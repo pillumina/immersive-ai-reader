@@ -97,8 +97,10 @@
 |------|------|------|------|
 | **运行时** | Node.js | 20+ | 服务端运行环境 |
 | **框架** | Next.js API Routes | 14+ | API 服务 |
-| **AI SDK** | zhipu-sdk | latest | 智谱 AI API |
-| **AI SDK** | minimax-sdk | latest | Minimax API |
+| **AI SDK** | @zhipu/sdk | ^1.0.0 | 智谱 AI API 客户端 |
+| **AI SDK** | minimax-api | ^2.0.0 | Minimax API 客户端（或自定义 fetch）|
+
+**注意：** 如果官方 SDK 不可用，使用原生 fetch 调用 REST API。
 
 #### 本地存储
 
@@ -126,33 +128,120 @@
 **用户流程：**
 ```
 1. 用户点击"Upload PDF"按钮
-2. 选择本地 PDF 文件（限制 ≤ 100MB）
+2. 选择本地 PDF 文件（限制 ≤ 100MB，≤ 500 页）
 3. 前端使用 PDF.js 解析文档
 4. 提取页面、文本、元数据
 5. 渲染到 Fabric.js 画布
 6. 保存到 IndexedDB
 ```
 
-**技术实现：**
+**MVP 决策：前端解析 PDF（客户端）**
+
+MVP 阶段**完全在前端解析 PDF**，不使用后端 API。原因：
+1. 减少服务器负载和带宽成本
+2. 提高解析速度（无需上传下载）
+3. 利用浏览器原生能力（PDF.js）
+4. 简化架构（无需后端 PDF 处理）
+
+**大型文档处理策略：**
+
 ```typescript
-// 伪代码
-async function uploadPDF(file: File) {
-  // 1. 验证文件
-  if (file.size > 100 * 1024 * 1024) {
-    throw new Error('File size exceeds 100MB limit');
+// 文件验证（增强版）
+function validatePDFFile(file: File): ValidationResult {
+  // 1. 文件类型
+  if (file.type !== 'application/pdf') {
+    return { valid: false, error: 'Only PDF files are allowed' };
   }
 
-  // 2. 解析 PDF
+  // 2. 文件大小
+  if (file.size > 100 * 1024 * 1024) {
+    return { valid: false, error: 'File size exceeds 100MB limit' };
+  }
+
+  // 3. 文件名安全
+  if (file.name.includes('..') || file.name.includes('/')) {
+    return { valid: false, error: 'Invalid file name' };
+  }
+
+  return { valid: true };
+}
+
+// 页数限制检查
+async function checkPageLimit(file: File): Promise<number> {
   const pdfDoc = await pdfjsLib.getDocument(file).promise;
+  const pageCount = pdfDoc.numPages;
+
+  if (pageCount > 500) {
+    throw new Error(`PDF has ${pageCount} pages. Maximum supported is 500 pages.`);
+  }
+
+  return pageCount;
+}
+
+// 大型文档处理（分批提取文本）
+async function extractTextFromLargePDF(pdfDoc: PDFDocumentProxy): Promise<string> {
+  const BATCH_SIZE = 50; // 每批处理 50 页
+  const totalPages = pdfDoc.numPages;
+  const batches: string[] = [];
+
+  for (let i = 1; i <= totalPages; i += BATCH_SIZE) {
+    const endPage = Math.min(i + BATCH_SIZE - 1, totalPages);
+    const batchTexts: string[] = [];
+
+    for (let page = i; page <= endPage; page++) {
+      const pageObj = await pdfDoc.getPage(page);
+      const textContent = await pageObj.getTextContent();
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+      batchTexts.push(pageText);
+
+      // 让出主线程，避免阻塞 UI
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    batches.push(batchTexts.join('\n\n'));
+  }
+
+  return batches.join('\n\n---PAGE_BREAK---\n\n');
+}
+
+// 内存管理
+function cleanupLargePDF(pdfDoc: PDFDocumentProxy) {
+  // 清理 PDF 文档对象
+  pdfDoc.destroy();
+
+  // 手动触发垃圾回收（如果可用）
+  if (window.gc) {
+    window.gc();
+  }
+}
+```
+
+**技术实现：**
+```typescript
+async function uploadPDF(file: File) {
+  // 1. 验证文件
+  const validation = validatePDFFile(file);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+
+  // 2. 解析 PDF（检查页数）
+  const pdfDoc = await pdfjsLib.getDocument(file).promise;
+  const pageCount = await checkPageLimit(file);
 
   // 3. 提取文本（用于 AI 分析）
-  const textContent = await extractTextFromPDF(pdfDoc);
+  const textContent = await extractTextFromLargePDF(pdfDoc);
 
   // 4. 渲染到画布
   const canvas = new fabric.Canvas('canvas');
-  for (let i = 1; i <= pdfDoc.numPages; i++) {
+  for (let i = 1; i <= Math.min(pageCount, 10); i++) { // 初始只渲染前 10 页
     const page = await pdfDoc.getPage(i);
     await renderPageToCanvas(canvas, page, i);
+
+    // 让出主线程
+    await new Promise(resolve => setTimeout(resolve, 0));
   }
 
   // 5. 保存到 IndexedDB
@@ -163,6 +252,9 @@ async function uploadPDF(file: File) {
     annotations: [],
     createdAt: new Date()
   });
+
+  // 6. 清理内存
+  cleanupLargePDF(pdfDoc);
 }
 ```
 
@@ -567,6 +659,118 @@ font-family: 'Inter', sans-serif;
 - Tablet: 768px - 1439px（隐藏 AI 面板，可展开）
 - Mobile: < 768px（侧边栏 + AI 面板均为抽屉）
 
+**实现策略：**
+
+```tsx
+// hooks/useResponsiveLayout.ts
+interface LayoutState {
+  isDesktop: boolean;
+  isTablet: boolean;
+  isMobile: boolean;
+  showAIPanel: boolean;
+  showSidebar: boolean;
+}
+
+function useResponsiveLayout() {
+  const [layout, setLayout] = useState<LayoutState>({
+    isDesktop: true,
+    isTablet: false,
+    isMobile: false,
+    showAIPanel: true,
+    showSidebar: true,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+
+      if (width >= 1440) {
+        setLayout({
+          isDesktop: true,
+          isTablet: false,
+          isMobile: false,
+          showAIPanel: true,
+          showSidebar: true,
+        });
+      } else if (width >= 768) {
+        setLayout({
+          isDesktop: false,
+          isTablet: true,
+          isMobile: false,
+          showAIPanel: false, // 默认隐藏
+          showSidebar: true,
+        });
+      } else {
+        setLayout({
+          isDesktop: false,
+          isTablet: false,
+          isMobile: true,
+          showAIPanel: false,
+          showSidebar: false, // 默认隐藏
+        });
+      }
+    };
+
+    handleResize(); // 初始调用
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return layout;
+}
+
+// components/MainLayout.tsx
+function MainLayout() {
+  const layout = useResponsiveLayout();
+  const [aiPanelOpen, setAIPanelOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  return (
+    <div className="main-layout">
+      {/* 侧边栏 */}
+      {layout.isDesktop || sidebarOpen ? (
+        <Sidebar
+          collapsed={!layout.showSidebar && !sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+      ) : null}
+
+      {/* 主画布 */}
+      <CanvasArea />
+
+      {/* AI 面板 */}
+      {layout.isDesktop ? (
+        <AIPanel />
+      ) : aiPanelOpen ? (
+        <Drawer position="right" onClose={() => setAIPanelOpen(false)}>
+          <AIPanel />
+        </Drawer>
+      ) : null}
+
+      {/* 移动端工具栏 */}
+      {layout.isMobile && (
+        <MobileToolbar
+          onOpenSidebar={() => setSidebarOpen(true)}
+          onOpenAI={() => setAIPanelOpen(true)}
+        />
+      )}
+    </div>
+  );
+}
+```
+
+**Tailwind CSS 响应式类：**
+```tsx
+<div className="
+  grid
+  grid-cols-[280px_1fr_380px]
+  tablet:grid-cols-[280px_1fr]
+  mobile:grid-cols-[1fr]
+">
+  {/* ... */}
+</div>
+```
+
 ---
 
 #### 3.2.3 交互细节
@@ -631,6 +835,10 @@ const stores = {
     keyPath: 'id',
     indexes: ['annotationId', 'createdAt']
   },
+  conversations: {
+    keyPath: 'id',
+    indexes: ['documentId', 'updatedAt']
+  },
   settings: {
     keyPath: 'key'
   }
@@ -669,10 +877,111 @@ interface NoteRecord {
   updatedAt: Date;
 }
 
+// Conversation 表（对话历史）
+interface ConversationRecord {
+  id: string; // 使用 documentId 作为 ID
+  documentId: string;
+  messages: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: Date;
+  }>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Settings 表
 interface SettingsRecord {
   key: string;
   value: any;
+}
+
+// 数据库迁移策略
+const migrations = {
+  // Version 1: 初始版本
+  1: (db: IDBDatabase) => {
+    // 创建所有对象存储
+    const documentStore = db.createObjectStore('documents', { keyPath: 'id' });
+    documentStore.createIndex('createdAt', 'createdAt', { unique: false });
+    documentStore.createIndex('fileName', 'fileName', { unique: false });
+
+    const annotationStore = db.createObjectStore('annotations', { keyPath: 'id' });
+    annotationStore.createIndex('documentId', 'documentId', { unique: false });
+    annotationStore.createIndex('pageNumber', 'pageNumber', { unique: false });
+
+    const noteStore = db.createObjectStore('notes', { keyPath: 'id' });
+    noteStore.createIndex('annotationId', 'annotationId', { unique: false });
+    noteStore.createIndex('createdAt', 'createdAt', { unique: false });
+
+    const conversationStore = db.createObjectStore('conversations', { keyPath: 'id' });
+    conversationStore.createIndex('documentId', 'documentId', { unique: false });
+    conversationStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+
+    db.createObjectStore('settings', { keyPath: 'key' });
+  },
+
+  // Version 2: 未来示例（添加标签功能）
+  // 2: (db: IDBDatabase) => {
+  //   const documentStore = db.transaction('documents').objectStore('documents');
+  //   documentStore.createIndex('tags', 'tags', { unique: false, multiEntry: true });
+  // },
+};
+
+// 打开数据库（支持迁移）
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onerror = () => reject(request.error);
+
+    request.onsuccess = () => resolve(request.result);
+
+    request.onupgradeneeded = (event) => {
+      const db = request.result;
+      const oldVersion = event.oldVersion;
+      const newVersion = event.newVersion || DB_VERSION;
+
+      console.log(`Upgrading IndexedDB from version ${oldVersion} to ${newVersion}`);
+
+      // 按顺序执行迁移
+      for (let version = oldVersion + 1; version <= newVersion; version++) {
+        const migration = migrations[version as keyof typeof migrations];
+        if (migration) {
+          console.log(`Running migration ${version}`);
+          migration(db);
+        }
+      }
+    };
+  });
+}
+
+// 数据清理策略
+async function cleanupOldData() {
+  const db = await openDB();
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - 30); // 保留 30 天
+
+  const tx = db.transaction(['documents', 'conversations'], 'readwrite');
+
+  // 清理旧文档
+  const docStore = tx.objectStore('documents');
+  const docIndex = docStore.index('createdAt');
+  const oldDocs = await docIndex.getAll(IDBKeyRange.upperBound(cutoffDate));
+
+  for (const doc of oldDocs) {
+    await docStore.delete(doc.id);
+    console.log(`Deleted old document: ${doc.fileName}`);
+  }
+
+  // 清理旧对话
+  const convStore = tx.objectStore('conversations');
+  const convIndex = convStore.index('updatedAt');
+  const oldConvs = await convIndex.getAll(IDBKeyRange.upperBound(cutoffDate));
+
+  for (const conv of oldConvs) {
+    await convStore.delete(conv.id);
+    console.log(`Deleted old conversation: ${conv.id}`);
+  }
 }
 ```
 
@@ -795,9 +1104,124 @@ data: {"content": "string", "done": false}
 **1. PDF 渲染优化**
 ```typescript
 // 虚拟滚动：只渲染可视区域的页面
-function renderVisiblePages() {
-  const visiblePages = getVisiblePages();
-  visiblePages.forEach(page => renderPage(page));
+const PAGE_HEIGHT = 842; // A4 纸高度（像素）
+const PAGE_GAP = 20;
+const BUFFER_PAGES = 2; // 上下缓冲区域
+
+interface VirtualScrollState {
+  visiblePages: number[];
+  scrollTop: number;
+  viewportHeight: number;
+}
+
+function useVirtualScroll(
+  canvas: fabric.Canvas,
+  totalPages: number
+) {
+  const [visiblePages, setVisiblePages] = useState<number[]>([]);
+  const pageCache = useRef(new Map<number, fabric.Group>());
+
+  const calculateVisiblePages = useCallback(
+    (scrollTop: number, viewportHeight: number) => {
+      const startIndex = Math.max(
+        0,
+        Math.floor(scrollTop / (PAGE_HEIGHT + PAGE_GAP)) - BUFFER_PAGES
+      );
+      const endIndex = Math.min(
+        totalPages - 1,
+        Math.ceil((scrollTop + viewportHeight) / (PAGE_HEIGHT + PAGE_GAP)) + BUFFER_PAGES
+      );
+
+      const pages: number[] = [];
+      for (let i = startIndex; i <= endIndex; i++) {
+        pages.push(i);
+      }
+
+      return pages;
+    },
+    [totalPages]
+  );
+
+  const renderPage = useCallback(
+    async (pageNumber: number) => {
+      // 检查缓存
+      if (pageCache.current.has(pageNumber)) {
+        return pageCache.current.get(pageNumber)!;
+      }
+
+      // 渲染页面
+      const page = await pdfDoc.getPage(pageNumber + 1);
+      const group = await renderPageToGroup(page, pageNumber);
+
+      // 缓存
+      pageCache.current.set(pageNumber, group);
+
+      return group;
+    },
+    [pdfDoc]
+  );
+
+  const updateVisiblePages = useCallback(
+    async (scrollTop: number, viewportHeight: number) => {
+      const newVisiblePages = calculateVisiblePages(scrollTop, viewportHeight);
+
+      // 移除不可见的页面
+      canvas.getObjects().forEach((obj) => {
+        if (obj.type === 'group' && 'pageNumber' in obj) {
+          const pageNum = (obj as any).pageNumber;
+          if (!newVisiblePages.includes(pageNum)) {
+            canvas.remove(obj);
+          }
+        }
+      });
+
+      // 添加新可见的页面
+      for (const pageNum of newVisiblePages) {
+        if (!canvas.getObjects().some(obj => (obj as any).pageNumber === pageNum)) {
+          const pageGroup = await renderPage(pageNum);
+          canvas.add(pageGroup);
+        }
+      }
+
+      canvas.renderAll();
+      setVisiblePages(newVisiblePages);
+    },
+    [canvas, calculateVisiblePages, renderPage]
+  );
+
+  // 监听滚动事件
+  useEffect(() => {
+    if (!canvas) return;
+
+    const handleScroll = debounce((e: Event) => {
+      const target = e.target as HTMLElement;
+      updateVisiblePages(target.scrollTop, target.clientHeight);
+    }, 100);
+
+    const scrollContainer = canvas.upperCanvasEl.parentElement;
+    scrollContainer?.addEventListener('scroll', handleScroll);
+
+    // 初始渲染
+    updateVisiblePages(0, scrollContainer?.clientHeight || 800);
+
+    return () => {
+      scrollContainer?.removeEventListener('scroll', handleScroll);
+    };
+  }, [canvas, updateVisiblePages]);
+
+  // 缩放变化时重新计算
+  const handleZoom = useCallback(
+    (newZoom: number) => {
+      canvas.setZoom(newZoom);
+      const scrollContainer = canvas.upperCanvasEl.parentElement;
+      if (scrollContainer) {
+        updateVisiblePages(scrollContainer.scrollTop, scrollContainer.clientHeight);
+      }
+    },
+    [canvas, updateVisiblePages]
+  );
+
+  return { visiblePages, handleZoom };
 }
 
 // 页面缓存
@@ -810,7 +1234,29 @@ const pageCache = new Map<number, ImageData>();
 fabric.Canvas.prototype.renderOnAddRemove = false;
 
 // 批量操作
-canvas.renderAll();
+function batchAddObjects(canvas: fabric.Canvas, objects: fabric.Object[]) {
+  objects.forEach(obj => canvas.add(obj));
+  canvas.renderAll(); // 只渲染一次
+}
+
+// 对象池（复用对象）
+class ObjectPool<T extends fabric.Object> {
+  private pool: T[] = [];
+
+  acquire(createFn: () => T): T {
+    if (this.pool.length > 0) {
+      return this.pool.pop()!;
+    }
+    return createFn();
+  }
+
+  release(obj: T) {
+    obj.set({ visible: false });
+    this.pool.push(obj);
+  }
+}
+
+const highlightPool = new ObjectPool<fabric.Rect>();
 ```
 
 **3. IndexedDB 优化**
@@ -846,22 +1292,37 @@ const documentCache = new LRUCache<string, string>({
 
 ### 7.1 API Key 安全
 
-**存储安全：**
-```typescript
-// ❌ 不推荐：明文存储
-localStorage.setItem('api-key', 'sk-xxx');
+**MVP 决策：使用 Base64 编码存储**
 
-// ✅ 推荐：加密存储
+为了平衡开发效率和安全性，MVP 阶段使用 Base64 编码（混淆）存储 API Key。这**不是真正的加密**，但可以防止普通用户直接看到明文 API Key。
+
+**存储方案（Base64 编码）：**
+```typescript
+// ✅ MVP 方案：Base64 编码（混淆）
 function saveApiKey(key: string) {
-  const encrypted = btoa(key); // Base64 编码（混淆）
-  localStorage.setItem('api-key-encrypted', encrypted);
+  const encoded = btoa(key); // Base64 编码
+  localStorage.setItem('api-key-encrypted', encoded);
 }
 
-// 🔒 最佳实践：使用 Web Crypto API
-async function encryptApiKey(key: string, password: string) {
+function getApiKey(): string | null {
+  const encoded = localStorage.getItem('api-key-encrypted');
+  return encoded ? atob(encoded) : null; // Base64 解码
+}
+
+// 注意事项：
+// 1. Base64 仅用于混淆，不是真正的加密
+// 2. 不要在不安全的网络环境中传输
+// 3. 生产环境应使用 Web Crypto API
+```
+
+**未来升级路径（Phase 2）：**
+```typescript
+// 🔒 Phase 2 方案：Web Crypto API（真正加密）
+async function encryptApiKeySecure(key: string, password: string) {
   const encoder = new TextEncoder();
   const data = encoder.encode(key);
 
+  // 生成密钥
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     encoder.encode(password),
@@ -871,27 +1332,38 @@ async function encryptApiKey(key: string, password: string) {
   );
 
   const cryptoKey = await crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: encoder.encode('salt'), iterations: 100000, hash: 'SHA-256' },
+    {
+      name: 'PBKDF2',
+      salt: encoder.encode('ai-reader-salt'),
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
     ['encrypt']
   );
 
+  // 加密
+  const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: crypto.getRandomValues(new Uint8Array(12)) },
+    { name: 'AES-GCM', iv },
     cryptoKey,
     data
   );
 
-  return encrypted;
+  return { encrypted, iv };
 }
+
+// Phase 2 时需要用户输入主密码来解密 API Key
 ```
 
-**传输安全：**
+**安全最佳实践：**
 - ✅ 仅在 HTTPS 下运行
-- ✅ API Key 仅发送到后端代理，不直接暴露给前端
+- ✅ API Key 仅发送到后端代理，不直接暴露给第三方
 - ✅ 后端验证 API Key 格式
+- ✅ 不在 URL 参数或日志中记录 API Key
+- ⚠️ Base64 编码无法防止恶意脚本读取（需要 CSP 等额外防护）
 
 ### 7.2 文件上传安全
 
@@ -950,25 +1422,116 @@ function sanitizeUserInput(input: string): string {
 
 ### 8.2 错误边界
 
+**ErrorFallback 组件设计：**
+
+```tsx
+// components/ErrorFallback.tsx
+interface ErrorFallbackProps {
+  error: Error;
+  resetErrorBoundary: () => void;
+}
+
+function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
+  return (
+    <div className="error-fallback">
+      <div className="error-icon">
+        <AlertCircle size={48} />
+      </div>
+      <h2 className="error-title">Something went wrong</h2>
+      <p className="error-message">{error.message}</p>
+      <div className="error-actions">
+        <button onClick={resetErrorBoundary} className="btn-primary">
+          Try again
+        </button>
+        <button onClick={() => window.location.reload()} className="btn-secondary">
+          Reload page
+        </button>
+      </div>
+      <details className="error-details">
+        <summary>Technical details</summary>
+        <pre>{error.stack}</pre>
+      </details>
+    </div>
+  );
+}
+```
+
+**样式（Tailwind CSS）：**
+```css
+.error-fallback {
+  @apply flex flex-col items-center justify-center min-h-screen p-8;
+  @apply bg-white text-gray-900;
+}
+
+.error-icon {
+  @apply mb-6 text-red-500;
+}
+
+.error-title {
+  @apply text-3xl font-semibold mb-4;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.error-message {
+  @apply text-lg text-gray-600 mb-8 text-center max-w-md;
+}
+
+.error-actions {
+  @apply flex gap-4 mb-8;
+}
+
+.error-details {
+  @apply mt-8 p-4 bg-gray-50 rounded text-sm max-w-2xl;
+}
+```
+
+**使用方式：**
 ```tsx
 // React Error Boundary
-class ErrorBoundary extends React.Component {
+import { ErrorBoundary } from 'react-error-boundary';
+
+class AppErrorBoundary extends React.Component {
   state = { hasError: false };
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError(error: Error) {
     return { hasError: true };
   }
 
-  componentDidCatch(error, errorInfo) {
-    console.error('Error:', error, errorInfo);
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // 记录错误到控制台
+    console.error('Error caught by boundary:', error, errorInfo);
+
+    // 可选：发送到错误监控服务（Sentry/LogRocket）
+    if (process.env.NODE_ENV === 'production') {
+      logErrorToService(error, errorInfo);
+    }
   }
+
+  resetErrorBoundary = () => {
+    this.setState({ hasError: false });
+  };
 
   render() {
     if (this.state.hasError) {
-      return <ErrorFallback />;
+      return (
+        <ErrorFallback
+          error={this.state.error}
+          resetErrorBoundary={this.resetErrorBoundary}
+        />
+      );
     }
+
     return this.props.children;
   }
+}
+
+// 在应用根节点使用
+function App() {
+  return (
+    <AppErrorBoundary>
+      <MainApplication />
+    </AppErrorBoundary>
+  );
 }
 ```
 
