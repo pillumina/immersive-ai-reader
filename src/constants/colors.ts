@@ -1,0 +1,6 @@
+export const COLORS = {
+  HIGHLIGHT_YELLOW: '#FEF08A',
+  NOTE_MARKER_RED: '#E42313',
+  PAGE_BORDER: '#E8E8E8',
+  CANVAS_BG: '#E8E8E8',
+} as const;
