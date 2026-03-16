@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "regions": ["sfo1"],
+  "env": {
+    "AI_PROVIDER_DEFAULT": "@ai_provider_default",
+    "MAX_FILE_SIZE_MB": "@max_file_size_mb",
+    "MAX_PAGE_COUNT": "@max_page_count"
+  }
+}

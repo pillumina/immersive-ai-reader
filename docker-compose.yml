@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  ai-reader:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - AI_PROVIDER_DEFAULT=zhipu
+      - MAX_FILE_SIZE_MB=100
+      - MAX_PAGE_COUNT=500
+    restart: unless-stopped
