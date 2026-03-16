@@ -63,8 +63,7 @@
 ┌─────────────────┴───────────────────────────┐
 │        后端（Next.js API Routes）            │
 │  ┌─────────────────────────────────────┐   │
-│  │  /api/chat - AI 对话代理              │   │
-│  │  /api/parse-pdf - PDF 文本提取        │   │
+│  │  /api/chat - AI 对话代理（智谱/Minimax）│   │
 │  └─────────────────────────────────────┘   │
 └─────────────────┬───────────────────────────┘
                   │
@@ -437,34 +436,89 @@ async function sendChatMessage(message: string) {
 
 // 后端：AI 代理
 export async function POST(request: Request) {
-  const { message, documentId, provider, apiKey } = await request.json();
+  try {
+    const { message, documentId, provider, apiKey, conversationHistory } = await request.json();
 
-  // 1. 从 IndexedDB 获取文档内容
-  const document = await getDocument(documentId);
+    // 1. 验证 API Key 格式
+    if (!apiKey || apiKey.trim().length < 10) {
+      return NextResponse.json(
+        { error: 'Invalid API key format' },
+        { status: 400 }
+      );
+    }
 
-  // 2. 构建 Prompt
-  const prompt = `
+    // 2. 从 IndexedDB 获取文档内容
+    const document = await getDocument(documentId);
+    if (!document) {
+      return NextResponse.json(
+        { error: 'Document not found' },
+        { status: 404 }
+      );
+    }
+
+    // 3. 构建 Prompt（包含对话历史）
+    const historyContext = conversationHistory
+      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+      .join('\n');
+
+    const prompt = `
 You are an AI assistant helping users understand PDF documents.
 
 Document content:
 ${document.textContent}
 
-User question: ${message}
+Conversation history:
+${historyContext}
 
-Please answer based on the document content.
-  `;
+Current question: ${message}
 
-  // 3. 调用 AI API
-  const stream = await callAIAPI(provider, apiKey, prompt);
+Please answer based on the document content and conversation context.
+    `;
 
-  // 4. 流式返回
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  });
+    // 4. 调用 AI API（带错误处理）
+    try {
+      const stream = await callAIAPI(provider, apiKey, prompt);
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    } catch (error: any) {
+      // 处理 AI API 错误
+      const status = error.status || error.response?.status;
+
+      if (status === 401) {
+        return NextResponse.json(
+          { error: 'Invalid API key. Please check your settings.' },
+          { status: 401 }
+        );
+      } else if (status === 429) {
+        return NextResponse.json(
+          { error: 'API rate limit exceeded. Please try again later.' },
+          { status: 429 }
+        );
+      } else if (status === 402 || status === 403) {
+        return NextResponse.json(
+          { error: 'Insufficient API quota. Please check your billing.' },
+          { status: 402 }
+        );
+      } else {
+        console.error('AI API error:', error);
+        return NextResponse.json(
+          { error: 'AI service unavailable. Please try again later.' },
+          { status: 503 }
+        );
+      }
+    }
+  } catch (error: any) {
+    console.error('Chat endpoint error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }
 
 async function callAIAPI(provider: string, apiKey: string, prompt: string) {
@@ -483,6 +537,22 @@ async function callAIAPI(provider: string, apiKey: string, prompt: string) {
     });
   } else if (provider === 'minimax') {
     // Minimax API 调用
+    const response = await fetch('https://api.minimax.chat/v1/text/chatcompletion_v2', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'abab6.5-chat',
+        messages: [{ role: 'user', content: prompt }],
+        stream: true,
+        temperature: 0.7,
+        top_p: 0.9,
+      }),
+    });
+
+    return response.body;
   }
 }
 ```
@@ -1031,31 +1101,6 @@ data: {"content": "string", "done": false}
 - 400: 请求参数错误
 - 401: API Key 无效
 - 500: 服务器错误
-
----
-
-#### POST /api/parse-pdf
-
-**描述：** 解析 PDF 文本（可选，前端可直接处理）
-
-**Request:**
-```json
-{
-  "file": "File (multipart/form-data)"
-}
-```
-
-**Response:**
-```json
-{
-  "textContent": "string",
-  "metadata": {
-    "title": "string",
-    "author": "string",
-    "pageCount": "number"
-  }
-}
-```
 
 ---
 
@@ -1777,10 +1822,44 @@ console.log(JSON.stringify({
 4. 本地存储
 
 **P2（可以有）：**
-1. 多语言支持
-2. 主题切换
-3. 导出功能
-4. 快捷键
+1. 多语言支持（中英文界面）
+2. 主题切换（深色模式）
+3. 导出功能（Markdown/PDF）
+4. 快捷键系统
+5. PDF 文本提取 API（服务端解析，用于处理复杂 PDF）
+
+**Phase 2 功能（未来规划）：**
+
+以下功能不在 MVP 范围内，将在后续版本中实现：
+
+**用户系统与云端存储：**
+- 用户注册/登录（NextAuth.js）
+- 云端数据同步（PostgreSQL + AWS S3）
+- 跨设备访问
+- 文档分享功能
+
+**高级 AI 功能：**
+- 多模型支持（GPT-4、Claude、Gemini）
+- RAG 检索增强生成
+- 向量数据库集成（Pinecone/Weaviate）
+- 文档对比分析
+
+**协作功能：**
+- 代码仓库集成（GitHub）
+- 多人实时协作
+- 评论与批注
+- 团队工作空间
+
+**移动端与桌面端：**
+- React Native 移动应用
+- Electron 桌面应用
+- 离线模式支持
+
+**知识管理：**
+- 知识图谱可视化
+- 实体关系提取
+- 文献推荐系统
+- 个人知识库构建
 
 ---
 
