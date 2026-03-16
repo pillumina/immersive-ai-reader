@@ -1,4 +1,4 @@
-import { fabric } from 'fabric';
+import * as fabric from 'fabric';
 import { COLORS } from '@/constants/colors';
 
 export class CanvasManager {
