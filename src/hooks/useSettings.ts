@@ -16,7 +16,7 @@ export function useSettings() {
       const savedProvider = await getSettings<string>(db, 'provider');
       const savedApiKey = await getSettings<string>(db, 'apiKey');
 
-      if (savedProvider) setProvider(savedProvider);
+      if (savedProvider) setProvider(savedProvider as AIProvider);
       if (savedApiKey) setApiKey(decryptApiKey(savedApiKey));
     } catch (error) {
       console.error('Failed to load settings:', error);
