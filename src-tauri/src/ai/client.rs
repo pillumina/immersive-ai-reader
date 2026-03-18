@@ -35,6 +35,23 @@ impl AIClient {
             }
         }
 
+        if provider == "zhipu_coding" {
+            // Accept either full chat path or v4 base endpoint and normalize.
+            if trimmed.ends_with("/api/coding/paas/v4") || trimmed.ends_with("/api/coding/paas/v4/") {
+                return Ok("https://open.bigmodel.cn/api/coding/paas/v4/chat/completions".to_string());
+            }
+            if trimmed == "https://open.bigmodel.cn/api/coding/paas/v4/" || trimmed == "https://open.bigmodel.cn/api/coding/paas/v4" {
+                return Ok("https://open.bigmodel.cn/api/coding/paas/v4/chat/completions".to_string());
+            }
+        }
+
+        if provider == "minimax" {
+            // Handle minimax anthropic endpoint - accept base or full path
+            if trimmed.ends_with("/anthropic") && !trimmed.ends_with("/chat/completions") {
+                return Ok(format!("{}chat/completions", trimmed));
+            }
+        }
+
         Ok(trimmed.to_string())
     }
 

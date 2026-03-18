@@ -89,7 +89,7 @@ export function MainCanvas({
         onContextMenu={handleContextMenu}
       >
         {hasDocument ? (
-          <div className="relative min-w-full">
+          <div className="relative">
             <div id="pdf-pages-container" className="pdf-pages-container" />
             {isLoading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/70">

@@ -10,15 +10,21 @@ export interface AIProviderPreset {
 export const AI_PROVIDER_PRESETS: AIProviderPreset[] = [
   {
     id: 'zhipu',
-    label: 'Zhipu',
-    defaultEndpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-    defaultModel: 'glm-4',
+    label: 'Zhipu (Standard)',
+    defaultEndpoint: 'https://open.bigmodel.cn/api/paas/v4/',
+    defaultModel: 'glm-5',
+  },
+  {
+    id: 'zhipu_coding',
+    label: 'Zhipu (Coding)',
+    defaultEndpoint: 'https://open.bigmodel.cn/api/coding/paas/v4/',
+    defaultModel: 'glm-5',
   },
   {
     id: 'minimax',
     label: 'Minimax',
-    defaultEndpoint: 'https://api.minimax.chat/v1/text/chatcompletion_v2',
-    defaultModel: 'abab6.5-chat',
+    defaultEndpoint: 'https://api.minimaxi.com/anthropic',
+    defaultModel: 'MiniMax-M2.7',
   },
   {
     id: 'openai_compatible',

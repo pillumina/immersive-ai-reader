@@ -27,6 +27,7 @@ h1, h2, h3, h4, h5, h6 {
   padding: 20px;
   transform-origin: top left;
   width: fit-content;
+  image-rendering: auto;
 }
 
 .pdf-page {
@@ -55,6 +56,8 @@ h1, h2, h3, h4, h5, h6 {
 
 .pdf-page-canvas {
   display: block;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
 }
 
 .pdf-text-layer {

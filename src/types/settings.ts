@@ -1,4 +1,4 @@
-export type AIProvider = 'zhipu' | 'minimax' | 'openai_compatible' | 'custom';
+export type AIProvider = 'zhipu' | 'zhipu_coding' | 'minimax' | 'openai_compatible' | 'custom';
 
 export interface AIConfig {
   provider: AIProvider;
