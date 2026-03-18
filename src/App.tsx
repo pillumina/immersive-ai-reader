@@ -55,6 +55,7 @@ function App() {
     jumpToCitation,
     highlightSelection,
     addNoteForSelection,
+    pinNoteToCurrentPage,
   } = useCanvasRendering(
     'pdf-scroll-container',
     'pdf-pages-container',
@@ -74,7 +75,15 @@ function App() {
     });
   }, [aiContext]);
 
-  const { messages, isLoading: aiLoading, error: aiError, sendMessage, retryAssistantMessage, loadHistory } = useAI(
+  const {
+    messages,
+    isLoading: aiLoading,
+    error: aiError,
+    sendMessage,
+    retryAssistantMessage,
+    stopGeneration,
+    loadHistory,
+  } = useAI(
     currentDocument?.id || '',
     aiConfig,
     getAIContext
@@ -208,6 +217,20 @@ function App() {
       setToast({ message, type: 'error' });
     }
   };
+  const handlePinMessageToCanvas = async (messageId: string) => {
+    const target = messages.find((m) => m.id === messageId && m.role === 'assistant');
+    if (!target?.content?.trim()) {
+      setToast({ message: 'No message content to pin', type: 'info' });
+      return;
+    }
+    try {
+      await pinNoteToCurrentPage(target.content);
+      setToast({ message: `Pinned to page ${currentPage}`, type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to pin message';
+      setToast({ message, type: 'error' });
+    }
+  };
 
   return (
     <main className="flex h-screen bg-white">
@@ -241,6 +264,8 @@ function App() {
         isLoading={aiLoading}
         onSendMessage={sendMessage}
         onRetryMessage={retryAssistantMessage}
+        onStopGeneration={stopGeneration}
+        onPinToCanvas={handlePinMessageToCanvas}
         onSummarize={handleSummarize}
         onTranslateSelection={handleTranslateSelection}
         onExportNotes={handleExportNotes}

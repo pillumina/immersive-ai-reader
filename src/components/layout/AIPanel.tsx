@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Check, Copy, Loader2, RotateCcw, Send } from 'lucide-react';
+import { Check, Copy, Loader2, Pin, RotateCcw, Square, Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message } from '@/types/conversation';
@@ -11,6 +11,8 @@ interface AIPanelProps {
   isLoading: boolean;
   onSendMessage: (content: string) => void;
   onRetryMessage: (messageId: string) => void;
+  onStopGeneration: () => void;
+  onPinToCanvas: (messageId: string) => void;
   onSummarize: () => void;
   onTranslateSelection: () => void;
   onExportNotes: () => void;
@@ -22,6 +24,8 @@ export function AIPanel({
   isLoading,
   onSendMessage,
   onRetryMessage,
+  onStopGeneration,
+  onPinToCanvas,
   onSummarize,
   onTranslateSelection,
   onExportNotes,
@@ -29,11 +33,28 @@ export function AIPanel({
 }: AIPanelProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const shouldStickToBottomRef = useRef(true);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    if (!shouldStickToBottomRef.current) return;
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      // Streaming updates happen frequently; smooth here causes scroll jitter.
+      behavior: isLoading ? 'auto' : 'smooth',
+    });
+  }, [messages, isLoading]);
+
+  const handleMessagesScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    shouldStickToBottomRef.current = distanceToBottom < 72;
+  };
 
   const handleSend = () => {
     if (input.trim() && !isLoading) {
@@ -159,7 +180,11 @@ export function AIPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4"
+        onScroll={handleMessagesScroll}
+      >
         {messages.length === 0 ? (
           <p className="text-gray-400 text-sm text-center pt-8">
             Ask questions about your document
@@ -167,7 +192,7 @@ export function AIPanel({
         ) : (
           messages.map((msg, idx) => (
             <div key={msg.id || idx} className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] p-3 text-sm rounded-2xl leading-relaxed shadow-sm ${
+              <div className={`ai-msg group max-w-[85%] p-3 text-sm rounded-2xl leading-relaxed shadow-sm ${
                 msg.role === 'user'
                   ? 'bg-[#E42313] text-white rounded-br-md'
                   : msg.status === 'error'
@@ -186,14 +211,19 @@ export function AIPanel({
                   </div>
                 ) : (
                   <>
-                    {msg.role === 'assistant' ? renderAssistantContent(msg.content) : msg.content}
+                    {msg.role === 'assistant' ? (
+                      <div>
+                        {renderAssistantContent(msg.content)}
+                        {msg.status === 'streaming' && <span className="ai-stream-caret">|</span>}
+                      </div>
+                    ) : msg.content}
                     {msg.role === 'assistant' && (
                       <div className="mt-2 text-[11px] text-gray-500">
                         {formatUsageHint(msg)}
                       </div>
                     )}
                     {msg.role === 'assistant' && (
-                      <div className="mt-2 flex items-center gap-2">
+                      <div className="ai-msg-toolbar mt-2 flex items-center gap-2">
                         <Button
                           variant="secondary"
                           size="sm"
@@ -203,6 +233,17 @@ export function AIPanel({
                           {copiedMessageId === msg.id ? <Check size={14} /> : <Copy size={14} />}
                           {copiedMessageId === msg.id ? 'Copied' : 'Copy'}
                         </Button>
+                        {msg.id && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => onPinToCanvas(msg.id!)}
+                            disabled={isLoading}
+                          >
+                            <Pin size={14} />
+                            Pin
+                          </Button>
+                        )}
                         {msg.status === 'error' && msg.id && (
                           <Button
                             variant="secondary"
@@ -227,9 +268,19 @@ export function AIPanel({
 
       <div className="p-4 border-t border-[#E3E8F0]">
         {isLoading && (
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
-            <Loader2 size={12} className="animate-spin" />
-            Model is generating response...
+          <div className="mb-2 flex items-center justify-between gap-3 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
+            <span className="inline-flex items-center gap-2">
+              <Loader2 size={12} className="animate-spin" />
+              Model is generating response...
+            </span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50"
+              onClick={onStopGeneration}
+            >
+              <Square size={10} />
+              Stop
+            </button>
           </div>
         )}
         <div className="flex gap-2">

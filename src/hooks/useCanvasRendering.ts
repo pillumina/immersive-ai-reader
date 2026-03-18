@@ -68,7 +68,8 @@ export function useCanvasRendering(
       .forEach((a) => {
         const textValue = typeof a.text === 'string' ? a.text : '';
         const isNote = textValue.startsWith(NOTE_PREFIX);
-        const noteContent = isNote ? textValue.slice(NOTE_PREFIX.length) : '';
+        const noteRaw = isNote ? textValue.slice(NOTE_PREFIX.length) : '';
+        const noteContent = isNote ? noteRaw.split('\n\n')[0] : '';
 
         renderHighlight(
           Number(a.page_number),
@@ -270,6 +271,43 @@ export function useCanvasRendering(
     selection.removeAllRanges();
   };
 
+  const pinNoteToCurrentPage = async (content: string) => {
+    if (!pdfDocument) throw new Error('请先上传或选择文档');
+    const note = content.trim();
+    if (!note) throw new Error('消息内容为空，无法固定');
+
+    const pageNumber = Math.max(currentPage || 1, 1);
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (!(containerEl instanceof HTMLElement)) {
+      throw new Error('页面容器未就绪');
+    }
+    const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
+    if (!pageEl) {
+      throw new Error('未找到当前页面');
+    }
+
+    const existingCards = pageEl.querySelectorAll('.pdf-note-card').length;
+    const x = 20;
+    const y = 24 + existingCards * 78;
+    const width = 8;
+    const height = 8;
+
+    await annotationCommands.create({
+      document_id: pdfDocument.id,
+      page_number: pageNumber,
+      annotation_type: 'highlight',
+      color: 'rgba(14, 165, 233, 0.06)',
+      position_x: x,
+      position_y: y,
+      position_width: width,
+      position_height: height,
+      text: `${NOTE_PREFIX}${note}`,
+    });
+
+    renderHighlight(pageNumber, x, y, width, height, 'rgba(14, 165, 233, 0.06)');
+    renderNoteCard(pageNumber, x, y, note);
+  };
+
   useEffect(() => {
     const scroller = globalThis.document?.getElementById(scrollContainerId);
     const containerEl = globalThis.document?.getElementById(containerId);
@@ -327,5 +365,6 @@ export function useCanvasRendering(
     jumpToCitation,
     highlightSelection,
     addNoteForSelection,
+    pinNoteToCurrentPage,
   };
 }
