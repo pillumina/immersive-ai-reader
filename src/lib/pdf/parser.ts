@@ -1,10 +1,5 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import { pdfjsLib } from '@/lib/pdf/pdfjs';
 import { MAX_PAGE_COUNT, BATCH_PAGE_SIZE } from '@/constants/limits';
-
-// 设置 PDF.js worker
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-}
 
 /**
  * 检查页数限制

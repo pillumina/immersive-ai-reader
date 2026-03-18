@@ -1,10 +1,11 @@
 export interface PDFDocument {
   id: string;
   fileName: string;
+  filePath: string;
   fileSize: number;
   pageCount: number;
   textContent: string;
-  fileBlob: Blob;
+  fileBlob: Blob | null;
   createdAt: Date;
   updatedAt: Date;
 }

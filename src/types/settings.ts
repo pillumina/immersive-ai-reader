@@ -1,8 +1,20 @@
-export type AIProvider = 'zhipu' | 'minimax';
+export type AIProvider = 'zhipu' | 'minimax' | 'openai_compatible' | 'custom';
+
+export interface AIConfig {
+  provider: AIProvider;
+  endpoint: string;
+  model: string;
+  apiKey: string;
+}
+
+export interface AIProfile {
+  id: string;
+  name: string;
+  config: AIConfig;
+}
 
 export interface Settings {
-  provider: AIProvider;
-  apiKey: string;
+  ai: AIConfig;
   theme?: 'light' | 'dark';
 }
 

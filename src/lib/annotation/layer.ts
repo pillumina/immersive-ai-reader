@@ -1,4 +1,4 @@
-import { Annotation, Note } from '@/types/annotation';
+import { Annotation } from '@/types/annotation';
 import { saveAnnotation, getAnnotationsByDocument, deleteAnnotation } from '@/lib/storage/annotations';
 import { openDB } from '@/lib/storage/indexeddb';
 import { generateId } from '@/lib/utils/crypto';

@@ -1,0 +1,193 @@
+import { invoke } from '@tauri-apps/api/core';
+import { Message } from '@/types/conversation';
+
+function unwrapInvokeError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const anyErr = error as Record<string, unknown>;
+    if (typeof anyErr.message === 'string') return anyErr.message;
+    try {
+      return JSON.stringify(anyErr);
+    } catch {
+      return 'Unknown invoke error';
+    }
+  }
+  return 'Unknown invoke error';
+}
+
+export interface BackendDocument {
+  id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  page_count: number;
+  text_content: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BackendConversation {
+  id: string;
+  document_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BackendMessage {
+  id: number;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export interface AIConnectivityResult {
+  ok: boolean;
+  status_code: number;
+  latency_ms: number;
+  message: string;
+}
+
+// Document commands
+export const documentCommands = {
+  create: async (request: {
+    file_name: string;
+    file_path: string;
+    file_size: number;
+    page_count: number;
+    text_content: string;
+  }): Promise<BackendDocument> => {
+    return await invoke<BackendDocument>('create_document', { request });
+  },
+
+  getById: async (id: string): Promise<BackendDocument | null> => {
+    return await invoke<BackendDocument | null>('get_document', { id });
+  },
+
+  getAll: async (): Promise<BackendDocument[]> => {
+    return await invoke<BackendDocument[]>('get_all_documents');
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await invoke('delete_document', { id });
+  },
+
+  openPDFFile: async (): Promise<[string, number[]] | null> => {
+    return await invoke<[string, number[]] | null>('open_pdf_file');
+  },
+
+  readPDFFile: async (path: string): Promise<number[]> => {
+    return await invoke<number[]>('read_pdf_file', { path });
+  },
+
+  updateDocumentFilePath: async (id: string, filePath: string, fileName: string, fileSize: number): Promise<void> => {
+    await invoke('update_document_file_path', {
+      id,
+      filePath,
+      fileName,
+      fileSize,
+    });
+  },
+};
+
+// Annotation commands
+export const annotationCommands = {
+  create: async (request: {
+    document_id: string;
+    page_number: number;
+    annotation_type: string;
+    color: string;
+    position_x: number;
+    position_y: number;
+    position_width: number;
+    position_height: number;
+    text?: string;
+  }): Promise<any> => {
+    return await invoke('create_annotation', { request });
+  },
+
+  getByDocument: async (documentId: string): Promise<any[]> => {
+    return await invoke('get_annotations_by_document', { documentId });
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await invoke('delete_annotation', { id });
+  },
+};
+
+// Conversation commands
+export const conversationCommands = {
+  getOrCreate: async (documentId: string): Promise<BackendConversation> => {
+    return await invoke<BackendConversation>('get_conversation', { documentId });
+  },
+
+  addMessage: async (request: {
+    conversation_id: string;
+    role: string;
+    content: string;
+  }): Promise<number> => {
+    return await invoke('add_message', { request });
+  },
+
+  getMessages: async (conversationId: string): Promise<BackendMessage[]> => {
+    return await invoke<BackendMessage[]>('get_messages', { conversationId });
+  },
+};
+
+// AI commands
+export const aiCommands = {
+  sendMessage: async (
+    provider: string,
+    endpoint: string,
+    model: string,
+    apiKey: string,
+    documentId: string,
+    message: string,
+    history: Message[]
+  ): Promise<string> => {
+    try {
+      return await invoke<string>('send_chat_message', {
+        provider,
+        endpoint,
+        model,
+        apiKey,
+        documentId,
+        message,
+        history,
+      });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+
+  saveApiKey: async (provider: string, apiKey: string): Promise<void> => {
+    await invoke('save_api_key', { provider, apiKey });
+  },
+
+  getApiKey: async (provider: string): Promise<string> => {
+    return await invoke<string>('get_api_key', { provider });
+  },
+
+  deleteApiKey: async (provider: string): Promise<void> => {
+    await invoke('delete_api_key', { provider });
+  },
+
+  testConnectivity: async (
+    provider: string,
+    endpoint: string,
+    model: string,
+    apiKey: string
+  ): Promise<AIConnectivityResult> => {
+    try {
+      return await invoke<AIConnectivityResult>('test_ai_connectivity', {
+        provider,
+        endpoint,
+        model,
+        apiKey,
+      });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+};
