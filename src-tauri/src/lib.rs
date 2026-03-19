@@ -55,6 +55,7 @@ pub fn run() {
             commands::annotation::get_annotations_by_document,
             commands::annotation::delete_annotation,
             commands::annotation::update_annotation_position,
+            commands::annotation::update_annotation_text,
 
             // Conversation commands
             commands::conversation::get_conversation,

@@ -48,6 +48,7 @@ function App() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
   const [focusMode, setFocusMode] = useState(false);
+  const [splitActive, setSplitActive] = useState(false);
   const [comparePageSignal, setComparePageSignal] = useState<number | null>(null);
   const [comparePaneCommand, setComparePaneCommand] = useState<{
     page: number;
@@ -386,9 +387,10 @@ function App() {
         isFocusMode={focusMode}
         comparePageSignal={comparePageSignal}
         comparePaneCommand={comparePaneCommand}
+        onSplitModeChange={setSplitActive}
       />
 
-      {!focusMode && (
+      {!focusMode && !splitActive && (
         <AIPanel
           messages={messages}
           isLoading={aiLoading}

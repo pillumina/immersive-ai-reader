@@ -138,6 +138,23 @@ Update cadence: 每次迭代结束必须更新一次（含现状值、是否达�
 - 2026-03-19: Upgraded split into dual-workspace controls: right pane now supports independent zoom/page jump and can be driven directly from chat via "To Right" action.
 - 2026-03-19: Added right-pane independent TOC (search + active section highlight) and compare-page jump history navigation (Back/Forward).
 - 2026-03-19: Transformed split view from generic layout into task-oriented reference pane: context badges (Evidence Check / AI Reference / Compare), auto-open on citation clicks, compact two-row controls, and "Verify" action in chat to open cited pages for source verification.
+- 2026-03-19: Added note card markdown editing: rendered display (headings/lists/code/bold/italic), double-click to edit with live markdown textarea, Ctrl+Enter/blur to save, Escape to cancel, persisted to SQLite via update_annotation_text.
+- 2026-03-19: Comprehensive UI/UX & performance optimization pass:
+  - Code splitting: react-markdown + remark-gfm extracted to separate 165KB chunk (main bundle reduced).
+  - Global CSS: custom scrollbar (6px, translucent), GPU-accelerated scroll containers, smooth zoom transitions, antialiased text rendering, custom selection color.
+  - Toast: slide-in/out animation with exit transition, gradient backgrounds, type-specific icons (CheckCircle/AlertCircle/Info).
+  - Button: focus-visible ring (not focus), active press scale(0.97), refined hover states.
+  - Input: hover border state, focus-visible ring pattern matching Button.
+  - Sidebar: gradient background, document count badge, empty state with icon, active document ring highlight, smooth hover transitions, action buttons fade-in on hover.
+  - Canvas toolbar: glassmorphism (backdrop-blur-xl), compact 28px icon buttons, tabular-nums page counter, reduced height (44→44px).
+  - Context menu: glassmorphism with blur(20px), scale+fade entry animation, rounded-12 corners.
+  - TOC sidebar: slide-in-from-right animation, compact search input, active item highlight, backdrop-blur.
+  - Floating TOC button: list icon, hover scale(1.03), active press scale.
+  - Loading states: custom pulse animation (gradient orb) replacing generic spinner.
+  - Empty states: icon + descriptive text for both canvas and chat.
+  - AI Panel: redesigned header with brand icon, quick action chips (pill buttons), polished input area with mode selector, compact send button, memoized session stats.
+  - AI messages: smoother enter animation (scale+fade), refined thinking dots (scale pulse), smaller action buttons (22px height), active press scale.
+  - PDF pages: reduced shadow depth, subtle border-radius, will-change:transform hint, smooth box-shadow transition.
 
 ## Update Rule
 

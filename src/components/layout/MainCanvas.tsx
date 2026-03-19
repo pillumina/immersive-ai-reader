@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut, Loader } from 'lucide-react';
+import { ZoomIn, ZoomOut, X } from 'lucide-react';
 import { DragEvent, MouseEvent, WheelEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PdfOutlineItem } from '@/lib/pdf/renderer';
@@ -28,6 +28,7 @@ interface MainCanvasProps {
     reason?: 'evidence' | 'reference' | 'compare';
     nonce: number;
   } | null;
+  onSplitModeChange?: (active: boolean) => void;
 }
 
 export function MainCanvas({
@@ -50,6 +51,7 @@ export function MainCanvas({
   isFocusMode,
   comparePageSignal,
   comparePaneCommand,
+  onSplitModeChange,
 }: MainCanvasProps) {
   const [tocOpen, setTocOpen] = useState(false);
   const [tocQuery, setTocQuery] = useState('');
@@ -65,6 +67,11 @@ export function MainCanvas({
   const [compareHistory, setCompareHistory] = useState<number[]>([]);
   const [compareHistoryIndex, setCompareHistoryIndex] = useState(-1);
   const [splitReason, setSplitReason] = useState<'evidence' | 'reference' | 'compare'>('compare');
+
+  // Notify parent when split mode changes so it can adjust layout (e.g. hide AI panel).
+  useEffect(() => {
+    onSplitModeChange?.(splitMode);
+  }, [splitMode, onSplitModeChange]);
 
   const splitStateStorageKey = documentId
     ? `main_canvas_split_state:${documentId}`
@@ -195,6 +202,13 @@ export function MainCanvas({
     navigateComparePage(comparePageSignal);
   }, [splitMode, compareFollowCitation, comparePageSignal]);
 
+  // Follow main view scroll: sync reference pane to the current page the user is viewing.
+  useEffect(() => {
+    if (!splitMode || !compareFollowCitation) return;
+    if (currentPage <= 0 || currentPage === comparePage) return;
+    navigateComparePage(currentPage);
+  }, [splitMode, compareFollowCitation, currentPage]);
+
   useEffect(() => {
     if (!comparePaneCommand) return;
     if (comparePaneCommand.openSplit) {
@@ -221,7 +235,19 @@ export function MainCanvas({
     clone.style.transform = `scale(${compareZoom})`;
     clone.style.transformOrigin = 'top left';
     clone.style.width = `${targetPageEl.offsetWidth}px`;
-    // Keep compare pane visual-only to avoid selection/drag conflict.
+
+    // cloneNode does NOT copy canvas pixel data — manually redraw each canvas.
+    const srcCanvases = targetPageEl.querySelectorAll<HTMLCanvasElement>('canvas');
+    const dstCanvases = clone.querySelectorAll<HTMLCanvasElement>('canvas');
+    srcCanvases.forEach((srcCanvas, i) => {
+      const dstCanvas = dstCanvases[i];
+      if (!dstCanvas) return;
+      dstCanvas.width = srcCanvas.width;
+      dstCanvas.height = srcCanvas.height;
+      const ctx = dstCanvas.getContext('2d');
+      if (ctx) ctx.drawImage(srcCanvas, 0, 0);
+    });
+
     clone.querySelectorAll<HTMLElement>('.pdf-note-card, .pdf-highlight, .pdf-text-layer').forEach((node) => {
       node.style.pointerEvents = 'none';
     });
@@ -300,55 +326,61 @@ export function MainCanvas({
   });
 
   return (
-    <main className="flex-1 flex flex-col bg-[#EEF2F7] relative">
-      <div className="h-12 border-b border-[#E3E8F0] bg-white/95 backdrop-blur flex items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={onZoomIn}>
-            <ZoomIn size={16} />
-          </Button>
-          <Button variant="secondary" size="sm" onClick={onZoomOut}>
-            <ZoomOut size={16} />
-          </Button>
-          <span className="text-sm text-gray-600 ml-2">{Math.round(zoomLevel * 100)}%</span>
+    <main className="flex-1 min-w-0 overflow-hidden flex flex-col bg-[#EEF2F7] relative">
+      {/* Toolbar – glassmorphism + compact spacing */}
+      <div className="h-11 border-b border-[#E3E8F0]/60 bg-white/80 backdrop-blur-xl flex items-center justify-between px-3 gap-2 select-none">
+        <div className="flex items-center gap-1.5">
+          <button type="button" className="toolbar-icon-btn" onClick={onZoomOut} title="Zoom out">
+            <ZoomOut size={15} />
+          </button>
+          <span className="min-w-[38px] text-center text-[12px] font-medium tabular-nums text-[#475569]">{Math.round(zoomLevel * 100)}%</span>
+          <button type="button" className="toolbar-icon-btn" onClick={onZoomIn} title="Zoom in">
+            <ZoomIn size={15} />
+          </button>
           {totalPages > 0 && (
-            <span className="text-sm text-gray-600 ml-3">
-              Page {currentPage} / {totalPages}
-            </span>
+            <>
+              <span className="mx-1 h-4 w-px bg-[#E3E8F0]" />
+              <span className="text-[12px] tabular-nums text-[#64748B]">
+                {currentPage}<span className="mx-0.5 text-[#CBD5E1]">/</span>{totalPages}
+              </span>
+            </>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant={isFocusMode ? 'primary' : 'secondary'} size="sm" onClick={onToggleFocusMode}>
+        <div className="flex items-center gap-1.5">
+          <Button variant={isFocusMode ? 'primary' : 'secondary'} size="sm" onClick={onToggleFocusMode} className="!h-7 !px-2.5 !text-[11px]">
             {isFocusMode ? 'Exit Focus' : 'Focus'}
           </Button>
           <Button
             variant={splitMode ? 'primary' : 'secondary'}
             size="sm"
             onClick={() => {
+              if (!hasDocument || totalPages <= 0) return;
               setSplitMode((v) => {
                 if (!v) setSplitReason('compare');
                 return !v;
               });
             }}
-            title="Open reference pane for side-by-side reading"
+            disabled={!hasDocument || totalPages <= 0}
+            title={hasDocument && totalPages > 0 ? 'Open reference pane for side-by-side reading' : 'Load a document first'}
+            className="!h-7 !px-2.5 !text-[11px]"
           >
-            {splitMode ? 'Close Reference' : 'Reference Pane'}
+            {splitMode ? 'Close Ref' : 'Reference'}
           </Button>
-          <Button variant="secondary" size="sm" onClick={onHighlightSelection}>
+          <Button variant="secondary" size="sm" onClick={onHighlightSelection} disabled={!hasDocument} className="!h-7 !px-2.5 !text-[11px]">
             Highlight
           </Button>
-          <span className="text-xs text-gray-500">Ctrl/Cmd + Wheel to zoom</span>
           {hasDocument && totalPages > 0 && (
-            <Button variant="secondary" size="sm" onClick={() => setTocOpen((v) => !v)}>
-              {tocOpen ? 'Hide TOC' : 'Show TOC'}
+            <Button variant="secondary" size="sm" onClick={() => setTocOpen((v) => !v)} className="!h-7 !px-2.5 !text-[11px]">
+              {tocOpen ? 'Hide TOC' : 'TOC'}
             </Button>
           )}
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-w-0 flex overflow-hidden">
         <div
           id="pdf-scroll-container"
-          className={`flex-1 overflow-auto p-4 ${isAICardDragOver ? 'ai-card-drop-active' : ''}`}
+          className={`flex-1 min-w-0 overflow-auto p-4 ${isAICardDragOver ? 'ai-card-drop-active' : ''}`}
           onWheel={handleWheel}
           onContextMenu={handleContextMenu}
           onDragOver={handleDragOver}
@@ -359,26 +391,29 @@ export function MainCanvas({
             <div className="relative">
               <div id="pdf-pages-container" className="pdf-pages-container" />
               {isLoading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/70">
-                  <Loader className="animate-spin" size={48} />
-                  <p className="text-gray-600">Processing PDF...</p>
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/75 backdrop-blur-sm animate-in fade-in">
+                  <div className="loading-pulse" />
+                  <p className="text-[13px] text-[#475569] font-medium">Rendering document…</p>
                 </div>
               )}
             </div>
           ) : isLoading ? (
-            <div className="h-full flex flex-col items-center justify-center gap-3">
-              <Loader className="animate-spin" size={48} />
-              <p className="text-gray-600">Processing PDF...</p>
+            <div className="h-full flex flex-col items-center justify-center gap-4 animate-in fade-in">
+              <div className="loading-pulse" />
+              <p className="text-[13px] text-[#475569] font-medium">Processing PDF…</p>
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center">
-              <p className="text-gray-400">Upload a PDF to get started</p>
+            <div className="h-full flex flex-col items-center justify-center gap-3">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#F1F5F9] to-[#E2E8F0] flex items-center justify-center">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </div>
+              <p className="text-[13px] text-[#94A3B8]">Upload a PDF to get started</p>
             </div>
           )}
         </div>
 
         {splitMode && hasDocument && totalPages > 0 && (
-          <aside className="relative w-[38%] min-w-[320px] border-l border-[#E3E8F0] bg-[#F8FAFC] flex flex-col">
+          <aside className="relative w-[45%] min-w-[340px] max-w-[55%] border-l border-[#E3E8F0] bg-[#F8FAFC] flex flex-col">
             <div className="border-b border-[#E3E8F0] bg-white/90">
               {/* Row 1: Task context */}
               <div className="flex h-8 items-center justify-between px-3">
@@ -394,21 +429,22 @@ export function MainCanvas({
                   </span>
                   <span className="text-[11px] text-[#64748B]">page {comparePage} / {totalPages}</span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    className={`rounded px-1.5 py-0.5 text-[10px] ${compareFollowCitation ? 'bg-[#E42313]/10 text-[#E42313]' : 'text-[#94A3B8] hover:text-[#475569]'}`}
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] transition-colors ${compareFollowCitation ? 'bg-[#E42313]/10 text-[#E42313]' : 'text-[#94A3B8] hover:text-[#475569]'}`}
                     onClick={() => setCompareFollowCitation((v) => !v)}
-                    title={compareFollowCitation ? 'Auto-follow citation clicks' : 'Manual navigation only'}
+                    title={compareFollowCitation ? 'Auto-follow: syncs with main view scroll & citation clicks' : 'Manual navigation only'}
                   >
                     {compareFollowCitation ? 'Auto-follow' : 'Manual'}
                   </button>
                   <button
                     type="button"
-                    className="text-[11px] text-[#94A3B8] hover:text-[#475569]"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#E3E8F0] bg-white text-[#64748B] transition-all hover:bg-[#FEF2F2] hover:border-[#FECACA] hover:text-[#DC2626] active:scale-95"
                     onClick={() => setSplitMode(false)}
+                    title="Close reference pane (back to AI chat)"
                   >
-                    Close
+                    <X size={15} />
                   </button>
                 </div>
               </div>
@@ -499,43 +535,39 @@ export function MainCanvas({
       </div>
 
       {tocOpen && hasDocument && totalPages > 0 && (
-        <aside className="absolute right-0 top-12 bottom-0 w-[300px] bg-white border-l border-[#E8E8E8] shadow-xl z-20 overflow-auto">
-          <div className="sticky top-0 bg-white border-b border-[#E8E8E8] px-4 py-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Table of Contents</h3>
-            <button className="text-xs text-gray-500 hover:text-black" onClick={() => setTocOpen(false)}>
+        <aside className="absolute right-0 top-11 bottom-0 w-[280px] bg-white/[0.97] border-l border-[#E3E8F0]/60 shadow-2xl backdrop-blur-xl z-20 flex flex-col animate-in slide-in-from-right">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#EEF2F7]">
+            <h3 className="text-[13px] font-semibold text-[#1E293B]">Contents</h3>
+            <button className="text-[11px] text-[#94A3B8] hover:text-[#334155] transition-colors" onClick={() => setTocOpen(false)}>
               Close
             </button>
           </div>
-          <div className="p-2 border-b border-[#EEF2F7]">
+          <div className="px-3 pt-2 pb-1.5">
             <input
               value={tocQuery}
               onChange={(e) => setTocQuery(e.target.value)}
-              className="w-full rounded-lg border border-[#D9DEE8] px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#E42313]/20 focus:border-[#E42313]"
-              placeholder="Search TOC..."
+              className="w-full rounded-lg border border-[#E3E8F0] bg-[#F8FAFC] px-2.5 py-1.5 text-[12px] text-[#334155] outline-none focus:border-[#E42313] focus:ring-2 focus:ring-[#E42313]/10 transition-all placeholder:text-[#94A3B8]"
+              placeholder="Search…"
             />
           </div>
-          <div className="p-2">
+          <div className="flex-1 overflow-y-auto px-2 py-1">
             {filteredOutline.length === 0 && (
-              <p className="px-2 py-3 text-xs text-gray-400">No matched entries</p>
+              <p className="px-2 py-4 text-center text-[11px] text-[#94A3B8]">No matching entries</p>
             )}
             {filteredOutline.map((item) => (
               <button
                 key={item.id}
-                className={`w-full text-left px-2 py-1.5 text-sm rounded transition-colors ${
+                className={`w-full text-left rounded-lg px-2 py-1.5 text-[12px] leading-snug transition-all duration-100 ${
                   item.id === activeOutlineId
-                    ? 'bg-[#fff1f0] text-[#C62314]'
-                    : 'hover:bg-gray-50'
+                    ? 'bg-[#FEF2F2] text-[#C62314] font-medium'
+                    : 'text-[#475569] hover:bg-[#F8FAFC]'
                 }`}
-                style={{ paddingLeft: `${8 + item.level * 14}px` }}
+                style={{ paddingLeft: `${8 + item.level * 12}px` }}
                 disabled={!item.pageNumber}
-                onClick={() => {
-                  if (item.pageNumber) {
-                    onJumpToPage(item.pageNumber);
-                  }
-                }}
+                onClick={() => { if (item.pageNumber) onJumpToPage(item.pageNumber); }}
               >
-                <span className="text-gray-800">{item.title}</span>
-                {item.pageNumber && <span className="text-xs text-gray-500 ml-2">p.{item.pageNumber}</span>}
+                <span>{item.title}</span>
+                {item.pageNumber && <span className="ml-1.5 text-[10px] tabular-nums text-[#94A3B8]">p{item.pageNumber}</span>}
               </button>
             ))}
           </div>
@@ -545,57 +577,34 @@ export function MainCanvas({
       {!tocOpen && hasDocument && totalPages > 0 && (
         <button
           type="button"
-          className="absolute right-6 bottom-6 z-20 rounded-full border border-[#D9DEE8] bg-white/95 px-4 py-2 text-xs font-medium text-[#334155] shadow-lg backdrop-blur hover:bg-white"
+          className="absolute right-5 bottom-5 z-20 flex items-center gap-1.5 rounded-full border border-[#E3E8F0] bg-white/90 px-3.5 py-2 text-[11px] font-medium text-[#475569] shadow-lg backdrop-blur-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-[1.03] active:scale-[0.97]"
           onClick={() => setTocOpen(true)}
           title="Open Table of Contents"
         >
-          TOC · p{currentPage}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          p{currentPage}
         </button>
       )}
 
       {contextMenu && (
         <div
-          className="fixed z-30 bg-white border border-gray-200 shadow-lg rounded p-1"
+          className="ctx-menu fixed z-30"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           {hasDocument && totalPages > 0 && (
-            <button
-              className="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 rounded"
-              onClick={() => {
-                setTocOpen(true);
-                setContextMenu(null);
-              }}
-            >
-              Open TOC Sidebar
+            <button className="ctx-menu-item" onClick={() => { setTocOpen(true); setContextMenu(null); }}>
+              Open TOC
             </button>
           )}
-          <button
-            className="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 rounded"
-            onClick={() => {
-              onHighlightSelection();
-              setContextMenu(null);
-            }}
-          >
-            Highlight Selection
+          <button className="ctx-menu-item" onClick={() => { onHighlightSelection(); setContextMenu(null); }}>
+            Highlight
           </button>
-          <button
-            className="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 rounded"
-            onClick={() => {
-              onAddNoteSelection();
-              setContextMenu(null);
-            }}
-          >
-            Add Note from Selection
+          <button className="ctx-menu-item" onClick={() => { onAddNoteSelection(); setContextMenu(null); }}>
+            Add Note
           </button>
-          <button
-            className="block w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 rounded"
-            onClick={() => {
-              onExplainSelection();
-              setContextMenu(null);
-            }}
-          >
-            Explain Selection with AI
+          <button className="ctx-menu-item" onClick={() => { onExplainSelection(); setContextMenu(null); }}>
+            Explain with AI
           </button>
         </div>
       )}

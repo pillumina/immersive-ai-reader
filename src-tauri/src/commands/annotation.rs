@@ -41,3 +41,15 @@ pub async fn update_annotation_position(
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn update_annotation_text(
+    id: String,
+    text: String,
+    repo: State<'_, AnnotationRepository>,
+) -> Result<(), String> {
+    repo
+        .update_text(&id, &text)
+        .await
+        .map_err(|e| e.to_string())
+}

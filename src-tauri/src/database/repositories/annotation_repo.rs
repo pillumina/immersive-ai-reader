@@ -76,4 +76,24 @@ impl AnnotationRepository {
 
         Ok(())
     }
+
+    pub async fn update_text(
+        &self,
+        id: &str,
+        text: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE annotations
+            SET text = ?
+            WHERE id = ?
+            "#,
+        )
+        .bind(text)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
 }

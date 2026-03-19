@@ -126,6 +126,10 @@ export const annotationCommands = {
       positionY,
     });
   },
+
+  updateText: async (id: string, text: string): Promise<void> => {
+    await invoke('update_annotation_text', { id, text });
+  },
 };
 
 // Conversation commands

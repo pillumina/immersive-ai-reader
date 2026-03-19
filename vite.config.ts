@@ -30,6 +30,7 @@ export default defineConfig({
         manualChunks: {
           'pdfjs': ['pdfjs-dist'],
           'fabric': ['fabric'],
+          'markdown': ['react-markdown', 'remark-gfm'],
         },
       },
     },
