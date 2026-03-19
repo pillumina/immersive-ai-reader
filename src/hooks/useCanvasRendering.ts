@@ -180,7 +180,24 @@ export function useCanvasRendering(
         enterEdit();
       });
       card.style.cursor = 'default';
-      card.title = 'Double-click to edit';
+      card.title = 'Double-click to edit. Drag to canvas.';
+
+      // Make note cards draggable to canvas
+      card.draggable = true;
+      card.dataset.notePageNumber = String(pageNumber);
+      card.addEventListener('dragstart', (evt) => {
+        if (!(evt instanceof DragEvent)) return;
+        const notePayload = {
+          id: options?.annotationId || `note-${Date.now()}`,
+          annotationId: options?.annotationId || '',
+          content,
+          selectedText: options?.selectedText || '',
+          pageNumber,
+        };
+        evt.dataTransfer?.setData('application/x-note-card', JSON.stringify(notePayload));
+        evt.dataTransfer?.setData('text/plain', `__NOTECARD__${JSON.stringify(notePayload)}`);
+        evt.dataTransfer!.effectAllowed = 'copy';
+      });
     }
     if (kind === 'ai-card' && options?.messageId) {
       card.dataset.messageId = options.messageId;
@@ -464,33 +481,70 @@ export function useCanvasRendering(
     return count;
   };
 
-  const addNoteForSelection = async (content: string) => {
+  const addNoteForSelection = async (content: string, clickX?: number, clickY?: number) => {
     if (!pdfDocument) throw new Error('请先上传或选择文档');
     const note = content.trim();
     if (!note) throw new Error('笔记内容不能为空');
 
     const selection = globalThis.getSelection?.();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      throw new Error('请先选中文本');
+    const hasSelection = selection && selection.rangeCount > 0 && !selection.isCollapsed;
+
+    let pageNumber: number;
+    let x: number;
+    let y: number;
+    let width: number;
+    let height: number;
+    let selectedText = '';
+
+    if (hasSelection) {
+      // Anchored note: attached to selected text
+      const range = selection!.getRangeAt(0);
+      const rect = Array.from(range.getClientRects()).find((r) => r.width > 1 && r.height > 1);
+      if (!rect) throw new Error('未找到可锚定区域');
+
+      const target = globalThis.document
+        ?.elementFromPoint(rect.left + 1, rect.top + 1)
+        ?.closest('.pdf-page') as HTMLElement | null;
+      if (!target) throw new Error('未找到页面锚点');
+
+      pageNumber = Number(target.dataset.pageNumber || '0');
+      if (!pageNumber) throw new Error('未找到页面编号');
+
+      const pageRect = target.getBoundingClientRect();
+      x = Math.max(rect.left - pageRect.left, 0);
+      y = Math.max(rect.top - pageRect.top, 0);
+      width = Math.min(rect.width, pageRect.width - x);
+      height = Math.min(rect.height, pageRect.height - y);
+      selectedText = selection!.toString().trim();
+    } else if (clickX !== undefined && clickY !== undefined) {
+      // Free-floating note: anchored to click position on current page
+      const containerEl = globalThis.document?.getElementById(containerId);
+      const target = globalThis.document
+        ?.elementFromPoint(clickX, clickY)
+        ?.closest('.pdf-page') as HTMLElement | null;
+      if (!target) {
+        // Fallback to current page
+        pageNumber = currentPage || 1;
+      } else {
+        pageNumber = Number(target.dataset.pageNumber || '0') || currentPage || 1;
+      }
+      if (!pageNumber) throw new Error('未找到页面编号');
+
+      const pageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
+      if (!pageEl) throw new Error('未找到页面元素');
+
+      const pageRect = pageEl.getBoundingClientRect();
+      x = Math.max(clickX - pageRect.left, 20);
+      y = Math.max(clickY - pageRect.top, 24);
+      width = 8;
+      height = 8;
+
+      // Avoid overlapping existing cards
+      const existingCards = pageEl.querySelectorAll('.pdf-note-card').length;
+      y = 24 + existingCards * 78;
+    } else {
+      throw new Error('请先选中文本，或在页面上右键创建笔记');
     }
-
-    const range = selection.getRangeAt(0);
-    const rect = Array.from(range.getClientRects()).find((r) => r.width > 1 && r.height > 1);
-    if (!rect) throw new Error('未找到可锚定区域');
-
-    const target = globalThis.document
-      ?.elementFromPoint(rect.left + 1, rect.top + 1)
-      ?.closest('.pdf-page') as HTMLElement | null;
-    if (!target) throw new Error('未找到页面锚点');
-    const pageNumber = Number(target.dataset.pageNumber || '0');
-    if (!pageNumber) throw new Error('未找到页面编号');
-
-    const pageRect = target.getBoundingClientRect();
-    const x = Math.max(rect.left - pageRect.left, 0);
-    const y = Math.max(rect.top - pageRect.top, 0);
-    const width = Math.min(rect.width, pageRect.width - x);
-    const height = Math.min(rect.height, pageRect.height - y);
-    const selectedText = selection.toString().trim();
 
     const createdNote = await annotationCommands.create({
       document_id: pdfDocument.id,
@@ -501,12 +555,14 @@ export function useCanvasRendering(
       position_y: y,
       position_width: width,
       position_height: height,
-      text: `${NOTE_PREFIX}${note}\n\n${selectedText}`,
+      text: selectedText ? `${NOTE_PREFIX}${note}\n\n${selectedText}` : `${NOTE_PREFIX}${note}`,
     });
 
-    renderHighlight(pageNumber, x, y, width, height, 'rgba(14, 165, 233, 0.25)');
+    if (hasSelection) {
+      renderHighlight(pageNumber, x, y, width, height, 'rgba(14, 165, 233, 0.25)');
+    }
     renderNoteCard(pageNumber, x, y, note, { annotationId: createdNote?.id, selectedText });
-    selection.removeAllRanges();
+    selection?.removeAllRanges();
   };
 
   const pinNoteToCurrentPage = async (

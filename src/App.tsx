@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { MainCanvas } from '@/components/layout/MainCanvas';
 import { AIPanel } from '@/components/layout/AIPanel';
 import { SettingsModal } from '@/components/features/SettingsModal';
+import { NotesManager } from '@/components/features/NotesManager';
 import { Toast } from '@/components/ui/Toast';
 import { usePDF } from '@/hooks/usePDF';
 import { useAI } from '@/hooks/useAI';
@@ -44,6 +45,8 @@ function App() {
   } = useSettings();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [notesManagerOpen, setNotesManagerOpen] = useState(false);
+  const [notesAnnotations, setNotesAnnotations] = useState<any[]>([]);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
@@ -126,6 +129,26 @@ function App() {
     }
   }, [currentDocument, loadHistory]);
 
+  // Load notes for Notes Manager
+  useEffect(() => {
+    const loadNotes = async () => {
+      if (!currentDocument?.id) {
+        setNotesAnnotations([]);
+        return;
+      }
+      try {
+        const annotations = await annotationCommands.getByDocument(currentDocument.id);
+        setNotesAnnotations(annotations);
+      } catch (err) {
+        console.error('Failed to load annotations:', err);
+        setNotesAnnotations([]);
+      }
+    };
+    if (notesManagerOpen) {
+      loadNotes();
+    }
+  }, [currentDocument?.id, notesManagerOpen]);
+
   useEffect(() => {
     const refresh = async () => {
       if (!currentDocument?.id) {
@@ -199,15 +222,19 @@ function App() {
       setToast({ message, type: 'info' });
     }
   };
-  const handleAddNoteSelection = async () => {
-    const note = window.prompt('Add a note for selected text:');
+  const handleAddNoteSelection = async (clickX?: number, clickY?: number) => {
+    const note = window.prompt('Add a note:');
     if (note === null) return;
+    if (!note.trim()) {
+      setToast({ message: 'Note content cannot be empty', type: 'info' });
+      return;
+    }
     try {
-      await addNoteForSelection(note);
+      await addNoteForSelection(note, clickX, clickY);
       setToast({ message: 'Note added', type: 'success' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add note';
-      setToast({ message, type: 'info' });
+      setToast({ message, type: 'error' });
     }
   };
   const handleSummarize = () => {
@@ -271,6 +298,37 @@ function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to export notes';
       setToast({ message, type: 'error' });
+    }
+  };
+
+  const handleDeleteNote = async (annotationId: string) => {
+    try {
+      await annotationCommands.delete(annotationId);
+      setNotesAnnotations((prev) => prev.filter((a) => a.id !== annotationId));
+      setToast({ message: 'Note deleted', type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete note';
+      setToast({ message, type: 'error' });
+      throw error;
+    }
+  };
+
+  const handleUpdateNote = async (annotationId: string, newContent: string) => {
+    try {
+      const annotation = notesAnnotations.find((a) => a.id === annotationId);
+      if (!annotation) throw new Error('Annotation not found');
+      const oldText = typeof annotation.text === 'string' ? annotation.text : '';
+      const selectedText = oldText.includes('\n\n') ? oldText.split('\n\n').slice(1).join('\n\n') : '';
+      const newText = `__NOTE__|${newContent}${selectedText ? '\n\n' + selectedText : ''}`;
+      await annotationCommands.updateText(annotationId, newText);
+      setNotesAnnotations((prev) =>
+        prev.map((a) => (a.id === annotationId ? { ...a, text: newText } : a))
+      );
+      setToast({ message: 'Note updated', type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update note';
+      setToast({ message, type: 'error' });
+      throw error;
     }
   };
   const handlePinMessageToCanvas = async (messageId: string, pageHint?: number) => {
@@ -391,6 +449,7 @@ function App() {
         onJumpToPage={jumpToPage}
         onHighlightSelection={handleHighlightSelection}
         onAddNoteSelection={handleAddNoteSelection}
+        onOpenNotesManager={() => setNotesManagerOpen(true)}
         onExplainSelection={() => { void handleExplainTerm(); }}
         onDropAICard={handleDropAICard}
         documentId={currentDocument?.id}
@@ -468,6 +527,25 @@ function App() {
           );
         }}
       />
+
+      {notesManagerOpen && currentDocument && (
+        <NotesManager
+          annotations={notesAnnotations}
+          onJumpToPage={(page) => {
+            jumpToCitation(page);
+            setComparePageSignal(page);
+            setComparePaneCommand({
+              page,
+              openSplit: true,
+              reason: 'reference',
+              nonce: Date.now(),
+            });
+          }}
+          onDeleteNote={handleDeleteNote}
+          onUpdateNote={handleUpdateNote}
+          onClose={() => setNotesManagerOpen(false)}
+        />
+      )}
 
       {toast && (
         <Toast
