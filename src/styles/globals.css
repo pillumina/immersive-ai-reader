@@ -518,6 +518,49 @@ h1, h2, h3, h4, h5, h6 {
   transform: scale(0.93);
 }
 
+/* ─── PDF Skeleton Loading ─── */
+.pdf-page-skeleton {
+  position: relative;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.pdf-page-skeleton-inner {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  overflow: hidden;
+}
+
+.pdf-page-skeleton-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 100%
+  );
+  animation: skeletonShimmer 1.8s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.pdf-page-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+  font-size: 13px;
+}
+
 /* ─── Loading pulse ─── */
 .loading-pulse {
   width: 36px;

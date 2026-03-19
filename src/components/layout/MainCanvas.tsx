@@ -396,9 +396,9 @@ export function MainCanvas({
             <div className="relative">
               <div id="pdf-pages-container" className="pdf-pages-container" />
               {isLoading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/75 backdrop-blur-sm animate-in fade-in">
-                  <div className="loading-pulse" />
-                  <p className="text-[13px] text-[#475569] font-medium">Rendering document…</p>
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/90 shadow-md border border-[#E3E8F0] backdrop-blur-sm animate-in fade-in slide-in-from-top-2">
+                  <div className="w-3.5 h-3.5 rounded-full bg-[#E42313] animate-pulse" />
+                  <p className="text-[11px] text-[#475569] font-medium whitespace-nowrap">Rendering…</p>
                 </div>
               )}
             </div>

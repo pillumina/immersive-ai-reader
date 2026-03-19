@@ -375,7 +375,7 @@ export function useCanvasRendering(
 
         const result = await Promise.race([
           renderPagesToContainer(file, containerEl, {
-            scale: 1.5,
+            scale: 1.25,
             shouldCancel: () => jobId !== renderJobIdRef.current,
           }),
           new Promise<never>((_, reject) =>

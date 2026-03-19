@@ -51,7 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
               We encountered an unexpected error. The app has been reset to a safe state.
             </p>
 
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {this.state.error && (
               <div className="mb-6 p-4 bg-slate-50 rounded-lg text-left">
                 <p className="text-xs font-mono text-red-600 break-all">
                   {this.state.error.message}
@@ -61,7 +61,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
             <div className="flex gap-3 justify-center">
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => window.location.reload()}
                 className="flex items-center gap-2"
               >
