@@ -181,6 +181,15 @@ function App() {
     }
   }, [renderError]);
 
+  // Listen for ai-card-unpinned events from PDF canvas cards
+  useEffect(() => {
+    const handler = () => {
+      setToast({ message: 'AI card removed from canvas', type: 'success' });
+    };
+    globalThis.addEventListener('ai-card-unpinned', handler);
+    return () => globalThis.removeEventListener('ai-card-unpinned', handler);
+  }, []);
+
   useEffect(() => {
     if (pdfError) {
       setToast({ message: pdfError, type: 'error' });
@@ -438,6 +447,9 @@ function App() {
           onSelectDocument={selectDocument}
           onDeleteDocument={deleteDocument}
           onRelinkDocument={relinkDocument}
+          totalPages={totalPages}
+          currentPage={currentPage}
+          onJumpToPage={jumpToPage}
         />
       )}
 

@@ -692,6 +692,8 @@ export function useCanvasRendering(
       highlight?.remove();
     }
     onUnpin?.(messageId);
+    // Fire custom event so App can show toast
+    globalThis.dispatchEvent(new CustomEvent('ai-card-unpinned', { detail: { messageId } }));
   };
 
   useEffect(() => {
