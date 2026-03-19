@@ -277,7 +277,8 @@ export function MainCanvas({
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    const hasAiCard = Array.from(event.dataTransfer.types).includes('application/x-ai-card');
+    const types = Array.from(event.dataTransfer.types);
+    const hasAiCard = types.includes('application/x-ai-card') || types.includes('text/plain');
     if (!hasAiCard) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'copy';
@@ -289,7 +290,11 @@ export function MainCanvas({
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    const raw = event.dataTransfer.getData('application/x-ai-card');
+    let raw = event.dataTransfer.getData('application/x-ai-card');
+    if (!raw) {
+      const plain = event.dataTransfer.getData('text/plain');
+      if (plain.startsWith('__AICARD__')) raw = plain.slice('__AICARD__'.length);
+    }
     setIsAICardDragOver(false);
     if (!raw) return;
     event.preventDefault();

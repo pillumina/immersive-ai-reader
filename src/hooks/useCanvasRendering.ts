@@ -84,7 +84,8 @@ export function useCanvasRendering(
     y: number,
     width: number,
     height: number,
-    color: string
+    color: string,
+    annotationId?: string
   ) => {
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(containerEl instanceof HTMLElement)) return;
@@ -97,6 +98,7 @@ export function useCanvasRendering(
     highlight.style.width = `${width}px`;
     highlight.style.height = `${height}px`;
     highlight.style.backgroundColor = color;
+    if (annotationId) highlight.dataset.annotationId = annotationId;
     pageEl.appendChild(highlight);
   };
 
@@ -332,7 +334,8 @@ export function useCanvasRendering(
               : isNote
                 ? 'rgba(14, 165, 233, 0.25)'
                 : 'rgba(255, 235, 59, 0.35)'
-          )
+          ),
+          (isAiCard || isNote) ? a.id : undefined
         );
         if (isNote && noteContent) {
           const noteSelectedText = isNote ? noteRaw.split('\n\n').slice(1).join('\n\n') : '';
@@ -583,7 +586,8 @@ export function useCanvasRendering(
       y,
       width,
       height,
-      kind === 'ai-card' ? 'rgba(168, 85, 247, 0.18)' : 'rgba(14, 165, 233, 0.06)'
+      kind === 'ai-card' ? 'rgba(168, 85, 247, 0.18)' : 'rgba(14, 165, 233, 0.06)',
+      kind === 'ai-card' ? created?.id : undefined
     );
     renderNoteCard(pageNumber, x, y, note, {
       messageId: options?.messageId,
@@ -638,13 +642,31 @@ export function useCanvasRendering(
       text: textPayload,
     });
 
-    renderHighlight(resolvedPageNumber, x, y, width, height, 'rgba(168, 85, 247, 0.18)');
+    renderHighlight(resolvedPageNumber, x, y, width, height, 'rgba(168, 85, 247, 0.18)', created?.id);
     renderNoteCard(resolvedPageNumber, x, y, note, {
       messageId,
       annotationId: created?.id,
       kind: 'ai-card',
     });
     jumpToPage(resolvedPageNumber);
+  };
+
+  const unpinAiCardByMessageId = async (messageId: string) => {
+    if (!pdfDocument) throw new Error('请先上传或选择文档');
+    const annotations = await annotationCommands.getByDocument(pdfDocument.id);
+    const prefix = `${AI_CARD_PREFIX}${messageId}`;
+    const aiAnnotation = annotations.find(
+      (a: { text?: string }) => typeof a.text === 'string' && a.text.startsWith(prefix)
+    );
+    if (!aiAnnotation?.id) throw new Error('未找到对应的 AI 卡片');
+    await annotationCommands.delete(aiAnnotation.id);
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (containerEl instanceof HTMLElement) {
+      const card = containerEl.querySelector<HTMLElement>(`.pdf-ai-card[data-message-id="${messageId}"]`);
+      card?.remove();
+      const highlight = containerEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${aiAnnotation.id}"]`);
+      highlight?.remove();
+    }
   };
 
   useEffect(() => {
@@ -724,6 +746,7 @@ export function useCanvasRendering(
     addNoteForSelection,
     pinNoteToCurrentPage,
     dropAICardAtPoint,
+    unpinAiCardByMessageId,
     locateAiCardByMessageId,
   };
 }

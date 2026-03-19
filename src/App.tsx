@@ -70,6 +70,7 @@ function App() {
     addNoteForSelection,
     pinNoteToCurrentPage,
     dropAICardAtPoint,
+    unpinAiCardByMessageId,
     locateAiCardByMessageId,
   } = useCanvasRendering(
     'pdf-scroll-container',
@@ -298,6 +299,16 @@ function App() {
       setToast({ message: 'No pinned AI card found for this message', type: 'info' });
     }
   };
+  const handleUnpinFromCanvas = async (messageId: string) => {
+    try {
+      await unpinAiCardByMessageId(messageId);
+      setPinnedMessageIds((prev) => prev.filter((id) => id !== messageId));
+      setToast({ message: 'AI card removed from canvas', type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to unpin';
+      setToast({ message, type: 'error' });
+    }
+  };
   const handleJumpToCitation = (page: number) => {
     jumpToCitation(page);
     setComparePageSignal(page);
@@ -401,6 +412,7 @@ function App() {
           onRetryMessage={(messageId, mode) => { void retryAssistantMessage(messageId, mode); }}
           onStopGeneration={stopGeneration}
           onPinToCanvas={handlePinMessageToCanvas}
+          onUnpinFromCanvas={handleUnpinFromCanvas}
           onLocateCanvasCard={handleLocateCanvasCard}
           onSendToRightPane={handleSendToRightPane}
           onSummarize={handleSummarize}

@@ -14,6 +14,7 @@ interface AIPanelProps {
   onRetryMessage: (messageId: string, mode?: ChatInputMode) => void;
   onStopGeneration: () => void;
   onPinToCanvas: (messageId: string, pageHint?: number) => void;
+  onUnpinFromCanvas: (messageId: string) => void;
   onLocateCanvasCard: (messageId: string) => void;
   onSendToRightPane: (messageId: string, pageHint?: number) => void;
   onSummarize: () => void;
@@ -41,6 +42,7 @@ export function AIPanel({
   onRetryMessage,
   onStopGeneration,
   onPinToCanvas,
+  onUnpinFromCanvas,
   onLocateCanvasCard,
   onSendToRightPane,
   onSummarize,
@@ -239,15 +241,16 @@ export function AIPanel({
     return Number.isFinite(page) && page > 0 ? page : undefined;
   };
 
-  const handleDragAICard = (event: DragEvent<HTMLButtonElement>, msg: Message) => {
+  const handleDragAICard = (event: DragEvent<HTMLElement>, msg: Message) => {
     if (!msg.id || !msg.content?.trim()) return;
     const payload = {
       messageId: msg.id,
       content: msg.content,
       pageHint: extractFirstCitationPage(msg.content),
     };
-    event.dataTransfer.setData('application/x-ai-card', JSON.stringify(payload));
-    event.dataTransfer.setData('text/plain', msg.content.slice(0, 120));
+    const json = JSON.stringify(payload);
+    event.dataTransfer.setData('application/x-ai-card', json);
+    event.dataTransfer.setData('text/plain', `__AICARD__${json}`);
     event.dataTransfer.effectAllowed = 'copy';
   };
 
@@ -360,28 +363,33 @@ export function AIPanel({
                           <span>{copiedMessageId === msg.id ? 'Copied' : 'Copy'}</span>
                         </button>
                         {msg.id && (
-                          <button
-                            type="button"
-                            className="ai-msg-action"
-                            draggable
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            draggable={!isLoading}
                             onDragStart={(e) => handleDragAICard(e, msg)}
-                            disabled={isLoading}
-                            title="Drag to canvas"
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.preventDefault(); }}
+                            className="ai-msg-action cursor-grab active:cursor-grabbing"
+                            title="Drag to PDF canvas"
                           >
                             <GripVertical size={13} />
                             <span>Drag</span>
-                          </button>
+                          </div>
                         )}
                         {msg.id && (
                           <button
                             type="button"
                             className="ai-msg-action"
-                            onClick={() => onPinToCanvas(msg.id!, extractFirstCitationPage(msg.content))}
-                            disabled={isLoading || pinnedIdSet.has(msg.id || '')}
-                            title={pinnedIdSet.has(msg.id || '') ? 'Already pinned to canvas' : 'Pin as canvas card'}
+                            onClick={() =>
+                              pinnedIdSet.has(msg.id || '')
+                                ? onUnpinFromCanvas(msg.id!)
+                                : onPinToCanvas(msg.id!, extractFirstCitationPage(msg.content))
+                            }
+                            disabled={isLoading}
+                            title={pinnedIdSet.has(msg.id || '') ? 'Remove AI card from canvas' : 'Pin as canvas card'}
                           >
                             <Pin size={13} />
-                            <span>{pinnedIdSet.has(msg.id || '') ? 'Pinned' : 'Pin'}</span>
+                            <span>{pinnedIdSet.has(msg.id || '') ? 'Unpin' : 'Pin'}</span>
                           </button>
                         )}
                         {msg.id && (
