@@ -17,6 +17,7 @@ interface ToastState {
 }
 
 function App() {
+  const AI_CARD_PREFIX = '__AICARD__|';
   const {
     currentDocument,
     documents,
@@ -32,6 +33,8 @@ function App() {
     aiConfig,
     activeProfile,
     profiles,
+    uiSettings,
+    updateUiSettings,
     loadSettings,
     saveActiveProfile,
     createNewProfile,
@@ -43,6 +46,15 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
+  const [focusMode, setFocusMode] = useState(false);
+  const [comparePageSignal, setComparePageSignal] = useState<number | null>(null);
+  const [comparePaneCommand, setComparePaneCommand] = useState<{
+    page: number;
+    openSplit?: boolean;
+    reason?: 'evidence' | 'reference' | 'compare';
+    nonce: number;
+  } | null>(null);
 
   // Canvas rendering
   const {
@@ -56,6 +68,8 @@ function App() {
     highlightSelection,
     addNoteForSelection,
     pinNoteToCurrentPage,
+    dropAICardAtPoint,
+    locateAiCardByMessageId,
   } = useCanvasRendering(
     'pdf-scroll-container',
     'pdf-pages-container',
@@ -79,14 +93,21 @@ function App() {
     messages,
     isLoading: aiLoading,
     error: aiError,
+    pendingRouteConfirmation,
+    routePreferenceStats,
     sendMessage,
+    explainTerm,
     retryAssistantMessage,
+    confirmPendingRoute,
+    dismissPendingRoute,
+    clearRoutePreferenceMemory,
     stopGeneration,
     loadHistory,
   } = useAI(
     currentDocument?.id || '',
     aiConfig,
-    getAIContext
+    getAIContext,
+    { rememberRoutePreferenceAcrossSessions: uiSettings.rememberRoutePreferenceAcrossSessions }
   );
 
   useEffect(() => {
@@ -102,6 +123,31 @@ function App() {
       loadHistory();
     }
   }, [currentDocument, loadHistory]);
+
+  useEffect(() => {
+    const refresh = async () => {
+      if (!currentDocument?.id) {
+        setPinnedMessageIds([]);
+        return;
+      }
+      try {
+        const annotations = await annotationCommands.getByDocument(currentDocument.id);
+        const ids = annotations
+          .map((a: any) => (typeof a.text === 'string' ? a.text : ''))
+          .filter((text: string) => text.startsWith(AI_CARD_PREFIX))
+          .map((text: string) => {
+            const raw = text.slice(AI_CARD_PREFIX.length);
+            const messageId = raw.split('\n\n')[0]?.trim();
+            return messageId || '';
+          })
+          .filter((id: string) => !!id);
+        setPinnedMessageIds(Array.from(new Set(ids)));
+      } catch {
+        setPinnedMessageIds([]);
+      }
+    };
+    void refresh();
+  }, [currentDocument?.id, AI_CARD_PREFIX]);
 
   useEffect(() => {
     if (renderError) {
@@ -177,6 +223,14 @@ function App() {
     }
     sendMessage(`Translate the following text into Chinese, preserve technical terms in English when needed, and provide concise explanation:\n\n${text}`);
   };
+  const handleExplainTerm = async () => {
+    const term = globalThis.getSelection?.()?.toString().trim();
+    if (!term) {
+      setToast({ message: 'Select a term first', type: 'info' });
+      return;
+    }
+    await explainTerm(term);
+  };
   const handleExportNotes = async () => {
     if (!currentDocument) {
       setToast({ message: 'No document loaded', type: 'info' });
@@ -217,32 +271,100 @@ function App() {
       setToast({ message, type: 'error' });
     }
   };
-  const handlePinMessageToCanvas = async (messageId: string) => {
+  const handlePinMessageToCanvas = async (messageId: string, pageHint?: number) => {
     const target = messages.find((m) => m.id === messageId && m.role === 'assistant');
     if (!target?.content?.trim()) {
       setToast({ message: 'No message content to pin', type: 'info' });
       return;
     }
     try {
-      await pinNoteToCurrentPage(target.content);
-      setToast({ message: `Pinned to page ${currentPage}`, type: 'success' });
+      await pinNoteToCurrentPage(target.content, {
+        kind: 'ai-card',
+        messageId,
+        pageNumber: pageHint,
+      });
+      setPinnedMessageIds((prev) => (prev.includes(messageId) ? prev : [...prev, messageId]));
+      const resolvedPage = pageHint || currentPage;
+      setToast({ message: `Pinned as AI card to page ${resolvedPage}`, type: 'success' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to pin message';
       setToast({ message, type: 'error' });
     }
   };
+  const handleLocateCanvasCard = (messageId: string) => {
+    const found = locateAiCardByMessageId(messageId);
+    if (!found) {
+      setToast({ message: 'No pinned AI card found for this message', type: 'info' });
+    }
+  };
+  const handleJumpToCitation = (page: number) => {
+    jumpToCitation(page);
+    setComparePageSignal(page);
+    setComparePaneCommand({
+      page,
+      openSplit: true,
+      reason: 'evidence',
+      nonce: Date.now(),
+    });
+  };
+  const handleSendToRightPane = (messageId: string, pageHint?: number) => {
+    const target = messages.find((m) => m.id === messageId && m.role === 'assistant');
+    if (!target) {
+      setToast({ message: 'Message not found', type: 'info' });
+      return;
+    }
+    const fallbackPageFromContent = (() => {
+      const match = target.content.match(/\[ref:p(\d+)\]|\[p(\d+)\]/i);
+      const page = Number(match?.[1] || match?.[2] || '0');
+      return Number.isFinite(page) && page > 0 ? page : null;
+    })();
+    const targetPage = pageHint || fallbackPageFromContent || currentPage || 1;
+    setComparePaneCommand({
+      page: targetPage,
+      openSplit: true,
+      reason: 'reference',
+      nonce: Date.now(),
+    });
+    setToast({ message: `Verify source · page ${targetPage}`, type: 'success' });
+  };
+  const handleDropAICard = (
+    payload: { messageId: string; content: string; pageHint?: number },
+    clientX: number,
+    clientY: number
+  ) => {
+    void (async () => {
+      try {
+        await dropAICardAtPoint(
+          payload.content,
+          payload.messageId,
+          clientX,
+          clientY,
+          payload.pageHint
+        );
+        setPinnedMessageIds((prev) => (
+          prev.includes(payload.messageId) ? prev : [...prev, payload.messageId]
+        ));
+        setToast({ message: 'AI card dropped to canvas', type: 'success' });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to drop AI card';
+        setToast({ message, type: 'error' });
+      }
+    })();
+  };
 
   return (
     <main className="flex h-screen bg-white">
-      <Sidebar
-        onUpload={handleUpload}
-        onOpenSettings={() => setSettingsOpen(true)}
-        documents={documents}
-        currentDocumentId={currentDocument?.id}
-        onSelectDocument={selectDocument}
-        onDeleteDocument={deleteDocument}
-        onRelinkDocument={relinkDocument}
-      />
+      {!focusMode && (
+        <Sidebar
+          onUpload={handleUpload}
+          onOpenSettings={() => setSettingsOpen(true)}
+          documents={documents}
+          currentDocumentId={currentDocument?.id}
+          onSelectDocument={selectDocument}
+          onDeleteDocument={deleteDocument}
+          onRelinkDocument={relinkDocument}
+        />
+      )}
 
       <MainCanvas
         zoomLevel={zoomLevel}
@@ -257,20 +379,39 @@ function App() {
         onJumpToPage={jumpToPage}
         onHighlightSelection={handleHighlightSelection}
         onAddNoteSelection={handleAddNoteSelection}
+        onExplainSelection={() => { void handleExplainTerm(); }}
+        onDropAICard={handleDropAICard}
+        documentId={currentDocument?.id}
+        onToggleFocusMode={() => setFocusMode((v) => !v)}
+        isFocusMode={focusMode}
+        comparePageSignal={comparePageSignal}
+        comparePaneCommand={comparePaneCommand}
       />
 
-      <AIPanel
-        messages={messages}
-        isLoading={aiLoading}
-        onSendMessage={sendMessage}
-        onRetryMessage={retryAssistantMessage}
-        onStopGeneration={stopGeneration}
-        onPinToCanvas={handlePinMessageToCanvas}
-        onSummarize={handleSummarize}
-        onTranslateSelection={handleTranslateSelection}
-        onExportNotes={handleExportNotes}
-        onJumpToCitation={jumpToCitation}
-      />
+      {!focusMode && (
+        <AIPanel
+          messages={messages}
+          isLoading={aiLoading}
+          showPerfHints={uiSettings.showChatPerfHints}
+          defaultInputMode={uiSettings.chatInputModeDefault}
+          onSendMessage={(content, mode) => { void sendMessage(content, mode || 'auto'); }}
+          onExplainTerm={() => { void handleExplainTerm(); }}
+          onRetryMessage={(messageId, mode) => { void retryAssistantMessage(messageId, mode); }}
+          onStopGeneration={stopGeneration}
+          onPinToCanvas={handlePinMessageToCanvas}
+          onLocateCanvasCard={handleLocateCanvasCard}
+          onSendToRightPane={handleSendToRightPane}
+          onSummarize={handleSummarize}
+          onTranslateSelection={handleTranslateSelection}
+          onExportNotes={handleExportNotes}
+          onJumpToCitation={handleJumpToCitation}
+          pendingRouteConfirmation={pendingRouteConfirmation}
+          onConfirmRouteAsChat={() => { void confirmPendingRoute('chat'); }}
+          onConfirmRouteAsDoc={() => { void confirmPendingRoute('doc'); }}
+          onDismissRouteConfirm={dismissPendingRoute}
+          pinnedMessageIds={pinnedMessageIds}
+        />
+      )}
 
       <SettingsModal
         open={settingsOpen}
@@ -289,6 +430,20 @@ function App() {
           }
         }}
         onRenameProfile={renameProfile}
+        showChatPerfHints={uiSettings.showChatPerfHints}
+        onToggleChatPerfHints={(enabled) => updateUiSettings({ showChatPerfHints: enabled })}
+        chatInputModeDefault={uiSettings.chatInputModeDefault}
+        onChangeChatInputModeDefault={(mode) => updateUiSettings({ chatInputModeDefault: mode })}
+        routePreferenceStats={routePreferenceStats}
+        routePreferenceScopeLabel={
+          currentDocument?.fileName || 'global scope (no active document)'
+        }
+        routePreferenceScopeDetail={currentDocument?.id || undefined}
+        onClearRoutePreferenceMemory={clearRoutePreferenceMemory}
+        rememberRoutePreferenceAcrossSessions={uiSettings.rememberRoutePreferenceAcrossSessions}
+        onToggleRememberRoutePreferenceAcrossSessions={(enabled) =>
+          updateUiSettings({ rememberRoutePreferenceAcrossSessions: enabled })
+        }
         onSaveActiveProfile={handleSaveSettings}
         onTestConnectivity={async (config) => {
           return await aiCommands.testConnectivity(

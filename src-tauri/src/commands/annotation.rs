@@ -28,3 +28,16 @@ pub async fn delete_annotation(
 ) -> Result<(), String> {
     repo.delete(&id).await.map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn update_annotation_position(
+    id: String,
+    position_x: f64,
+    position_y: f64,
+    repo: State<'_, AnnotationRepository>,
+) -> Result<(), String> {
+    repo
+        .update_position(&id, position_x, position_y)
+        .await
+        .map_err(|e| e.to_string())
+}

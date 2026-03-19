@@ -17,11 +17,13 @@ export function useCanvasRendering(
   const [currentPage, setCurrentPage] = useState(1);
   const [outline, setOutline] = useState<PdfOutlineItem[]>([]);
   const NOTE_PREFIX = '__NOTE__|';
+  const AI_CARD_PREFIX = '__AICARD__|';
 
   const clearHighlights = () => {
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(containerEl instanceof HTMLElement)) return;
     containerEl.querySelectorAll('.pdf-highlight').forEach((el) => el.remove());
+    containerEl.querySelectorAll('.pdf-note-card').forEach((el) => el.remove());
   };
 
   const renderHighlight = (
@@ -46,17 +48,141 @@ export function useCanvasRendering(
     pageEl.appendChild(highlight);
   };
 
-  const renderNoteCard = (pageNumber: number, x: number, y: number, content: string) => {
+  const renderNoteCard = (
+    pageNumber: number,
+    x: number,
+    y: number,
+    content: string,
+    options?: { messageId?: string; annotationId?: string; kind?: 'note' | 'ai-card' }
+  ) => {
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(containerEl instanceof HTMLElement)) return;
     const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
     if (!pageEl) return;
 
     const card = document.createElement('div');
-    card.className = 'pdf-note-card';
+    const kind = options?.kind || 'note';
+    card.className = `pdf-note-card ${kind === 'ai-card' ? 'pdf-ai-card' : ''}`;
     card.style.left = `${Math.max(x + 8, 8)}px`;
     card.style.top = `${Math.max(y + 8, 8)}px`;
-    card.textContent = content;
+    if (kind === 'ai-card') {
+      const header = document.createElement('div');
+      header.className = 'pdf-ai-card-header';
+      header.textContent = 'AI Card';
+      const body = document.createElement('div');
+      body.className = 'pdf-ai-card-body';
+      body.textContent = content;
+      const actions = document.createElement('div');
+      actions.className = 'pdf-ai-card-actions';
+      const openBtn = document.createElement('button');
+      openBtn.type = 'button';
+      openBtn.className = 'pdf-ai-card-action';
+      openBtn.textContent = 'Open Chat';
+      const expandBtn = document.createElement('button');
+      expandBtn.type = 'button';
+      expandBtn.className = 'pdf-ai-card-action';
+      expandBtn.textContent = 'Expand';
+      actions.appendChild(openBtn);
+      actions.appendChild(expandBtn);
+      card.appendChild(header);
+      card.appendChild(body);
+      card.appendChild(actions);
+
+      let expanded = false;
+      expandBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        expanded = !expanded;
+        body.classList.toggle('is-expanded', expanded);
+        expandBtn.textContent = expanded ? 'Collapse' : 'Expand';
+      });
+      openBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        if (!options?.messageId) return;
+        globalThis.dispatchEvent(
+          new CustomEvent('ai-open-message', {
+            detail: { messageId: options.messageId },
+          })
+        );
+      });
+    } else {
+      card.textContent = content;
+    }
+    if (kind === 'ai-card' && options?.messageId) {
+      card.dataset.messageId = options.messageId;
+      if (options.annotationId) {
+        card.dataset.annotationId = options.annotationId;
+      }
+      card.title = 'Drag to reposition';
+      const attachDrag = () => {
+        const annotationId = options.annotationId;
+        if (!annotationId) return;
+        let dragging = false;
+        let startClientX = 0;
+        let startClientY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+        let lastLeft = 0;
+        let lastTop = 0;
+        let didDrag = false;
+
+        const onPointerMove = (evt: PointerEvent) => {
+          if (!dragging) return;
+          const pageRect = pageEl.getBoundingClientRect();
+          const dx = evt.clientX - startClientX;
+          const dy = evt.clientY - startClientY;
+          if (Math.abs(dx) + Math.abs(dy) > 3) {
+            didDrag = true;
+          }
+          const maxLeft = Math.max(pageRect.width - card.offsetWidth - 8, 8);
+          const maxTop = Math.max(pageRect.height - card.offsetHeight - 8, 8);
+          lastLeft = Math.min(Math.max(startLeft + dx, 8), maxLeft);
+          lastTop = Math.min(Math.max(startTop + dy, 8), maxTop);
+          card.style.left = `${lastLeft}px`;
+          card.style.top = `${lastTop}px`;
+        };
+
+        const onPointerUp = async () => {
+          if (!dragging) return;
+          dragging = false;
+          card.classList.remove('pdf-ai-card-dragging');
+          globalThis.removeEventListener('pointermove', onPointerMove);
+          globalThis.removeEventListener('pointerup', onPointerUp);
+          // Card uses +8 visual offset from annotation anchor.
+          const nextX = Math.max(lastLeft - 8, 0);
+          const nextY = Math.max(lastTop - 8, 0);
+          try {
+            await annotationCommands.updatePosition(annotationId, nextX, nextY);
+          } catch {
+            card.style.left = `${startLeft}px`;
+            card.style.top = `${startTop}px`;
+          }
+          if (didDrag) {
+            card.dataset.dragged = '1';
+            globalThis.setTimeout(() => {
+              if (card.dataset.dragged === '1') delete card.dataset.dragged;
+            }, 120);
+          }
+        };
+
+        card.addEventListener('pointerdown', (evt) => {
+          if (evt.button !== 0) return;
+          const targetEl = evt.target as HTMLElement | null;
+          if (targetEl?.closest('.pdf-ai-card-action')) return;
+          dragging = true;
+          startClientX = evt.clientX;
+          startClientY = evt.clientY;
+          startLeft = card.offsetLeft;
+          startTop = card.offsetTop;
+          lastLeft = startLeft;
+          lastTop = startTop;
+          didDrag = false;
+          card.classList.add('pdf-ai-card-dragging');
+          globalThis.addEventListener('pointermove', onPointerMove);
+          globalThis.addEventListener('pointerup', onPointerUp, { once: true });
+        });
+      };
+      attachDrag();
+    }
     pageEl.appendChild(card);
   };
 
@@ -68,8 +194,13 @@ export function useCanvasRendering(
       .forEach((a) => {
         const textValue = typeof a.text === 'string' ? a.text : '';
         const isNote = textValue.startsWith(NOTE_PREFIX);
+        const isAiCard = textValue.startsWith(AI_CARD_PREFIX);
         const noteRaw = isNote ? textValue.slice(NOTE_PREFIX.length) : '';
         const noteContent = isNote ? noteRaw.split('\n\n')[0] : '';
+        const aiRaw = isAiCard ? textValue.slice(AI_CARD_PREFIX.length) : '';
+        const aiParts = isAiCard ? aiRaw.split('\n\n') : [];
+        const aiMessageId = isAiCard ? (aiParts[0] || '').trim() : '';
+        const aiContent = isAiCard ? aiParts.slice(1).join('\n\n').trim() : '';
 
         renderHighlight(
           Number(a.page_number),
@@ -77,7 +208,13 @@ export function useCanvasRendering(
           Number(a.position_y),
           Number(a.position_width),
           Number(a.position_height),
-          a.color || (isNote ? 'rgba(14, 165, 233, 0.25)' : 'rgba(255, 235, 59, 0.35)')
+          a.color || (
+            isAiCard
+              ? 'rgba(168, 85, 247, 0.18)'
+              : isNote
+                ? 'rgba(14, 165, 233, 0.25)'
+                : 'rgba(255, 235, 59, 0.35)'
+          )
         );
         if (isNote && noteContent) {
           renderNoteCard(
@@ -85,6 +222,15 @@ export function useCanvasRendering(
             Number(a.position_x),
             Number(a.position_y),
             noteContent
+          );
+        }
+        if (isAiCard && aiContent) {
+          renderNoteCard(
+            Number(a.page_number),
+            Number(a.position_x),
+            Number(a.position_y),
+            aiContent,
+            { messageId: aiMessageId, annotationId: a.id, kind: 'ai-card' }
           );
         }
       });
@@ -271,12 +417,15 @@ export function useCanvasRendering(
     selection.removeAllRanges();
   };
 
-  const pinNoteToCurrentPage = async (content: string) => {
+  const pinNoteToCurrentPage = async (
+    content: string,
+    options?: { pageNumber?: number; messageId?: string; kind?: 'note' | 'ai-card' }
+  ) => {
     if (!pdfDocument) throw new Error('请先上传或选择文档');
     const note = content.trim();
     if (!note) throw new Error('消息内容为空，无法固定');
 
-    const pageNumber = Math.max(currentPage || 1, 1);
+    const pageNumber = Math.max(options?.pageNumber || currentPage || 1, 1);
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(containerEl instanceof HTMLElement)) {
       throw new Error('页面容器未就绪');
@@ -292,20 +441,90 @@ export function useCanvasRendering(
     const width = 8;
     const height = 8;
 
-    await annotationCommands.create({
+    const kind = options?.kind || 'note';
+    const textPayload = kind === 'ai-card'
+      ? `${AI_CARD_PREFIX}${options?.messageId || ''}\n\n${note}`
+      : `${NOTE_PREFIX}${note}`;
+    const created = await annotationCommands.create({
       document_id: pdfDocument.id,
       page_number: pageNumber,
       annotation_type: 'highlight',
-      color: 'rgba(14, 165, 233, 0.06)',
+      color: kind === 'ai-card' ? 'rgba(168, 85, 247, 0.18)' : 'rgba(14, 165, 233, 0.06)',
       position_x: x,
       position_y: y,
       position_width: width,
       position_height: height,
-      text: `${NOTE_PREFIX}${note}`,
+      text: textPayload,
     });
 
-    renderHighlight(pageNumber, x, y, width, height, 'rgba(14, 165, 233, 0.06)');
-    renderNoteCard(pageNumber, x, y, note);
+    renderHighlight(
+      pageNumber,
+      x,
+      y,
+      width,
+      height,
+      kind === 'ai-card' ? 'rgba(168, 85, 247, 0.18)' : 'rgba(14, 165, 233, 0.06)'
+    );
+    renderNoteCard(pageNumber, x, y, note, {
+      messageId: options?.messageId,
+      annotationId: created?.id,
+      kind,
+    });
+  };
+
+  const dropAICardAtPoint = async (
+    content: string,
+    messageId: string,
+    clientX: number,
+    clientY: number,
+    pageHint?: number
+  ) => {
+    if (!pdfDocument) throw new Error('请先上传或选择文档');
+    const note = content.trim();
+    if (!note) throw new Error('消息内容为空，无法固定');
+
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (!(containerEl instanceof HTMLElement)) {
+      throw new Error('页面容器未就绪');
+    }
+    const targetPage = globalThis.document
+      ?.elementFromPoint(clientX, clientY)
+      ?.closest('.pdf-page') as HTMLElement | null;
+
+    const resolvedPageNumber = Number(targetPage?.dataset.pageNumber || pageHint || currentPage || 1);
+    const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${resolvedPageNumber}"]`);
+    if (!pageEl) {
+      throw new Error('未找到可投放页面');
+    }
+
+    const pageRect = pageEl.getBoundingClientRect();
+    const rawX = targetPage ? clientX - pageRect.left : 20;
+    const rawY = targetPage ? clientY - pageRect.top : 24;
+    const x = Math.max(rawX - 10, 8);
+    const y = Math.max(rawY - 10, 8);
+    const width = 8;
+    const height = 8;
+    const textPayload = `${AI_CARD_PREFIX}${messageId}\n\n${note}`;
+
+    const created = await annotationCommands.create({
+      document_id: pdfDocument.id,
+      page_number: resolvedPageNumber,
+      annotation_type: 'highlight',
+      color: 'rgba(168, 85, 247, 0.18)',
+      position_x: x,
+      position_y: y,
+      position_width: width,
+      position_height: height,
+      text: textPayload,
+    });
+
+    renderHighlight(resolvedPageNumber, x, y, width, height, 'rgba(168, 85, 247, 0.18)');
+    renderNoteCard(resolvedPageNumber, x, y, note, {
+      messageId,
+      annotationId: created?.id,
+      kind: 'ai-card',
+    });
+    jumpToPage(resolvedPageNumber);
   };
 
   useEffect(() => {
@@ -355,6 +574,24 @@ export function useCanvasRendering(
     setTimeout(() => flashPage(pageNumber), 220);
   };
 
+  const locateAiCardByMessageId = (messageId: string) => {
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (!(containerEl instanceof HTMLElement)) return false;
+    const card = containerEl.querySelector<HTMLElement>(`.pdf-ai-card[data-message-id="${messageId}"]`);
+    if (!card) return false;
+    const pageEl = card.closest<HTMLElement>('.pdf-page');
+    const pageNumber = Number(pageEl?.dataset.pageNumber || '0');
+    if (pageNumber > 0) {
+      jumpToPage(pageNumber);
+      setTimeout(() => flashPage(pageNumber), 220);
+    }
+    card.classList.remove('pdf-ai-card-focus');
+    void card.offsetWidth;
+    card.classList.add('pdf-ai-card-focus');
+    setTimeout(() => card.classList.remove('pdf-ai-card-focus'), 1800);
+    return true;
+  };
+
   return {
     isRendering,
     renderError,
@@ -366,5 +603,7 @@ export function useCanvasRendering(
     highlightSelection,
     addNoteForSelection,
     pinNoteToCurrentPage,
+    dropAICardAtPoint,
+    locateAiCardByMessageId,
   };
 }

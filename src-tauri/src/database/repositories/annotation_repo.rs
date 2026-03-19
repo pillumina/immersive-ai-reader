@@ -54,4 +54,26 @@ impl AnnotationRepository {
 
         Ok(())
     }
+
+    pub async fn update_position(
+        &self,
+        id: &str,
+        position_x: f64,
+        position_y: f64,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE annotations
+            SET position_x = ?, position_y = ?
+            WHERE id = ?
+            "#,
+        )
+        .bind(position_x)
+        .bind(position_y)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
 }

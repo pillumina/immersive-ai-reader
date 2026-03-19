@@ -8,6 +8,7 @@ pub struct ChatMessage {
     pub content: String,
 }
 
+#[derive(Clone)]
 pub struct AIClient {
     http_client: reqwest::Client,
 }
@@ -144,6 +145,44 @@ impl AIClient {
         }
 
         Ok(body)
+    }
+
+    pub async fn call_chat_stream(
+        &self,
+        provider: &str,
+        endpoint: &str,
+        model: &str,
+        api_key: &str,
+        messages: Vec<ChatMessage>,
+    ) -> Result<reqwest::Response, anyhow::Error> {
+        let endpoint = Self::resolve_chat_endpoint(provider, endpoint)?;
+        let mut request = self.http_client
+            .post(&endpoint)
+            .json(&serde_json::json!({
+                "model": model,
+                "messages": messages,
+                "stream": true,
+            }));
+
+        request = request.header("Authorization", format!("Bearer {}", api_key));
+        if provider == "anthropic" {
+            request = request
+                .header("x-api-key", api_key)
+                .header("anthropic-version", "2023-06-01");
+        }
+
+        let response = request.send().await?;
+        let status = response.status();
+        if !status.is_success() {
+            let status_code = status.as_u16();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!(
+                "HTTP {} from model endpoint: {}",
+                status_code,
+                body.chars().take(320).collect::<String>()
+            ));
+        }
+        Ok(response)
     }
 
     pub async fn test_connectivity(

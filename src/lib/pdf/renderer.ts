@@ -70,6 +70,30 @@ async function extractOutline(pdfDoc: pdfjsLib.PDFDocumentProxy): Promise<PdfOut
   return outline;
 }
 
+function buildFallbackOutline(totalPages: number): PdfOutlineItem[] {
+  // Keep fallback concise for very large documents.
+  const step = totalPages <= 60 ? 1 : 5;
+  const outline: PdfOutlineItem[] = [];
+  let id = 0;
+  for (let page = 1; page <= totalPages; page += step) {
+    outline.push({
+      id: `fallback-outline-${id++}`,
+      title: step === 1 ? `Page ${page}` : `Pages ${page}-${Math.min(page + step - 1, totalPages)}`,
+      pageNumber: page,
+      level: 0,
+    });
+  }
+  if (outline.length > 0 && outline[outline.length - 1].pageNumber !== totalPages) {
+    outline.push({
+      id: `fallback-outline-${id++}`,
+      title: `Page ${totalPages}`,
+      pageNumber: totalPages,
+      level: 0,
+    });
+  }
+  return outline;
+}
+
 /**
  * Render all PDF pages into a DOM container with selectable text layers.
  */
@@ -90,7 +114,9 @@ export async function renderPagesToContainer(
 
   container.innerHTML = '';
   const dpr = Math.min(globalThis.window?.devicePixelRatio || 1, 2);
-  const outline = await extractOutline(pdfDoc);
+  const extractedOutline = await extractOutline(pdfDoc);
+  const hasNavigableOutline = extractedOutline.some((item) => typeof item.pageNumber === 'number' && item.pageNumber > 0);
+  const outline = hasNavigableOutline ? extractedOutline : buildFallbackOutline(totalPages);
 
   for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
     if (shouldCancel?.()) {

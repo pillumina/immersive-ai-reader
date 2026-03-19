@@ -3,7 +3,9 @@ export interface MessageUsage {
   completionTokens?: number;
   totalTokens?: number;
   latencyMs?: number;
+  ttftMs?: number;
   model?: string;
+  cached?: boolean;
 }
 
 export interface Message {
@@ -14,6 +16,9 @@ export interface Message {
   status?: 'sent' | 'thinking' | 'streaming' | 'error';
   usage?: MessageUsage;
   requestContent?: string;
+  routeIntent?: 'chat' | 'doc_qa' | 'term';
+  routeConfidence?: number;
+  inputMode?: 'auto' | 'chat' | 'doc';
 }
 
 export interface ConversationHistory {

@@ -1,41 +1,73 @@
-import { useState, useRef, useEffect } from 'react';
-import { Check, Copy, Loader2, Pin, RotateCcw, Square, Send } from 'lucide-react';
+import { DragEvent, useState, useRef, useEffect } from 'react';
+import { Check, Copy, GripVertical, Loader2, MapPin, Pin, RotateCcw, Square, Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message } from '@/types/conversation';
+import { ChatInputMode } from '@/types/settings';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
 interface AIPanelProps {
   messages: Message[];
   isLoading: boolean;
-  onSendMessage: (content: string) => void;
-  onRetryMessage: (messageId: string) => void;
+  onSendMessage: (content: string, mode?: ChatInputMode) => void;
+  onExplainTerm: () => void;
+  onRetryMessage: (messageId: string, mode?: ChatInputMode) => void;
   onStopGeneration: () => void;
-  onPinToCanvas: (messageId: string) => void;
+  onPinToCanvas: (messageId: string, pageHint?: number) => void;
+  onLocateCanvasCard: (messageId: string) => void;
+  onSendToRightPane: (messageId: string, pageHint?: number) => void;
   onSummarize: () => void;
   onTranslateSelection: () => void;
   onExportNotes: () => void;
   onJumpToCitation: (page: number) => void;
+  showPerfHints: boolean;
+  defaultInputMode: ChatInputMode;
+  pendingRouteConfirmation: {
+    content: string;
+    confidence: number;
+    suggestedIntent: 'chat' | 'doc_qa' | 'term';
+  } | null;
+  onConfirmRouteAsChat: () => void;
+  onConfirmRouteAsDoc: () => void;
+  onDismissRouteConfirm: () => void;
+  pinnedMessageIds: string[];
 }
 
 export function AIPanel({
   messages,
   isLoading,
   onSendMessage,
+  onExplainTerm,
   onRetryMessage,
   onStopGeneration,
   onPinToCanvas,
+  onLocateCanvasCard,
+  onSendToRightPane,
   onSummarize,
   onTranslateSelection,
   onExportNotes,
   onJumpToCitation,
+  showPerfHints,
+  defaultInputMode,
+  pendingRouteConfirmation,
+  onConfirmRouteAsChat,
+  onConfirmRouteAsDoc,
+  onDismissRouteConfirm,
+  pinnedMessageIds,
 }: AIPanelProps) {
   const [input, setInput] = useState('');
+  const [inputMode, setInputMode] = useState<ChatInputMode>(defaultInputMode);
+  useEffect(() => {
+    setInputMode(defaultInputMode);
+  }, [defaultInputMode]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [focusedMessageId, setFocusedMessageId] = useState<string | null>(null);
+  const pinnedIdSet = new Set(pinnedMessageIds);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -49,6 +81,21 @@ export function AIPanel({
     });
   }, [messages, isLoading]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const custom = event as CustomEvent<{ messageId?: string }>;
+      const targetId = custom.detail?.messageId;
+      if (!targetId) return;
+      const targetEl = globalThis.document?.querySelector<HTMLElement>(`[data-ai-message-id="${targetId}"]`);
+      if (!targetEl) return;
+      setFocusedMessageId(targetId);
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      globalThis.setTimeout(() => setFocusedMessageId((prev) => (prev === targetId ? null : prev)), 1800);
+    };
+    globalThis.addEventListener('ai-open-message', handler as EventListener);
+    return () => globalThis.removeEventListener('ai-open-message', handler as EventListener);
+  }, []);
+
   const handleMessagesScroll = () => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -58,12 +105,26 @@ export function AIPanel({
 
   const handleSend = () => {
     if (input.trim() && !isLoading) {
-      onSendMessage(input.trim());
+      onSendMessage(input.trim(), inputMode);
       setInput('');
     }
   };
 
+  const formatRouteHint = (message: Message) => {
+    if (!message.routeIntent) return null;
+    const label = message.routeIntent === 'doc_qa'
+      ? 'doc'
+      : message.routeIntent === 'term'
+        ? 'term'
+        : 'chat';
+    const conf = typeof message.routeConfidence === 'number'
+      ? ` ${(message.routeConfidence * 100).toFixed(0)}%`
+      : '';
+    return `route ${label}${conf}`;
+  };
+
   const formatUsageHint = (message: Message) => {
+    if (!showPerfHints) return null;
     const usage = message.usage;
     if (!usage) return null;
     const parts: string[] = [];
@@ -80,8 +141,14 @@ export function AIPanel({
     if (typeof usage.latencyMs === 'number') {
       parts.push(`${(usage.latencyMs / 1000).toFixed(2)}s`);
     }
+    if (typeof usage.ttftMs === 'number') {
+      parts.push(`ttft ${(usage.ttftMs / 1000).toFixed(2)}s`);
+    }
     if (usage.model) {
       parts.push(usage.model);
+    }
+    if (usage.cached) {
+      parts.push('cache');
     }
     return parts.join(' · ');
   };
@@ -162,19 +229,41 @@ export function AIPanel({
     }
   };
 
+  const extractFirstCitationPage = (content: string): number | undefined => {
+    const match = content.match(/\[ref:p(\d+)\]|\[p(\d+)\]/i);
+    if (!match) return undefined;
+    const page = Number(match[1] || match[2] || '0');
+    return Number.isFinite(page) && page > 0 ? page : undefined;
+  };
+
+  const handleDragAICard = (event: DragEvent<HTMLButtonElement>, msg: Message) => {
+    if (!msg.id || !msg.content?.trim()) return;
+    const payload = {
+      messageId: msg.id,
+      content: msg.content,
+      pageHint: extractFirstCitationPage(msg.content),
+    };
+    event.dataTransfer.setData('application/x-ai-card', JSON.stringify(payload));
+    event.dataTransfer.setData('text/plain', msg.content.slice(0, 120));
+    event.dataTransfer.effectAllowed = 'copy';
+  };
+
   return (
     <aside className="w-[400px] border-l border-[#E3E8F0] bg-[#FCFDFF] flex flex-col">
       <div className="p-4 border-b border-[#E3E8F0]">
         <h2 className="text-lg font-semibold text-[#111827]">AI Assistant</h2>
         <p className="text-xs text-[#6B7280] mt-1">Context-aware help for current document</p>
-        <div
-          className="mt-2 inline-flex rounded-full border border-[#E5EAF3] bg-white px-3 py-1 text-[11px] text-[#4B5563]"
-          title={`Prompt: ${sessionStats.prompt} | Completion: ${sessionStats.completion} | Avg latency: ${avgLatency}`}
-        >
-          Session tokens {sessionStats.total} · avg {avgLatency}
-        </div>
+        {showPerfHints && (
+          <div
+            className="mt-2 inline-flex rounded-full border border-[#E5EAF3] bg-white px-3 py-1 text-[11px] text-[#4B5563]"
+            title={`Prompt: ${sessionStats.prompt} | Completion: ${sessionStats.completion} | Avg latency: ${avgLatency}`}
+          >
+            Session tokens {sessionStats.total} · avg {avgLatency}
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" onClick={onSummarize}>Summarize</Button>
+          <Button variant="secondary" size="sm" onClick={onExplainTerm}>Explain Term</Button>
           <Button variant="secondary" size="sm" onClick={onTranslateSelection}>Translate Selection</Button>
           <Button variant="secondary" size="sm" onClick={onExportNotes}>Export Notes</Button>
         </div>
@@ -191,14 +280,18 @@ export function AIPanel({
           </p>
         ) : (
           messages.map((msg, idx) => (
-            <div key={msg.id || idx} className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div
+              key={msg.id || idx}
+              data-ai-message-id={msg.id || ''}
+              className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
               <div className={`ai-msg group max-w-[85%] p-3 text-sm rounded-2xl leading-relaxed shadow-sm ${
                 msg.role === 'user'
                   ? 'bg-[#E42313] text-white rounded-br-md'
                   : msg.status === 'error'
                     ? 'bg-rose-50 border border-rose-200 text-rose-700 rounded-bl-md'
                     : 'bg-white border border-[#E5EAF3] text-[#111827] rounded-bl-md'
-              }`}>
+              } ${focusedMessageId && msg.id === focusedMessageId ? 'ai-msg-focus-ring' : ''}`}>
                 {msg.status === 'thinking' ? (
                   <div className="inline-flex items-center gap-2 text-gray-500">
                     <Loader2 size={14} className="animate-spin" />
@@ -219,41 +312,90 @@ export function AIPanel({
                     ) : msg.content}
                     {msg.role === 'assistant' && (
                       <div className="mt-2 text-[11px] text-gray-500">
-                        {formatUsageHint(msg)}
+                        {[
+                          formatRouteHint(msg),
+                          pinnedIdSet.has(msg.id || '') ? 'pinned' : null,
+                          formatUsageHint(msg),
+                        ].filter(Boolean).join(' · ')}
                       </div>
                     )}
                     {msg.role === 'assistant' && (
-                      <div className="ai-msg-toolbar mt-2 flex items-center gap-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
+                      <div className="ai-msg-toolbar mt-2 flex max-w-full flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          className="ai-msg-action"
                           onClick={() => void copyMessage(msg)}
                           disabled={isLoading}
+                          title={copiedMessageId === msg.id ? 'Copied' : 'Copy response'}
                         >
-                          {copiedMessageId === msg.id ? <Check size={14} /> : <Copy size={14} />}
-                          {copiedMessageId === msg.id ? 'Copied' : 'Copy'}
-                        </Button>
+                          {copiedMessageId === msg.id ? <Check size={13} /> : <Copy size={13} />}
+                          <span>{copiedMessageId === msg.id ? 'Copied' : 'Copy'}</span>
+                        </button>
                         {msg.id && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => onPinToCanvas(msg.id!)}
+                          <button
+                            type="button"
+                            className="ai-msg-action"
+                            draggable
+                            onDragStart={(e) => handleDragAICard(e, msg)}
                             disabled={isLoading}
+                            title="Drag to canvas"
                           >
-                            <Pin size={14} />
-                            Pin
-                          </Button>
+                            <GripVertical size={13} />
+                            <span>Drag</span>
+                          </button>
+                        )}
+                        {msg.id && (
+                          <button
+                            type="button"
+                            className="ai-msg-action"
+                            onClick={() => onPinToCanvas(msg.id!, extractFirstCitationPage(msg.content))}
+                            disabled={isLoading || pinnedIdSet.has(msg.id || '')}
+                            title={pinnedIdSet.has(msg.id || '') ? 'Already pinned to canvas' : 'Pin as canvas card'}
+                          >
+                            <Pin size={13} />
+                            <span>{pinnedIdSet.has(msg.id || '') ? 'Pinned' : 'Pin'}</span>
+                          </button>
+                        )}
+                        {msg.id && (
+                          <button
+                            type="button"
+                            className="ai-msg-action"
+                            onClick={() => onSendToRightPane(msg.id!, extractFirstCitationPage(msg.content))}
+                            disabled={isLoading}
+                            title="Open cited page in reference pane for verification"
+                          >
+                            <MapPin size={13} />
+                            <span>Verify</span>
+                          </button>
+                        )}
+                        {msg.id && (
+                          <button
+                            type="button"
+                            className="ai-msg-action"
+                            onClick={() => onLocateCanvasCard(msg.id!)}
+                            disabled={isLoading}
+                            title="Locate card in canvas"
+                          >
+                            <MapPin size={13} />
+                            <span>Locate</span>
+                          </button>
                         )}
                         {msg.status === 'error' && msg.id && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
+                          <button
+                            type="button"
+                            className="ai-msg-action"
                             onClick={() => onRetryMessage(msg.id!)}
                             disabled={isLoading}
+                            title="Retry with current route"
                           >
-                            <RotateCcw size={14} />
-                            Retry
-                          </Button>
+                            <RotateCcw size={13} />
+                            <span>Retry</span>
+                          </button>
+                        )}
+                        {msg.status === 'error' && (
+                          <span className="text-[10px] text-slate-400">
+                            Need route switch? Use input mode (Auto/Chat/Doc) then resend.
+                          </span>
                         )}
                       </div>
                     )}
@@ -267,6 +409,31 @@ export function AIPanel({
       </div>
 
       <div className="p-4 border-t border-[#E3E8F0]">
+        {pendingRouteConfirmation && !isLoading && (
+          <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <div className="flex items-center justify-between gap-2">
+              <p>
+                Route confidence is low ({Math.round(pendingRouteConfirmation.confidence * 100)}%).
+                Choose how to answer this message.
+              </p>
+              <button
+                type="button"
+                className="text-amber-700 hover:text-amber-900"
+                onClick={onDismissRouteConfirm}
+              >
+                Dismiss
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" onClick={onConfirmRouteAsChat}>
+                Reply as Chat
+              </Button>
+              <Button variant="secondary" size="sm" onClick={onConfirmRouteAsDoc}>
+                Reply as Doc
+              </Button>
+            </div>
+          </div>
+        )}
         {isLoading && (
           <div className="mb-2 flex items-center justify-between gap-3 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
             <span className="inline-flex items-center gap-2">
@@ -284,6 +451,32 @@ export function AIPanel({
           </div>
         )}
         <div className="flex gap-2">
+          <div className="flex items-center gap-1 rounded-xl border border-[#D9DEE8] bg-white px-1">
+            <button
+              type="button"
+              className={`px-2 py-1 text-xs rounded ${inputMode === 'auto' ? 'bg-[#E42313] text-white' : 'text-[#4B5563]'}`}
+              onClick={() => setInputMode('auto')}
+              disabled={isLoading}
+            >
+              Auto
+            </button>
+            <button
+              type="button"
+              className={`px-2 py-1 text-xs rounded ${inputMode === 'chat' ? 'bg-[#E42313] text-white' : 'text-[#4B5563]'}`}
+              onClick={() => setInputMode('chat')}
+              disabled={isLoading}
+            >
+              Chat
+            </button>
+            <button
+              type="button"
+              className={`px-2 py-1 text-xs rounded ${inputMode === 'doc' ? 'bg-[#E42313] text-white' : 'text-[#4B5563]'}`}
+              onClick={() => setInputMode('doc')}
+              disabled={isLoading}
+            >
+              Doc
+            </button>
+          </div>
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}

@@ -8,6 +8,7 @@ use tauri::Manager;
 use database::connection::init_database;
 use database::repositories::{document_repo::DocumentRepository, annotation_repo::AnnotationRepository, conversation_repo::ConversationRepository};
 use ai::client::AIClient;
+use commands::ai::StreamRegistry;
 
 pub fn run() {
     tauri::Builder::default()
@@ -35,6 +36,7 @@ pub fn run() {
             app.manage(AnnotationRepository::new(pool.clone()));
             app.manage(ConversationRepository::new(pool));
             app.manage(AIClient::new());
+            app.manage(StreamRegistry::default());
 
             Ok(())
         })
@@ -52,6 +54,7 @@ pub fn run() {
             commands::annotation::create_annotation,
             commands::annotation::get_annotations_by_document,
             commands::annotation::delete_annotation,
+            commands::annotation::update_annotation_position,
 
             // Conversation commands
             commands::conversation::get_conversation,
@@ -60,6 +63,8 @@ pub fn run() {
 
             // AI commands
             commands::ai::send_chat_message,
+            commands::ai::start_stream_chat,
+            commands::ai::stop_stream_chat,
             commands::ai::save_api_key,
             commands::ai::get_api_key,
             commands::ai::delete_api_key,

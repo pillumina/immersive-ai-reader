@@ -24,7 +24,14 @@ export function Sidebar({
   return (
     <aside className="w-[300px] border-r border-[#E3E8F0] bg-[#F8FAFC] flex flex-col">
       <div className="p-6 border-b border-[#E3E8F0]">
-        <h1 className="text-2xl font-bold text-[#111827] tracking-tight">Immersive Reader</h1>
+        <div className="flex items-center gap-3">
+          <img
+            src="/app-logo.svg"
+            alt="Immersive Reader logo"
+            className="h-10 w-10 rounded-2xl ring-1 ring-black/5 shadow-sm"
+          />
+          <h1 className="text-2xl font-bold text-[#111827] tracking-tight">Immersive Reader</h1>
+        </div>
         <p className="text-xs text-[#6B7280] mt-1">Document + AI workspace</p>
       </div>
 

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Immersive AI Reader logo</title>
+  <desc id="desc">Rounded book shape with linked nodes and AI spark.</desc>
+  <defs>
+    <linearGradient id="bg" x1="20" y1="20" x2="236" y2="236" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset="0.52" stop-color="#E42313"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+    <linearGradient id="page" x1="62" y1="56" x2="196" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#F8FAFC" stop-opacity="0.95"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#0F172A" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <rect x="12" y="12" width="232" height="232" rx="56" fill="url(#bg)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="58" y="48" width="140" height="160" rx="22" fill="url(#page)"/>
+    <path d="M128 48v160" stroke="#E2E8F0" stroke-width="3"/>
+    <path d="M79 86h35M79 106h28M142 86h35M142 106h28" stroke="#CBD5E1" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M84 160c14-18 30-25 44-25s30 7 44 25" stroke="#8B5CF6" stroke-width="6"/>
+    <circle cx="84" cy="160" r="8" fill="#A78BFA" stroke="#FFFFFF" stroke-width="3"/>
+    <circle cx="128" cy="135" r="8" fill="#E42313" stroke="#FFFFFF" stroke-width="3"/>
+    <circle cx="172" cy="160" r="8" fill="#FB923C" stroke="#FFFFFF" stroke-width="3"/>
+  </g>
+
+  <path d="M170 60l8 16 16 8-16 8-8 16-8-16-16-8 16-8z" fill="#F8FAFC"/>
+</svg>

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { AIConfig, AIProfile, AIProvider } from '@/types/settings';
+import { AIConfig, AIProfile, AIProvider, UISettings } from '@/types/settings';
 import { aiCommands } from '@/lib/tauri';
 import { defaultAIConfig, getPresetByProvider } from '@/constants/aiProviders';
 
@@ -14,7 +14,14 @@ interface StoredProfile {
 interface StoredSettings {
   activeProfileId: string;
   profiles: StoredProfile[];
+  ui?: UISettings;
 }
+
+const DEFAULT_UI_SETTINGS: UISettings = {
+  showChatPerfHints: true,
+  chatInputModeDefault: 'auto',
+  rememberRoutePreferenceAcrossSessions: true,
+};
 
 function buildKeychainAccount(profileId: string): string {
   return `ai-profile:${profileId}`;
@@ -48,19 +55,27 @@ function createProfile(config: AIConfig, name: string): AIProfile {
 export function useSettings() {
   const [profiles, setProfiles] = useState<AIProfile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string>('');
+  const [uiSettings, setUiSettings] = useState<UISettings>(DEFAULT_UI_SETTINGS);
 
-  const persist = useCallback((nextProfiles: AIProfile[], nextActiveProfileId: string) => {
+  const persist = useCallback(
+    (
+      nextProfiles: AIProfile[],
+      nextActiveProfileId: string,
+      nextUiSettings: UISettings = uiSettings
+    ) => {
     const payload: StoredSettings = {
       activeProfileId: nextActiveProfileId,
       profiles: nextProfiles.map(profileToStored),
+      ui: nextUiSettings,
     };
     localStorage.setItem(SETTINGS_PROFILES_KEY, JSON.stringify(payload));
-  }, []);
+  }, [uiSettings]);
 
   const loadSettings = useCallback(async () => {
     try {
       let loadedProfiles: AIProfile[] = [];
       let loadedActiveProfileId = '';
+      let loadedUiSettings: UISettings = DEFAULT_UI_SETTINGS;
 
       const savedProfilesRaw = localStorage.getItem(SETTINGS_PROFILES_KEY);
       if (savedProfilesRaw) {
@@ -76,6 +91,12 @@ export function useSettings() {
           },
         }));
         loadedActiveProfileId = parsed.activeProfileId;
+        const loadedUi = parsed.ui || DEFAULT_UI_SETTINGS;
+        loadedUiSettings = {
+          showChatPerfHints: loadedUi.showChatPerfHints ?? true,
+          chatInputModeDefault: loadedUi.chatInputModeDefault ?? 'auto',
+          rememberRoutePreferenceAcrossSessions: loadedUi.rememberRoutePreferenceAcrossSessions ?? true,
+        };
       } else {
         // Backward compatibility: migrate old single setting into one profile.
         let migrated = defaultAIConfig('zhipu');
@@ -132,7 +153,8 @@ export function useSettings() {
 
       setProfiles(hydratedProfiles);
       setActiveProfileId(loadedActiveProfileId);
-      persist(hydratedProfiles, loadedActiveProfileId);
+      setUiSettings(loadedUiSettings);
+      persist(hydratedProfiles, loadedActiveProfileId, loadedUiSettings);
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
@@ -164,8 +186,8 @@ export function useSettings() {
     if (!activeProfileId) {
       setActiveProfileId(profileId);
     }
-    persist(nextProfiles, nextActive);
-  }, [profiles, activeProfileId, persist]);
+    persist(nextProfiles, nextActive, uiSettings);
+  }, [profiles, activeProfileId, persist, uiSettings]);
 
   const saveActiveProfile = useCallback(async (config: AIConfig, name?: string) => {
     if (!activeProfileId) {
@@ -183,15 +205,15 @@ export function useSettings() {
     setProfiles(nextProfiles);
     setActiveProfileId(profile.id);
     await aiCommands.saveApiKey(buildKeychainAccount(profile.id), '');
-    persist(nextProfiles, profile.id);
+    persist(nextProfiles, profile.id, uiSettings);
     return profile;
-  }, [profiles, persist]);
+  }, [profiles, persist, uiSettings]);
 
   const switchProfile = useCallback((profileId: string) => {
     if (!profiles.some((p) => p.id === profileId)) return;
     setActiveProfileId(profileId);
-    persist(profiles, profileId);
-  }, [profiles, persist]);
+    persist(profiles, profileId, uiSettings);
+  }, [profiles, persist, uiSettings]);
 
   const deleteProfile = useCallback(async (profileId: string) => {
     if (profiles.length <= 1) {
@@ -206,8 +228,8 @@ export function useSettings() {
     }
     setProfiles(nextProfiles);
     setActiveProfileId(nextActive);
-    persist(nextProfiles, nextActive);
-  }, [profiles, activeProfileId, persist]);
+    persist(nextProfiles, nextActive, uiSettings);
+  }, [profiles, activeProfileId, persist, uiSettings]);
 
   const renameProfile = useCallback((profileId: string, name: string) => {
     const trimmed = name.trim();
@@ -216,8 +238,18 @@ export function useSettings() {
       p.id === profileId ? { ...p, name: trimmed } : p
     ));
     setProfiles(nextProfiles);
-    persist(nextProfiles, activeProfileId || nextProfiles[0]?.id || '');
-  }, [profiles, activeProfileId, persist]);
+    persist(nextProfiles, activeProfileId || nextProfiles[0]?.id || '', uiSettings);
+  }, [profiles, activeProfileId, persist, uiSettings]);
+
+  const updateUiSettings = useCallback((next: Partial<UISettings>) => {
+    const merged: UISettings = {
+      ...DEFAULT_UI_SETTINGS,
+      ...uiSettings,
+      ...next,
+    };
+    setUiSettings(merged);
+    persist(profiles, activeProfileId || profiles[0]?.id || '', merged);
+  }, [uiSettings, persist, profiles, activeProfileId]);
 
   const aiConfig = useMemo(() => {
     const active = profiles.find((p) => p.id === activeProfileId);
@@ -232,6 +264,8 @@ export function useSettings() {
     aiConfig,
     activeProfile,
     profiles,
+    uiSettings,
+    updateUiSettings,
     loadSettings,
     saveActiveProfile,
     saveProfile,

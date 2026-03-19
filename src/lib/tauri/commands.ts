@@ -49,6 +49,10 @@ export interface AIConnectivityResult {
   message: string;
 }
 
+export interface AIStreamStartResult {
+  stream_id: string;
+}
+
 // Document commands
 export const documentCommands = {
   create: async (request: {
@@ -114,6 +118,14 @@ export const annotationCommands = {
   delete: async (id: string): Promise<void> => {
     await invoke('delete_annotation', { id });
   },
+
+  updatePosition: async (id: string, positionX: number, positionY: number): Promise<void> => {
+    await invoke('update_annotation_position', {
+      id,
+      positionX,
+      positionY,
+    });
+  },
 };
 
 // Conversation commands
@@ -156,6 +168,38 @@ export const aiCommands = {
         message,
         history,
       });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+
+  startStreamMessage: async (
+    provider: string,
+    endpoint: string,
+    model: string,
+    apiKey: string,
+    documentId: string,
+    message: string,
+    history: Message[]
+  ): Promise<AIStreamStartResult> => {
+    try {
+      return await invoke<AIStreamStartResult>('start_stream_chat', {
+        provider,
+        endpoint,
+        model,
+        apiKey,
+        documentId,
+        message,
+        history,
+      });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+
+  stopStreamMessage: async (streamId: string): Promise<void> => {
+    try {
+      await invoke('stop_stream_chat', { streamId });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }

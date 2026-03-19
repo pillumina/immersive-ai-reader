@@ -13,8 +13,17 @@ export interface AIProfile {
   config: AIConfig;
 }
 
+export type ChatInputMode = 'auto' | 'chat' | 'doc';
+
+export interface UISettings {
+  showChatPerfHints: boolean;
+  chatInputModeDefault: ChatInputMode;
+  rememberRoutePreferenceAcrossSessions: boolean;
+}
+
 export interface Settings {
   ai: AIConfig;
+  ui?: UISettings;
   theme?: 'light' | 'dark';
 }
 
