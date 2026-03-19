@@ -60,7 +60,6 @@ export function MainCanvas({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isAICardDragOver, setIsAICardDragOver] = useState(false);
   const [splitMode, setSplitMode] = useState(false);
-  const [canvasMode, setCanvasMode] = useState(false);
   const [comparePage, setComparePage] = useState(1);
   const [compareFollowCitation, setCompareFollowCitation] = useState(true);
   const [compareZoom, setCompareZoom] = useState(1);
@@ -71,54 +70,10 @@ export function MainCanvas({
   const [compareHistoryIndex, setCompareHistoryIndex] = useState(-1);
   const [splitReason, setSplitReason] = useState<'evidence' | 'reference' | 'compare'>('compare');
 
-  // Canvas mode state
-  const [canvasCards, setCanvasCards] = useState<Array<{
-    id: string;
-    kind: 'note' | 'ai-card';
-    content: string;
-    selectedText?: string;
-    messageId?: string;
-    pageNumber: number;
-    x: number;
-    y: number;
-    annotationId: string;
-  }>>([]);
-
-  const [draggingCanvasCard, setDraggingCanvasCard] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [isCanvasDragOver, setIsCanvasDragOver] = useState(false);
-
-  const canvasStateStorageKey = documentId
-    ? `main_canvas_cards:${documentId}`
-    : 'main_canvas_cards:global';
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(canvasStateStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        setCanvasCards(parsed.filter((c: any) =>
-          c && typeof c.id === 'string' && typeof c.x === 'number' && typeof c.y === 'number'
-        ));
-      }
-    } catch {
-      // ignore malformed state
-    }
-  }, [canvasStateStorageKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(canvasStateStorageKey, JSON.stringify(canvasCards));
-    } catch {
-      // ignore persist failure
-    }
-  }, [canvasStateStorageKey, canvasCards]);
-
   // Notify parent when split mode changes so it can adjust layout (e.g. hide AI panel).
   useEffect(() => {
-    onSplitModeChange?.(splitMode || canvasMode);
-  }, [splitMode, canvasMode, onSplitModeChange]);
+    onSplitModeChange?.(splitMode);
+  }, [splitMode, onSplitModeChange]);
 
   const splitStateStorageKey = documentId
     ? `main_canvas_split_state:${documentId}`
@@ -359,116 +314,6 @@ export function MainCanvas({
   };
 
   // Canvas card drag handlers
-  const handleCanvasCardPointerDown = (e: React.PointerEvent, cardId: string) => {
-    if (e.button !== 0) return;
-    const target = e.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    setDraggingCanvasCard(cardId);
-    setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-    target.setPointerCapture(e.pointerId);
-  };
-
-  const handleCanvasCardPointerMove = (e: React.PointerEvent) => {
-    if (!draggingCanvasCard) return;
-    const canvasEl = globalThis.document?.getElementById('canvas-drop-zone');
-    if (!(canvasEl instanceof HTMLElement)) return;
-    const canvasRect = canvasEl.getBoundingClientRect();
-    const x = e.clientX - canvasRect.left - dragOffset.x;
-    const y = e.clientY - canvasRect.top - dragOffset.y;
-    setCanvasCards((prev) =>
-      prev.map((c) => (c.id === draggingCanvasCard ? { ...c, x: Math.max(0, x), y: Math.max(0, y) } : c))
-    );
-  };
-
-  const handleCanvasCardPointerUp = () => {
-    setDraggingCanvasCard(null);
-  };
-
-  const handleRemoveCanvasCard = (cardId: string) => {
-    setCanvasCards((prev) => prev.filter((c) => c.id !== cardId));
-  };
-
-  const handleCanvasDragOver = (e: React.DragEvent) => {
-    const types = Array.from(e.dataTransfer.types);
-    const hasAiCard = types.includes('application/x-ai-card') || types.includes('text/plain');
-    if (!hasAiCard) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setIsCanvasDragOver(true);
-  };
-
-  const handleCanvasDragLeave = () => {
-    setIsCanvasDragOver(false);
-  };
-
-  const handleCanvasDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsCanvasDragOver(false);
-    const canvasEl = globalThis.document?.getElementById('canvas-drop-zone');
-    if (!(canvasEl instanceof HTMLElement)) return;
-    const canvasRect = canvasEl.getBoundingClientRect();
-    const dropX = e.clientX - canvasRect.left;
-    const dropY = e.clientY - canvasRect.top;
-
-    // Try to parse AI card
-    let raw = e.dataTransfer.getData('application/x-ai-card');
-    if (!raw) {
-      const plain = e.dataTransfer.getData('text/plain');
-      if (plain.startsWith('__AICARD__')) raw = plain.slice('__AICARD__'.length);
-    }
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as { messageId?: string; content?: string; pageHint?: number };
-        if (parsed.messageId && parsed.content) {
-          const cardId = `canvas-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-          setCanvasCards((prev) => [
-            ...prev,
-            {
-              id: cardId,
-              kind: 'ai-card',
-              content: parsed.content!,
-              messageId: parsed.messageId,
-              pageNumber: parsed.pageHint || currentPage || 1,
-              x: dropX - 80,
-              y: dropY - 40,
-              annotationId: '',
-            },
-          ]);
-          return;
-        }
-      } catch {
-        // ignore malformed payload
-      }
-    }
-
-    // Try to parse note card
-    const noteRaw = e.dataTransfer.getData('application/x-note-card');
-    if (noteRaw) {
-      try {
-        const parsed = JSON.parse(noteRaw) as {
-          id?: string; annotationId?: string; content?: string; selectedText?: string; pageNumber?: number;
-        };
-        if (parsed.annotationId && parsed.content) {
-          const cardId = `canvas-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-          setCanvasCards((prev) => [
-            ...prev,
-            {
-              id: cardId,
-              kind: 'note',
-              content: parsed.content!,
-              selectedText: parsed.selectedText,
-              pageNumber: parsed.pageNumber || currentPage || 1,
-              x: dropX - 80,
-              y: dropY - 40,
-              annotationId: parsed.annotationId!,
-            },
-          ]);
-        }
-      } catch {
-        // ignore malformed payload
-      }
-    }
-  };
 
   const filteredOutline = outline.filter((item) => {
     if (!tocQuery.trim()) return true;
@@ -523,26 +368,12 @@ export function MainCanvas({
                 if (!v) setSplitReason('compare');
                 return !v;
               });
-              if (canvasMode) setCanvasMode(false);
             }}
             disabled={!hasDocument || totalPages <= 0}
             title={hasDocument && totalPages > 0 ? 'Open reference pane for side-by-side reading' : 'Load a document first'}
             className="!h-7 !px-2.5 !text-[11px]"
           >
             {splitMode ? 'Close Ref' : 'Reference'}
-          </Button>
-          <Button
-            variant={canvasMode ? 'primary' : 'secondary'}
-            size="sm"
-            onClick={() => {
-              setCanvasMode((v) => !v);
-              if (!canvasMode) setSplitMode(false);
-            }}
-            disabled={!hasDocument}
-            title={hasDocument ? 'Open thinking canvas for free-form note layout' : 'Load a document first'}
-            className="!h-7 !px-2.5 !text-[11px]"
-          >
-            {canvasMode ? 'Close Canvas' : 'Canvas'}
           </Button>
           <Button variant="secondary" size="sm" onClick={onHighlightSelection} disabled={!hasDocument} className="!h-7 !px-2.5 !text-[11px]">
             Highlight
@@ -553,9 +384,14 @@ export function MainCanvas({
             </Button>
           )}
           {hasDocument && totalPages > 0 && (
-            <Button variant="secondary" size="sm" onClick={() => setTocOpen((v) => !v)} className="!h-7 !px-2.5 !text-[11px]">
-              {tocOpen ? 'Hide TOC' : 'TOC'}
-            </Button>
+            <button
+              type="button"
+              className="toolbar-icon-btn"
+              onClick={() => setTocOpen((v) => !v)}
+              title="Open Table of Contents"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
           )}
         </div>
       </div>
@@ -595,113 +431,6 @@ export function MainCanvas({
           )}
         </div>
 
-        {canvasMode && hasDocument && (
-          <aside className="relative w-[45%] min-w-[340px] max-w-[55%] border-l border-[#E3E8F0] bg-[#FAFAF9] flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="border-b border-[#E3E8F0] bg-white/90 px-3 h-8 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-semibold text-[#6B21A8] bg-[#FAF5FF] border border-[#E9D5FF] px-2 py-0.5 rounded-full">
-                  Canvas
-                </span>
-                <span className="text-[11px] text-[#94A3B8]">{canvasCards.length} card{canvasCards.length !== 1 ? 's' : ''}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-[#CBD5E1]">drag cards freely</span>
-                <button
-                  type="button"
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#E3E8F0] bg-white text-[#64748B] transition-all hover:bg-[#FEF2F2] hover:border-[#FECACA] hover:text-[#DC2626] active:scale-95"
-                  onClick={() => setCanvasMode(false)}
-                  title="Close canvas"
-                >
-                  <X size={15} />
-                </button>
-              </div>
-            </div>
-
-            {/* Canvas Drop Zone */}
-            <div
-              id="canvas-drop-zone"
-              className={`flex-1 overflow-auto relative ${isCanvasDragOver ? 'bg-[#FAF5FF]' : ''} transition-colors duration-150`}
-              style={{
-                backgroundImage: 'radial-gradient(circle, #D1D5DB 1px, transparent 1px)',
-                backgroundSize: '20px 20px',
-                backgroundPosition: '0 0',
-              }}
-              onDragOver={handleCanvasDragOver}
-              onDragLeave={handleCanvasDragLeave}
-              onDrop={handleCanvasDrop}
-              onPointerMove={handleCanvasCardPointerMove}
-              onPointerUp={handleCanvasCardPointerUp}
-            >
-              {canvasCards.length === 0 && !isCanvasDragOver && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <div className="w-12 h-12 rounded-2xl bg-[#F3E8FF] flex items-center justify-center mb-3">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="7" height="7" rx="1"/>
-                      <rect x="14" y="3" width="7" height="7" rx="1"/>
-                      <rect x="3" y="14" width="7" height="7" rx="1"/>
-                      <rect x="14" y="14" width="7" height="7" rx="1"/>
-                    </svg>
-                  </div>
-                  <p className="text-[12px] text-[#A78BFA] font-medium mb-1">Drop cards here</p>
-                  <p className="text-[11px] text-[#C4B5FD]">Drag AI cards or notes to organize</p>
-                </div>
-              )}
-
-              {isCanvasDragOver && (
-                <div className="absolute inset-3 border-2 border-dashed border-[#A78BFA] rounded-2xl bg-[#FAF5FF]/60 flex items-center justify-center z-10 pointer-events-none">
-                  <span className="text-[13px] text-[#7C3AED] font-medium">Drop to add to canvas</span>
-                </div>
-              )}
-
-              {canvasCards.map((card) => (
-                <div
-                  key={card.id}
-                  className={`absolute select-none ${card.kind === 'ai-card' ? 'pdf-ai-card' : 'pdf-note-card'} ${
-                    draggingCanvasCard === card.id ? 'opacity-50 cursor-grabbing' : 'cursor-grab'
-                  }`}
-                  style={{ left: card.x, top: card.y }}
-                  onPointerDown={(e) => handleCanvasCardPointerDown(e, card.id)}
-                >
-                  {card.kind === 'ai-card' && (
-                    <div className="pdf-ai-card-header">AI Card · p{card.pageNumber}</div>
-                  )}
-                  {card.kind === 'note' && (
-                    <div className="text-[10px] font-semibold text-sky-700 mb-1">Note · p{card.pageNumber}</div>
-                  )}
-                  <div className="note-card-display text-[11px]">{card.content}</div>
-                  {card.selectedText && (
-                    <div className="mt-1.5 pl-2 border-l-2 border-sky-200 text-[10px] text-slate-500 italic line-clamp-2">
-                      {card.selectedText}
-                    </div>
-                  )}
-                  <div className="flex gap-1 mt-2">
-                    <button
-                      type="button"
-                      className="text-[10px] text-[#94A3B8] hover:text-[#7C3AED] transition-colors"
-                      onClick={() => {
-                        if (card.kind === 'ai-card' && card.annotationId) {
-                          onJumpToPage(card.pageNumber);
-                        }
-                      }}
-                      title="Go to source page"
-                    >
-                      → p{card.pageNumber}
-                    </button>
-                    <button
-                      type="button"
-                      className="ml-auto text-[10px] text-[#94A3B8] hover:text-red-500 transition-colors"
-                      onClick={() => handleRemoveCanvasCard(card.id)}
-                      title="Remove from canvas"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </aside>
-        )}
         {splitMode && hasDocument && totalPages > 0 && (
           <aside className="relative w-[45%] min-w-[340px] max-w-[55%] border-l border-[#E3E8F0] bg-[#F8FAFC] flex flex-col">
             <div className="border-b border-[#E3E8F0] bg-white/90">

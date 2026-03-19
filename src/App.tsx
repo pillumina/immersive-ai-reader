@@ -52,6 +52,17 @@ function App() {
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
   const [focusMode, setFocusMode] = useState(false);
   const [splitActive, setSplitActive] = useState(false);
+  const [canvasCards, setCanvasCards] = useState<Array<{
+    id: string;
+    kind: 'note' | 'ai-card';
+    content: string;
+    selectedText?: string;
+    messageId?: string;
+    pageNumber: number;
+    x: number;
+    y: number;
+    annotationId: string;
+  }>>([]);
   const [comparePageSignal, setComparePageSignal] = useState<number | null>(null);
   const [comparePaneCommand, setComparePaneCommand] = useState<{
     page: number;
@@ -483,6 +494,9 @@ function App() {
           onConfirmRouteAsDoc={() => { void confirmPendingRoute('doc'); }}
           onDismissRouteConfirm={dismissPendingRoute}
           pinnedMessageIds={pinnedMessageIds}
+          canvasCards={canvasCards}
+          onSetCanvasCards={setCanvasCards}
+          onJumpToPage={jumpToPage}
         />
       )}
 
