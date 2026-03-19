@@ -52,17 +52,6 @@ function App() {
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
   const [focusMode, setFocusMode] = useState(false);
   const [splitActive, setSplitActive] = useState(false);
-  const [canvasCards, setCanvasCards] = useState<Array<{
-    id: string;
-    kind: 'note' | 'ai-card';
-    content: string;
-    selectedText?: string;
-    messageId?: string;
-    pageNumber: number;
-    x: number;
-    y: number;
-    annotationId: string;
-  }>>([]);
   const [comparePageSignal, setComparePageSignal] = useState<number | null>(null);
   const [comparePaneCommand, setComparePaneCommand] = useState<{
     page: number;
@@ -90,7 +79,8 @@ function App() {
     'pdf-scroll-container',
     'pdf-pages-container',
     currentDocument,
-    zoomLevel
+    zoomLevel,
+    (messageId: string) => setPinnedMessageIds((prev) => prev.filter((id) => id !== messageId))
   );
 
   const aiContext = useMemo(() => ({
@@ -233,20 +223,25 @@ function App() {
       setToast({ message, type: 'info' });
     }
   };
-  const handleAddNoteSelection = async (clickX?: number, clickY?: number) => {
-    const note = window.prompt('Add a note:');
-    if (note === null) return;
-    if (!note.trim()) {
-      setToast({ message: 'Note content cannot be empty', type: 'info' });
-      return;
-    }
-    try {
-      await addNoteForSelection(note, clickX, clickY);
-      setToast({ message: 'Note added', type: 'success' });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to add note';
-      setToast({ message, type: 'error' });
-    }
+  const handleAddNoteSelection = async () => {
+    // Defer prompt so context menu closes first and selection is preserved
+    globalThis.setTimeout(() => {
+      const note = window.prompt('Add a note:');
+      if (note === null) return;
+      if (!note.trim()) {
+        setToast({ message: 'Note content cannot be empty', type: 'info' });
+        return;
+      }
+      void (async () => {
+        try {
+          await addNoteForSelection(note);
+          setToast({ message: 'Note added', type: 'success' });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to add note';
+          setToast({ message, type: 'info' });
+        }
+      })();
+    }, 50);
   };
   const handleSummarize = () => {
     if (!currentDocument) {
@@ -371,7 +366,6 @@ function App() {
   const handleUnpinFromCanvas = async (messageId: string) => {
     try {
       await unpinAiCardByMessageId(messageId);
-      setPinnedMessageIds((prev) => prev.filter((id) => id !== messageId));
       setToast({ message: 'AI card removed from canvas', type: 'success' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to unpin';
@@ -494,9 +488,7 @@ function App() {
           onConfirmRouteAsDoc={() => { void confirmPendingRoute('doc'); }}
           onDismissRouteConfirm={dismissPendingRoute}
           pinnedMessageIds={pinnedMessageIds}
-          canvasCards={canvasCards}
-          onSetCanvasCards={setCanvasCards}
-          onJumpToPage={jumpToPage}
+          onOpenNotesManager={() => setNotesManagerOpen(true)}
         />
       )}
 

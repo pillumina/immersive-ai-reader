@@ -8,7 +8,8 @@ export function useCanvasRendering(
   scrollContainerId: string,
   containerId: string,
   pdfDocument: PDFDocument | null,
-  zoomLevel: number
+  zoomLevel: number,
+  onUnpin?: (messageId: string) => void,
 ) {
   const renderJobIdRef = useRef(0);
   const latestZoomRef = useRef(zoomLevel);
@@ -80,7 +81,7 @@ export function useCanvasRendering(
       header.textContent = 'AI Card';
       const body = document.createElement('div');
       body.className = 'pdf-ai-card-body';
-      body.textContent = content;
+      body.innerHTML = simpleMarkdownToHtml(content);
       const actions = document.createElement('div');
       actions.className = 'pdf-ai-card-actions';
       const openBtn = document.createElement('button');
@@ -93,6 +94,18 @@ export function useCanvasRendering(
       expandBtn.textContent = 'Expand';
       actions.appendChild(openBtn);
       actions.appendChild(expandBtn);
+      // Add Unpin button for AI cards
+      if (options?.messageId && onUnpin) {
+        const unpinBtn = document.createElement('button');
+        unpinBtn.type = 'button';
+        unpinBtn.className = 'pdf-ai-card-action pdf-ai-card-unpin';
+        unpinBtn.textContent = 'Unpin';
+        unpinBtn.addEventListener('click', (evt) => {
+          evt.stopPropagation();
+          onUnpin(options.messageId!);
+        });
+        actions.appendChild(unpinBtn);
+      }
       card.appendChild(header);
       card.appendChild(body);
       card.appendChild(actions);
@@ -207,7 +220,6 @@ export function useCanvasRendering(
       card.title = 'Drag to reposition';
       const attachDrag = () => {
         const annotationId = options.annotationId;
-        if (!annotationId) return;
         let dragging = false;
         let startClientX = 0;
         let startClientY = 0;
@@ -247,7 +259,7 @@ export function useCanvasRendering(
           const nextX = Math.max(lastLeft - 8, 0);
           const nextY = Math.max(lastTop - 8, 0);
           try {
-            await annotationCommands.updatePosition(annotationId, nextX, nextY);
+            if (annotationId) await annotationCommands.updatePosition(annotationId, nextX, nextY);
           } catch {
             card.style.left = `${startLeft}px`;
             card.style.top = `${startTop}px`;
@@ -481,7 +493,7 @@ export function useCanvasRendering(
     return count;
   };
 
-  const addNoteForSelection = async (content: string, clickX?: number, clickY?: number) => {
+  const addNoteForSelection = async (content: string) => {
     if (!pdfDocument) throw new Error('请先上传或选择文档');
     const note = content.trim();
     if (!note) throw new Error('笔记内容不能为空');
@@ -516,34 +528,20 @@ export function useCanvasRendering(
       width = Math.min(rect.width, pageRect.width - x);
       height = Math.min(rect.height, pageRect.height - y);
       selectedText = selection!.toString().trim();
-    } else if (clickX !== undefined && clickY !== undefined) {
-      // Free-floating note: anchored to click position on current page
+    } else {
+      // Free-floating note: anchored to current page
       const containerEl = globalThis.document?.getElementById(containerId);
-      const target = globalThis.document
-        ?.elementFromPoint(clickX, clickY)
-        ?.closest('.pdf-page') as HTMLElement | null;
-      if (!target) {
-        // Fallback to current page
-        pageNumber = currentPage || 1;
-      } else {
-        pageNumber = Number(target.dataset.pageNumber || '0') || currentPage || 1;
-      }
-      if (!pageNumber) throw new Error('未找到页面编号');
+      pageNumber = currentPage || 1;
 
       const pageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
-      if (!pageEl) throw new Error('未找到页面元素');
+      if (!pageEl) throw new Error('未找到当前页面');
 
-      const pageRect = pageEl.getBoundingClientRect();
-      x = Math.max(clickX - pageRect.left, 20);
-      y = Math.max(clickY - pageRect.top, 24);
+      // Stack cards vertically to avoid overlap
+      const existingCards = pageEl.querySelectorAll('.pdf-note-card').length;
+      x = 20;
+      y = 24 + existingCards * 78;
       width = 8;
       height = 8;
-
-      // Avoid overlapping existing cards
-      const existingCards = pageEl.querySelectorAll('.pdf-note-card').length;
-      y = 24 + existingCards * 78;
-    } else {
-      throw new Error('请先选中文本，或在页面上右键创建笔记');
     }
 
     const createdNote = await annotationCommands.create({
@@ -636,19 +634,20 @@ export function useCanvasRendering(
     if (!(containerEl instanceof HTMLElement)) {
       throw new Error('页面容器未就绪');
     }
-    const targetPage = globalThis.document
-      ?.elementFromPoint(clientX, clientY)
-      ?.closest('.pdf-page') as HTMLElement | null;
 
-    const resolvedPageNumber = Number(targetPage?.dataset.pageNumber || pageHint || currentPage || 1);
+    // Use pageHint if available (extracted from AI content citation), fallback to currentPage
+    const resolvedPageNumber = pageHint || currentPage || 1;
     const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${resolvedPageNumber}"]`);
     if (!pageEl) {
-      throw new Error('未找到可投放页面');
+      throw new Error(`未找到页面 ${resolvedPageNumber}`);
     }
 
     const pageRect = pageEl.getBoundingClientRect();
-    const rawX = targetPage ? clientX - pageRect.left : 20;
-    const rawY = targetPage ? clientY - pageRect.top : 24;
+    // Try to use drop coordinates if they land within the page bounds, otherwise center the card
+    const isOverPage = clientX >= pageRect.left && clientX <= pageRect.right &&
+                       clientY >= pageRect.top && clientY <= pageRect.bottom;
+    const rawX = isOverPage ? clientX - pageRect.left : pageRect.width / 2;
+    const rawY = isOverPage ? clientY - pageRect.top : pageRect.height / 2;
     const x = Math.max(rawX - 10, 8);
     const y = Math.max(rawY - 10, 8);
     const width = 8;
@@ -692,6 +691,7 @@ export function useCanvasRendering(
       const highlight = containerEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${aiAnnotation.id}"]`);
       highlight?.remove();
     }
+    onUnpin?.(messageId);
   };
 
   useEffect(() => {

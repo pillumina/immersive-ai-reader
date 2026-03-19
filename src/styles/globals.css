@@ -293,6 +293,35 @@ h1, h2, h3, h4, h5, h6 {
   background: #faf5ff;
 }
 
+.pdf-ai-card-unpin {
+  border-color: #fecaca;
+  color: #dc2626;
+}
+.pdf-ai-card-unpin:hover {
+  border-color: #f87171;
+  background: #fef2f2;
+}
+
+.pdf-ai-card-body {
+  font-size: 12px;
+  line-height: 1.55;
+}
+.pdf-ai-card-body p { margin: 2px 0; }
+.pdf-ai-card-body code {
+  background: #f3f4f6;
+  border-radius: 3px;
+  padding: 0 3px;
+  font-size: 11px;
+}
+.pdf-ai-card-body pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  overflow-x: auto;
+}
+
 .ai-msg-enter {
   animation: aiMsgEnter 250ms cubic-bezier(0.16, 1, 0.3, 1);
 }

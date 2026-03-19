@@ -15,7 +15,7 @@ interface MainCanvasProps {
   outline: PdfOutlineItem[];
   onJumpToPage: (page: number) => void;
   onHighlightSelection: () => void;
-  onAddNoteSelection: (clickX?: number, clickY?: number) => void;
+  onAddNoteSelection: () => void;
   onOpenNotesManager?: () => void;
   onExplainSelection: () => void;
   onDropAICard: (payload: { messageId: string; content: string; pageHint?: number }, clientX: number, clientY: number) => void;
@@ -292,14 +292,14 @@ export function MainCanvas({
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsAICardDragOver(false);
     let raw = event.dataTransfer.getData('application/x-ai-card');
     if (!raw) {
       const plain = event.dataTransfer.getData('text/plain');
       if (plain.startsWith('__AICARD__')) raw = plain.slice('__AICARD__'.length);
     }
-    setIsAICardDragOver(false);
     if (!raw) return;
-    event.preventDefault();
     try {
       const parsed = JSON.parse(raw) as { messageId?: string; content?: string; pageHint?: number };
       if (!parsed.messageId || !parsed.content) return;
@@ -619,7 +619,7 @@ export function MainCanvas({
           <button className="ctx-menu-item" onClick={() => { onHighlightSelection(); setContextMenu(null); }}>
             Highlight
           </button>
-          <button className="ctx-menu-item" onClick={() => { onAddNoteSelection(contextMenu.x, contextMenu.y); setContextMenu(null); }}>
+          <button className="ctx-menu-item" onClick={() => { setContextMenu(null); onAddNoteSelection(); }}>
             Add Note
           </button>
           <button className="ctx-menu-item" onClick={() => { onExplainSelection(); setContextMenu(null); }}>

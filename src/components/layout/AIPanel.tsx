@@ -1,22 +1,10 @@
-import { DragEvent, useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Check, Copy, GripVertical, Loader2, MapPin, Pin, RotateCcw, Square, Send, LayoutGrid, MessageSquare, X } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback, useRef, DragEvent } from 'react';
+import { Check, Copy, GripVertical, Loader2, MapPin, Pin, RotateCcw, Square, Send, MessageSquare, StickyNote } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message } from '@/types/conversation';
 import { ChatInputMode } from '@/types/settings';
 import { Input } from '@/components/ui/Input';
-
-interface CanvasCard {
-  id: string;
-  kind: 'note' | 'ai-card';
-  content: string;
-  selectedText?: string;
-  messageId?: string;
-  pageNumber: number;
-  x: number;
-  y: number;
-  annotationId: string;
-}
 
 interface AIPanelProps {
   messages: Message[];
@@ -33,6 +21,7 @@ interface AIPanelProps {
   onTranslateSelection: () => void;
   onExportNotes: () => void;
   onJumpToCitation: (page: number) => void;
+  onOpenNotesManager: () => void;
   showPerfHints: boolean;
   defaultInputMode: ChatInputMode;
   pendingRouteConfirmation: {
@@ -44,10 +33,6 @@ interface AIPanelProps {
   onConfirmRouteAsDoc: () => void;
   onDismissRouteConfirm: () => void;
   pinnedMessageIds: string[];
-  // Canvas state
-  canvasCards: CanvasCard[];
-  onSetCanvasCards: React.Dispatch<React.SetStateAction<CanvasCard[]>>;
-  onJumpToPage: (page: number) => void;
 }
 
 export function AIPanel({
@@ -66,23 +51,16 @@ export function AIPanel({
   onExportNotes,
   onJumpToCitation,
   showPerfHints,
+  onOpenNotesManager,
   defaultInputMode,
   pendingRouteConfirmation,
   onConfirmRouteAsChat,
   onConfirmRouteAsDoc,
   onDismissRouteConfirm,
   pinnedMessageIds,
-  canvasCards,
-  onSetCanvasCards,
-  onJumpToPage,
 }: AIPanelProps) {
   const [input, setInput] = useState('');
   const [inputMode, setInputMode] = useState<ChatInputMode>(defaultInputMode);
-  const [rightTab, setRightTab] = useState<'chat' | 'canvas'>('chat');
-  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [isCanvasDragOver, setIsCanvasDragOver] = useState(false);
-  const canvasDropRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setInputMode(defaultInputMode);
   }, [defaultInputMode]);
@@ -278,154 +256,29 @@ export function AIPanel({
     event.dataTransfer.effectAllowed = 'copy';
   };
 
-  // Canvas drag handlers
-  const handleCanvasCardPointerDown = (e: React.PointerEvent, cardId: string) => {
-    if (e.button !== 0) return;
-    const target = e.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    setDraggingCardId(cardId);
-    setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-    target.setPointerCapture(e.pointerId);
-  };
-
-  const handleCanvasPointerMove = (e: React.PointerEvent) => {
-    if (!draggingCardId) return;
-    const canvasEl = canvasDropRef.current;
-    if (!(canvasEl instanceof HTMLElement)) return;
-    const rect = canvasEl.getBoundingClientRect();
-    const x = e.clientX - rect.left - dragOffset.x;
-    const y = e.clientY - rect.top - dragOffset.y;
-    onSetCanvasCards((prev) =>
-      prev.map((c) => (c.id === draggingCardId ? { ...c, x: Math.max(0, x), y: Math.max(0, y) } : c))
-    );
-  };
-
-  const handleCanvasPointerUp = () => {
-    setDraggingCardId(null);
-  };
-
-  const handleRemoveCanvasCard = (cardId: string) => {
-    onSetCanvasCards((prev) => prev.filter((c) => c.id !== cardId));
-  };
-
-  const handleCanvasDragOver = (e: React.DragEvent) => {
-    const types = Array.from(e.dataTransfer.types);
-    if (!types.includes('application/x-ai-card') && !types.includes('text/plain')) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setIsCanvasDragOver(true);
-  };
-
-  const handleCanvasDragLeave = () => {
-    setIsCanvasDragOver(false);
-  };
-
-  const handleCanvasDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsCanvasDragOver(false);
-    const canvasEl = canvasDropRef.current;
-    if (!(canvasEl instanceof HTMLElement)) return;
-    const rect = canvasEl.getBoundingClientRect();
-    const dropX = e.clientX - rect.left;
-    const dropY = e.clientY - rect.top;
-
-    // Parse AI card
-    let raw = e.dataTransfer.getData('application/x-ai-card');
-    if (!raw) {
-      const plain = e.dataTransfer.getData('text/plain');
-      if (plain.startsWith('__AICARD__')) raw = plain.slice('__AICARD__'.length);
-    }
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as { messageId?: string; content?: string; pageHint?: number };
-        if (parsed.messageId && parsed.content) {
-          const cardId = `canvas-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-          onSetCanvasCards((prev) => [
-            ...prev,
-            {
-              id: cardId,
-              kind: 'ai-card' as const,
-              content: parsed.content!,
-              messageId: parsed.messageId,
-              pageNumber: parsed.pageHint || 1,
-              x: dropX - 80,
-              y: dropY - 40,
-              annotationId: '',
-            },
-          ]);
-          return;
-        }
-      } catch {
-        // ignore malformed
-      }
-    }
-
-    // Parse note card
-    const noteRaw = e.dataTransfer.getData('application/x-note-card');
-    if (noteRaw) {
-      try {
-        const parsed = JSON.parse(noteRaw) as {
-          id?: string; annotationId?: string; content?: string; selectedText?: string; pageNumber?: number;
-        };
-        if (parsed.annotationId && parsed.content) {
-          const cardId = `canvas-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-          onSetCanvasCards((prev) => [
-            ...prev,
-            {
-              id: cardId,
-              kind: 'note' as const,
-              content: parsed.content!,
-              selectedText: parsed.selectedText,
-              pageNumber: parsed.pageNumber || 1,
-              x: dropX - 80,
-              y: dropY - 40,
-              annotationId: parsed.annotationId!,
-            },
-          ]);
-        }
-      } catch {
-        // ignore malformed
-      }
-    }
-  };
-
   return (
     <aside className="w-[380px] border-l border-[#E3E8F0]/60 bg-gradient-to-b from-[#FCFDFF] to-[#F8FAFC] flex flex-col select-none">
       {/* Tab Bar */}
       <div className="flex items-center border-b border-[#E3E8F0]/60 px-1">
         <button
           type="button"
-          onClick={() => setRightTab('chat')}
-          className={`flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 transition-colors ${
-            rightTab === 'chat'
-              ? 'border-[#E42313] text-[#E42313]'
-              : 'border-transparent text-[#94A3B8] hover:text-[#64748B]'
-          }`}
+          className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 border-[#E42313] text-[#E42313]"
         >
           <MessageSquare size={13} />
           Chat
         </button>
         <button
           type="button"
-          onClick={() => setRightTab('canvas')}
-          className={`flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 transition-colors ${
-            rightTab === 'canvas'
-              ? 'border-[#7C3AED] text-[#7C3AED]'
-              : 'border-transparent text-[#94A3B8] hover:text-[#64748B]'
-          }`}
+          onClick={onOpenNotesManager}
+          className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 border-transparent text-[#94A3B8] hover:text-[#64748B] transition-colors"
+          title="Note Management"
         >
-          <LayoutGrid size={13} />
-          Canvas
-          {canvasCards.length > 0 && (
-            <span className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#7C3AED]/10 text-[9px] font-bold text-[#7C3AED]">
-              {canvasCards.length}
-            </span>
-          )}
+          <StickyNote size={13} />
+          Notes
         </button>
       </div>
 
-      {rightTab === 'chat' && (
-        <>
+      <>
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-[#E3E8F0]/60">
         <div className="flex items-center gap-2">
@@ -683,90 +536,7 @@ export function AIPanel({
           </button>
         </div>
       </div>
-        </>
-        )}
-
-      {/* Canvas View */}
-      {rightTab === 'canvas' && (
-        <div
-          ref={canvasDropRef}
-          className={`flex-1 overflow-auto relative ${isCanvasDragOver ? 'bg-[#FAF5FF]' : 'bg-[#FAFAF9]'}`}
-          style={{
-            backgroundImage: canvasCards.length === 0 ? 'radial-gradient(circle, #D1D5DB 1px, transparent 1px)' : undefined,
-            backgroundSize: '20px 20px',
-          }}
-          onDragOver={handleCanvasDragOver}
-          onDragLeave={handleCanvasDragLeave}
-          onDrop={handleCanvasDrop}
-          onPointerMove={handleCanvasPointerMove}
-          onPointerUp={handleCanvasPointerUp}
-        >
-          {canvasCards.length === 0 && !isCanvasDragOver && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <div className="w-12 h-12 rounded-2xl bg-[#F3E8FF] flex items-center justify-center mb-3">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="7" rx="1"/>
-                  <rect x="14" y="3" width="7" height="7" rx="1"/>
-                  <rect x="3" y="14" width="7" height="7" rx="1"/>
-                  <rect x="14" y="14" width="7" height="7" rx="1"/>
-                </svg>
-              </div>
-              <p className="text-[12px] text-[#A78BFA] font-medium mb-1">Canvas is empty</p>
-              <p className="text-[11px] text-[#C4B5FD] text-center px-8 leading-relaxed">
-                Switch to Chat tab, then drag AI response cards here to organize them
-              </p>
-            </div>
-          )}
-
-          {isCanvasDragOver && (
-            <div className="absolute inset-3 border-2 border-dashed border-[#A78BFA] rounded-2xl bg-[#FAF5FF]/60 flex items-center justify-center z-10 pointer-events-none">
-              <span className="text-[13px] text-[#7C3AED] font-medium">Drop to add to canvas</span>
-            </div>
-          )}
-
-          {canvasCards.map((card) => (
-            <div
-              key={card.id}
-              className={`absolute select-none ${card.kind === 'ai-card' ? 'pdf-ai-card' : 'pdf-note-card'} ${
-                draggingCardId === card.id ? 'opacity-50 cursor-grabbing' : 'cursor-grab'
-              }`}
-              style={{ left: card.x, top: card.y }}
-              onPointerDown={(e) => handleCanvasCardPointerDown(e, card.id)}
-            >
-              {card.kind === 'ai-card' && (
-                <div className="pdf-ai-card-header">AI Card · p{card.pageNumber}</div>
-              )}
-              {card.kind === 'note' && (
-                <div className="text-[10px] font-semibold text-sky-700 mb-1">Note · p{card.pageNumber}</div>
-              )}
-              <div className="note-card-display text-[11px]">{card.content}</div>
-              {card.selectedText && (
-                <div className="mt-1.5 pl-2 border-l-2 border-sky-200 text-[10px] text-slate-500 italic line-clamp-2">
-                  {card.selectedText}
-                </div>
-              )}
-              <div className="flex gap-1 mt-2">
-                <button
-                  type="button"
-                  className="text-[10px] text-[#94A3B8] hover:text-[#7C3AED] transition-colors"
-                  onClick={() => onJumpToPage(card.pageNumber)}
-                  title="Go to source page"
-                >
-                  → p{card.pageNumber}
-                </button>
-                <button
-                  type="button"
-                  className="ml-auto text-[10px] text-[#94A3B8] hover:text-red-500 transition-colors"
-                  onClick={() => handleRemoveCanvasCard(card.id)}
-                  title="Remove from canvas"
-                >
-                  <X size={11} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      </>
     </aside>
   );
 }
