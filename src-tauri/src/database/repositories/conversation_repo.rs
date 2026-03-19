@@ -1,5 +1,5 @@
 use sqlx::SqlitePool;
-use crate::models::conversation::{Conversation, Message, AddMessageRequest};
+use crate::models::conversation::{Conversation, Message};
 use anyhow::Result;
 use uuid::Uuid;
 use chrono::Utc;

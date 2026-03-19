@@ -1,27 +1,74 @@
 import { useState, useCallback, useMemo } from 'react';
+import { z } from 'zod';
 import { AIConfig, AIProfile, AIProvider, UISettings } from '@/types/settings';
 import { aiCommands } from '@/lib/tauri';
 import { defaultAIConfig, getPresetByProvider } from '@/constants/aiProviders';
 
 const SETTINGS_PROFILES_KEY = 'ai_settings_profiles_v1';
 
-interface StoredProfile {
-  id: string;
-  name: string;
-  config: Omit<AIConfig, 'apiKey'>;
-}
+// Zod schemas for settings validation
+const UISettingsSchema = z.object({
+  showChatPerfHints: z.boolean(),
+  chatInputModeDefault: z.enum(['auto', 'chat', 'doc']),
+  rememberRoutePreferenceAcrossSessions: z.boolean(),
+});
 
-interface StoredSettings {
-  activeProfileId: string;
-  profiles: StoredProfile[];
-  ui?: UISettings;
-}
+const StoredProfileSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  config: z.object({
+    provider: z.string(),
+    endpoint: z.string(),
+    model: z.string(),
+  }),
+});
+
+const StoredSettingsSchema = z.object({
+  activeProfileId: z.string(),
+  profiles: z.array(StoredProfileSchema),
+  ui: UISettingsSchema.optional(),
+});
+
+type StoredProfile = z.infer<typeof StoredProfileSchema>;
+type StoredSettings = z.infer<typeof StoredSettingsSchema>;
 
 const DEFAULT_UI_SETTINGS: UISettings = {
   showChatPerfHints: true,
   chatInputModeDefault: 'auto',
   rememberRoutePreferenceAcrossSessions: true,
 };
+
+/**
+ * Safely parse settings from localStorage with Zod validation
+ */
+function safeParseSettings(raw: string | null): StoredSettings | null {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    const result = StoredSettingsSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
+    }
+    console.warn('[Settings] Invalid settings format, using defaults:', result.error.flatten());
+    return null;
+  } catch (e) {
+    console.warn('[Settings] Failed to parse settings, using defaults:', e);
+    return null;
+  }
+}
+
+/**
+ * Safely parse UI settings with Zod validation
+ */
+function safeParseUISettings(raw: unknown): UISettings {
+  const result = UISettingsSchema.safeParse(raw);
+  if (result.success) {
+    return result.data;
+  }
+  console.warn('[Settings] Invalid UI settings, using defaults:', result.error.flatten());
+  return DEFAULT_UI_SETTINGS;
+}
 
 function buildKeychainAccount(profileId: string): string {
   return `ai-profile:${profileId}`;
@@ -78,25 +125,23 @@ export function useSettings() {
       let loadedUiSettings: UISettings = DEFAULT_UI_SETTINGS;
 
       const savedProfilesRaw = localStorage.getItem(SETTINGS_PROFILES_KEY);
-      if (savedProfilesRaw) {
-        const parsed = JSON.parse(savedProfilesRaw) as StoredSettings;
-        loadedProfiles = (parsed.profiles || []).map((p) => ({
+      const parsedSettings = safeParseSettings(savedProfilesRaw);
+
+      if (parsedSettings) {
+        loadedProfiles = parsedSettings.profiles.map((p) => ({
           id: p.id,
           name: p.name,
           config: {
-            provider: p.config.provider,
+            provider: p.config.provider as AIProvider,
             endpoint: p.config.endpoint,
             model: p.config.model,
             apiKey: '',
           },
         }));
-        loadedActiveProfileId = parsed.activeProfileId;
-        const loadedUi = parsed.ui || DEFAULT_UI_SETTINGS;
-        loadedUiSettings = {
-          showChatPerfHints: loadedUi.showChatPerfHints ?? true,
-          chatInputModeDefault: loadedUi.chatInputModeDefault ?? 'auto',
-          rememberRoutePreferenceAcrossSessions: loadedUi.rememberRoutePreferenceAcrossSessions ?? true,
-        };
+        loadedActiveProfileId = parsedSettings.activeProfileId;
+        loadedUiSettings = parsedSettings.ui
+          ? safeParseUISettings(parsedSettings.ui)
+          : DEFAULT_UI_SETTINGS;
       } else {
         // Backward compatibility: migrate old single setting into one profile.
         let migrated = defaultAIConfig('zhipu');
