@@ -2,6 +2,7 @@ import { ZoomIn, ZoomOut, X } from 'lucide-react';
 import { DragEvent, MouseEvent, WheelEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PdfOutlineItem } from '@/lib/pdf/renderer';
+import { aiCardDragState } from '@/components/layout/AIPanel';
 
 interface MainCanvasProps {
   zoomLevel: number;
@@ -67,6 +68,22 @@ export function MainCanvas({
   const [compareHistory, setCompareHistory] = useState<number[]>([]);
   const [compareHistoryIndex, setCompareHistoryIndex] = useState(-1);
   const [splitReason, setSplitReason] = useState<'evidence' | 'reference' | 'compare'>('compare');
+
+  // Debug: global drag listener to verify events reach the document.
+  useEffect(() => {
+    const onGlobalDragOver = (e: Event) => {
+      console.log('[GLOBAL dragover] reached document, target:', (e.target as HTMLElement)?.tagName, (e.target as HTMLElement)?.className?.slice(0, 80));
+    };
+    const onGlobalDrop = (e: Event) => {
+      console.log('[GLOBAL drop] reached document, target:', (e.target as HTMLElement)?.tagName);
+    };
+    globalThis.document?.addEventListener('dragover', onGlobalDragOver);
+    globalThis.document?.addEventListener('drop', onGlobalDrop);
+    return () => {
+      globalThis.document?.removeEventListener('dragover', onGlobalDragOver);
+      globalThis.document?.removeEventListener('drop', onGlobalDrop);
+    };
+  }, []);
 
   // Notify parent when split mode changes so it can adjust layout (e.g. hide AI panel).
   useEffect(() => {
@@ -276,12 +293,9 @@ export function MainCanvas({
     setContextMenu({ x: event.clientX, y: event.clientY });
   };
 
-  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    const types = Array.from(event.dataTransfer.types);
-    const hasAiCard = types.includes('application/x-ai-card') || types.includes('text/plain');
-    if (!hasAiCard) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
     setIsAICardDragOver(true);
   };
 
@@ -292,23 +306,35 @@ export function MainCanvas({
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsAICardDragOver(false);
-    let raw = event.dataTransfer.getData('application/x-ai-card');
-    if (!raw) {
-      const plain = event.dataTransfer.getData('text/plain');
-      if (plain.startsWith('__AICARD__')) raw = plain.slice('__AICARD__'.length);
+
+    // Try module-level state first (works in Tauri WebView),
+    // fall back to dataTransfer for browser development.
+    let payload: { messageId: string; content: string; pageHint?: number } | null =
+      aiCardDragState.payload;
+
+    if (!payload) {
+      let raw = event.dataTransfer.getData('application/x-ai-card');
+      if (!raw) {
+        const plain = event.dataTransfer.getData('text/plain');
+        if (plain.startsWith('__AICARD__')) raw = plain.slice('__AICARD__'.length);
+      }
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed.messageId && parsed.content) payload = parsed;
+        } catch {
+          // ignore malformed payload
+        }
+      }
     }
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as { messageId?: string; content?: string; pageHint?: number };
-      if (!parsed.messageId || !parsed.content) return;
-      onDropAICard(
-        { messageId: parsed.messageId, content: parsed.content, pageHint: parsed.pageHint },
-        event.clientX,
-        event.clientY
-      );
-    } catch {
-      // ignore malformed payload
-    }
+
+    if (!payload) return;
+    onDropAICard(
+      { messageId: payload.messageId, content: payload.content, pageHint: payload.pageHint },
+      event.clientX,
+      event.clientY
+    );
+    aiCardDragState.payload = null;
   };
 
   // Canvas card drag handlers

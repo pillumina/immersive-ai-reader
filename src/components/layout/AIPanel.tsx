@@ -1,4 +1,13 @@
-import { useState, useEffect, useMemo, useCallback, useRef, DragEvent } from 'react';
+/**
+ * Module-level drag state — bypasses dataTransfer limitations in Tauri WebView.
+ * When a drag starts from an AI card, the payload is stored here.
+ * The canvas drop handler reads from here instead of event.dataTransfer.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export const aiCardDragState = {
+  payload: null as { messageId: string; content: string; pageHint?: number } | null,
+};
+import { useState, useRef, useEffect, useCallback, useMemo, DragEvent } from 'react';
 import { Check, Copy, GripVertical, Loader2, Pin, RotateCcw, Square, Send, MessageSquare, StickyNote, Search, BadgeCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -265,28 +274,7 @@ export function AIPanel({
     return Number.isFinite(page) && page > 0 ? page : undefined;
   };
 
-  const handleDragAICard = (event: DragEvent<HTMLElement>, msg: Message) => {
-    if (!msg.id || !msg.content?.trim()) return;
-    const payload = {
-      messageId: msg.id,
-      content: msg.content,
-      pageHint: extractFirstCitationPage(msg.content),
-    };
-    const json = JSON.stringify(payload);
-    event.dataTransfer.setData('application/x-ai-card', json);
-    event.dataTransfer.setData('text/plain', `__AICARD__${json}`);
-    event.dataTransfer.effectAllowed = 'copy';
-    // Suppress the default drag ghost so we can use a custom preview.
-    if (event.dataTransfer.setDragImage) {
-      const ghost = document.createElement('div');
-      ghost.style.cssText = 'position:fixed;top:-999px;padding:8px 12px;background:#c2410c;color:#fff;font-size:12px;border-radius:8px;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis;';
-      ghost.textContent = msg.content.slice(0, 80) + (msg.content.length > 80 ? '…' : '');
-      document.body.appendChild(ghost);
-      event.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 16);
-      requestAnimationFrame(() => document.body.removeChild(ghost));
-    }
-  };
-
+  // Store the message being dragged in a ref so the canvas can read it on drop.
   return (
     <aside className="w-[380px] border-l border-[#e7e5e4]/60 bg-gradient-to-b from-[#fafaf9] to-[#fafaf9] flex flex-col select-none">
       {/* Tab Bar */}
@@ -385,9 +373,18 @@ export function AIPanel({
             <div
               key={msg.id || idx}
               data-ai-message-id={msg.id || ''}
-              draggable={msg.role === 'assistant' && !!msg.id && !isLoading}
-              onDragStart={msg.role === 'assistant' && !!msg.id ? (e) => handleDragAICard(e, msg) : undefined}
-              className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${msg.role === 'assistant' && !!msg.id && !isLoading ? 'cursor-grab active:cursor-grabbing' : ''}`}
+              draggable={msg.role === 'assistant' && !!msg.id && !isLoading ? true : undefined}
+              onDragStart={msg.role === 'assistant' && !!msg.id && !isLoading ? (e: DragEvent<HTMLElement>) => {
+                const payload = { messageId: msg.id!, content: msg.content, pageHint: extractFirstCitationPage(msg.content) };
+                aiCardDragState.payload = payload;
+                // Also set dataTransfer for browser dev; canvas reads aiCardDragState in Tauri
+                try {
+                  e.dataTransfer.setData('application/x-ai-card', JSON.stringify(payload));
+                  e.dataTransfer.setData('text/plain', `__AICARD__${JSON.stringify(payload)}`);
+                  e.dataTransfer.effectAllowed = 'copy';
+                } catch { /* dataTransfer may be unavailable in some contexts */ }
+              } : undefined}
+              className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div className={`ai-msg group max-w-[85%] p-3 text-sm rounded-2xl leading-relaxed shadow-sm ${
                 msg.role === 'user'
@@ -436,7 +433,7 @@ export function AIPanel({
                         </button>
                         {msg.id && (
                           <div
-                            className="ai-msg-action cursor-grab active:cursor-grabbing"
+                            className="ai-msg-action"
                             title="Drag to canvas"
                           >
                             <GripVertical size={13} />
