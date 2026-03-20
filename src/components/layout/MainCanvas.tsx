@@ -279,6 +279,7 @@ export function MainCanvas({
   // Listen for custom ai-card-drop events dispatched by AIPanel pointer events
   useEffect(() => {
     const handler = (e: Event) => {
+      setIsAICardDragOver(false);
       const ce = e as CustomEvent<{ payload: { messageId: string; content: string; pageHint?: number }; clientX: number; clientY: number }>;
       onDropAICard(ce.detail.payload, ce.detail.clientX, ce.detail.clientY);
     };
