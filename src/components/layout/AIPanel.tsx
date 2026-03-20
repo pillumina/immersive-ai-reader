@@ -7,7 +7,7 @@
 export const aiCardDragState = {
   payload: null as { messageId: string; content: string; pageHint?: number } | null,
 };
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, DragEvent } from 'react';
 import { Check, Copy, GripVertical, Loader2, Pin, RotateCcw, Square, Send, MessageSquare, StickyNote, Search, BadgeCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -373,38 +373,7 @@ export function AIPanel({
             <div
               key={msg.id || idx}
               data-ai-message-id={msg.id || ''}
-              onPointerDown={msg.role === 'assistant' && !!msg.id && !isLoading ? (e: React.PointerEvent<HTMLElement>) => {
-                if (e.button !== 0) return;
-                // Record payload; will be delivered to canvas on pointer-up
-                aiCardDragState.payload = {
-                  messageId: msg.id!,
-                  content: msg.content,
-                  pageHint: extractFirstCitationPage(msg.content),
-                };
-                // Capture pointer so we receive pointerup even if pointer leaves the element
-                (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-              } : undefined}
-              onPointerUp={msg.role === 'assistant' && !!msg.id && !isLoading ? (e: React.PointerEvent<HTMLElement>) => {
-                (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-                // Check if the pointer was released over the canvas
-                const canvasEl = globalThis.document?.querySelector('[data-pdf-canvas]');
-                if (!canvasEl || !aiCardDragState.payload) return;
-                const rect = canvasEl.getBoundingClientRect();
-                const { clientX: cx, clientY: cy } = e;
-                if (cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) {
-                  // Pointer released over canvas — dispatch a custom event with coords
-                  const dropEvent = new CustomEvent('ai-card-drop', {
-                    detail: {
-                      payload: aiCardDragState.payload,
-                      clientX: cx,
-                      clientY: cy,
-                    },
-                    bubbles: true,
-                  });
-                  canvasEl.dispatchEvent(dropEvent);
-                }
-                aiCardDragState.payload = null;
-              } : undefined}
+              draggable={msg.role === 'assistant' && !!msg.id && !isLoading ? true : undefined}
               className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div className={`ai-msg group max-w-[85%] p-3 text-sm rounded-2xl leading-relaxed shadow-sm ${
@@ -454,8 +423,49 @@ export function AIPanel({
                         </button>
                         {msg.id && (
                           <div
+                            draggable
                             className="ai-msg-action"
                             title="Drag to canvas"
+                            onDragStart={(e: DragEvent<HTMLElement>) => {
+                              const payload = {
+                                messageId: msg.id!,
+                                content: msg.content,
+                                pageHint: extractFirstCitationPage(msg.content),
+                              };
+                              aiCardDragState.payload = payload;
+                              try {
+                                e.dataTransfer.setData('application/x-ai-card', JSON.stringify(payload));
+                                e.dataTransfer.effectAllowed = 'copy';
+                              } catch { /* Tauri WebView: dataTransfer unavailable */ }
+                            }}
+                            onPointerDown={(e: React.PointerEvent<HTMLElement>) => {
+                              if (e.button !== 0) return;
+                              aiCardDragState.payload = {
+                                messageId: msg.id!,
+                                content: msg.content,
+                                pageHint: extractFirstCitationPage(msg.content),
+                              };
+                              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                            }}
+                            onPointerUp={(e: React.PointerEvent<HTMLElement>) => {
+                              (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                              const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
+                              if (!scrollEl || !aiCardDragState.payload) return;
+                              const rect = scrollEl.getBoundingClientRect();
+                              const { clientX: cx, clientY: cy } = e;
+                              if (cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) {
+                                const dropEvent = new CustomEvent('ai-card-drop', {
+                                  detail: {
+                                    payload: aiCardDragState.payload,
+                                    clientX: cx,
+                                    clientY: cy,
+                                  },
+                                  bubbles: true,
+                                });
+                                scrollEl.dispatchEvent(dropEvent);
+                              }
+                              aiCardDragState.payload = null;
+                            }}
                           >
                             <GripVertical size={13} />
                           </div>
