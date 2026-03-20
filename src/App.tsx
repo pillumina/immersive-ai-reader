@@ -105,6 +105,7 @@ function App() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [noteInputOpen, setNoteInputOpen] = useState(false);
+  const noteInputRef = useRef<HTMLInputElement>(null);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
   const [focusMode, setFocusMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -799,12 +800,13 @@ function App() {
           <div className="bg-white rounded-2xl shadow-2xl border border-[#e7e5e4] p-5 w-[360px] flex flex-col gap-3 animate-in fade-in zoom-in-95">
             <p className="text-sm font-semibold text-[#1c1917]">Add Note</p>
             <input
+              ref={noteInputRef}
               autoFocus
               className="w-full px-3 py-2 rounded-xl border border-[#e7e5e4] text-sm text-[#1c1917] bg-[#fafaf9] focus:outline-none focus:border-[#c2410c] focus:ring-1 focus:ring-[#c2410c]/30 transition-colors"
               placeholder="Your note..."
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  handleNoteInputSubmit((e.target as HTMLInputElement).value);
+                  handleNoteInputSubmit(noteInputRef.current?.value ?? '');
                 }
                 if (e.key === 'Escape') setNoteInputOpen(false);
               }}
@@ -818,7 +820,7 @@ function App() {
               </button>
               <button
                 className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#c2410c] text-white hover:bg-[#9a3412] transition-colors"
-                onClick={(e) => handleNoteInputSubmit((e.currentTarget.parentElement?.previousElementSibling?.querySelector('input') as HTMLInputElement)?.value ?? '')}
+                onClick={() => handleNoteInputSubmit(noteInputRef.current?.value ?? '')}
               >
                 Add
               </button>
