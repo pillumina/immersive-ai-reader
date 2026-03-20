@@ -5,7 +5,6 @@ import { AIPanel } from '@/components/layout/AIPanel';
 import { TopBar, AppTab } from '@/components/layout/TopBar';
 import { LibraryView } from '@/components/features/LibraryView';
 import { SettingsModal } from '@/components/features/SettingsModal';
-import { NotesManager } from '@/components/features/NotesManager';
 import { Toast } from '@/components/ui/Toast';
 import { usePDF } from '@/hooks/usePDF';
 import { usePDFThumbnails } from '@/hooks/usePDFThumbnails';
@@ -102,7 +101,6 @@ function App() {
 
   // ─── UI state ─────────────────────────────────────────────────
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [notesManagerOpen, setNotesManagerOpen] = useState(false);
   const [notesAnnotations, setNotesAnnotations] = useState<any[]>([]);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -229,10 +227,8 @@ function App() {
         setNotesAnnotations([]);
       }
     };
-    if (notesManagerOpen) {
-      void loadNotes();
-    }
-  }, [currentDocument?.id, notesManagerOpen]);
+    void loadNotes();
+  }, [currentDocument?.id]);
 
   // ─── Load pinned AI cards ────────────────────────────────────
   useEffect(() => {
@@ -697,7 +693,6 @@ function App() {
             onJumpToPage={jumpToPage}
             onHighlightSelection={handleHighlightSelection}
             onAddNoteSelection={handleAddNoteSelection}
-            onOpenNotesManager={() => setNotesManagerOpen(true)}
             onExplainSelection={() => { void handleExplainTerm(); }}
             onDropAICard={handleDropAICard}
             documentId={currentDocument?.id}
@@ -726,12 +721,24 @@ function App() {
               onTranslateSelection={handleTranslateSelection}
               onExportNotes={handleExportNotes}
               onJumpToCitation={handleJumpToCitation}
+              notesAnnotations={notesAnnotations}
+              onDeleteNote={handleDeleteNote}
+              onUpdateNote={handleUpdateNote}
+              onJumpToPage={(page) => {
+                jumpToPage(page);
+                setComparePageSignal(page);
+                setComparePaneCommand({
+                  page,
+                  openSplit: true,
+                  reason: 'reference',
+                  nonce: Date.now(),
+                });
+              }}
               pendingRouteConfirmation={pendingRouteConfirmation}
               onConfirmRouteAsChat={() => { void confirmPendingRoute('chat'); }}
               onConfirmRouteAsDoc={() => { void confirmPendingRoute('doc'); }}
               onDismissRouteConfirm={dismissPendingRoute}
               pinnedMessageIds={pinnedMessageIds}
-              onOpenNotesManager={() => setNotesManagerOpen(true)}
             />
           )}
         </main>
@@ -780,25 +787,6 @@ function App() {
           );
         }}
       />
-
-      {notesManagerOpen && currentDocument && (
-        <NotesManager
-          annotations={notesAnnotations}
-          onJumpToPage={(page) => {
-            jumpToCitation(page);
-            setComparePageSignal(page);
-            setComparePaneCommand({
-              page,
-              openSplit: true,
-              reason: 'reference',
-              nonce: Date.now(),
-            });
-          }}
-          onDeleteNote={handleDeleteNote}
-          onUpdateNote={handleUpdateNote}
-          onClose={() => setNotesManagerOpen(false)}
-        />
-      )}
 
       {toast && (
         <Toast

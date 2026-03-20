@@ -727,9 +727,13 @@ export function useCanvasRendering(
     const containerEl = globalThis.document?.getElementById(containerId);
     if (containerEl instanceof HTMLElement) {
       const card = containerEl.querySelector<HTMLElement>(`.pdf-ai-card[data-message-id="${messageId}"]`);
+      console.log('[unpin] card found:', !!card, 'messageId:', messageId);
       card?.remove();
       const highlight = containerEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${aiAnnotation.id}"]`);
+      console.log('[unpin] highlight found:', !!highlight);
       highlight?.remove();
+    } else {
+      console.warn('[unpin] container not found:', containerId);
     }
     onUnpin?.(messageId);
     // Fire custom event so App can show toast

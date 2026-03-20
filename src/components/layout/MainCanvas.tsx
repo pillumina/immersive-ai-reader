@@ -16,7 +16,6 @@ interface MainCanvasProps {
   onJumpToPage: (page: number) => void;
   onHighlightSelection: () => void;
   onAddNoteSelection: () => void;
-  onOpenNotesManager?: () => void;
   onExplainSelection: () => void;
   onDropAICard: (payload: { messageId: string; content: string; pageHint?: number }, clientX: number, clientY: number) => void;
   documentId?: string;
@@ -45,7 +44,6 @@ export function MainCanvas({
   onJumpToPage,
   onHighlightSelection,
   onAddNoteSelection,
-  onOpenNotesManager,
   onExplainSelection,
   onDropAICard,
   documentId,
@@ -378,11 +376,6 @@ export function MainCanvas({
           <Button variant="secondary" size="sm" onClick={onHighlightSelection} disabled={!hasDocument} className="!h-7 !px-2.5 !text-[11px]">
             Highlight
           </Button>
-          {hasDocument && (
-            <Button variant="secondary" size="sm" onClick={onOpenNotesManager} className="!h-7 !px-2.5 !text-[11px]">
-              Notes
-            </Button>
-          )}
           {hasDocument && totalPages > 0 && (
             <button
               type="button"

@@ -6,6 +6,7 @@ import { Message } from '@/types/conversation';
 import { Logo } from '@/components/ui/Logo';
 import { ChatInputMode } from '@/types/settings';
 import { Input } from '@/components/ui/Input';
+import { NotesManager } from '@/components/features/NotesManager';
 
 interface AIPanelProps {
   messages: Message[];
@@ -22,7 +23,11 @@ interface AIPanelProps {
   onTranslateSelection: () => void;
   onExportNotes: () => void;
   onJumpToCitation: (page: number) => void;
-  onOpenNotesManager: () => void;
+  // Notes Manager (inline in panel)
+  notesAnnotations: Array<{ id: string; page_number: number; text: string; created_at: string }>;
+  onDeleteNote: (annotationId: string) => Promise<void>;
+  onUpdateNote: (annotationId: string, newContent: string) => Promise<void>;
+  onJumpToPage: (page: number) => void;
   showPerfHints: boolean;
   defaultInputMode: ChatInputMode;
   pendingRouteConfirmation: {
@@ -51,8 +56,11 @@ export function AIPanel({
   onTranslateSelection,
   onExportNotes,
   onJumpToCitation,
+  notesAnnotations,
+  onDeleteNote,
+  onUpdateNote,
+  onJumpToPage,
   showPerfHints,
-  onOpenNotesManager,
   defaultInputMode,
   pendingRouteConfirmation,
   onConfirmRouteAsChat,
@@ -60,6 +68,7 @@ export function AIPanel({
   onDismissRouteConfirm,
   pinnedMessageIds,
 }: AIPanelProps) {
+  const [notesView, setNotesView] = useState(false);
   const [input, setInput] = useState('');
   const [inputMode, setInputMode] = useState<ChatInputMode>(defaultInputMode);
   const [hasSelection, setHasSelection] = useState(false);
@@ -275,15 +284,24 @@ export function AIPanel({
       <div className="flex items-center border-b border-[#e7e5e4]/60 px-1">
         <button
           type="button"
-          className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 border-[#c2410c] text-[#c2410c]"
+          onClick={() => setNotesView(false)}
+          className={`flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 transition-colors ${
+            !notesView
+              ? 'border-[#c2410c] text-[#c2410c]'
+              : 'border-transparent text-[#a8a29e] hover:text-[#78716c]'
+          }`}
         >
           <MessageSquare size={13} />
           Chat
         </button>
         <button
           type="button"
-          onClick={onOpenNotesManager}
-          className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 border-transparent text-[#a8a29e] hover:text-[#78716c] transition-colors"
+          onClick={() => setNotesView(true)}
+          className={`flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 transition-colors ${
+            notesView
+              ? 'border-[#c2410c] text-[#c2410c]'
+              : 'border-transparent text-[#a8a29e] hover:text-[#78716c]'
+          }`}
           title="Note Management"
         >
           <StickyNote size={13} />
@@ -291,9 +309,19 @@ export function AIPanel({
         </button>
       </div>
 
-      <>
-      {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-[#e7e5e4]/60">
+      {/* Content: Chat or Notes Manager */}
+      {notesView ? (
+        <NotesManager
+          annotations={notesAnnotations}
+          onJumpToPage={onJumpToPage}
+          onDeleteNote={onDeleteNote}
+          onUpdateNote={onUpdateNote}
+          onClose={() => setNotesView(false)}
+        />
+      ) : (
+        <>
+        {/* Header */}
+        <div className="px-4 pt-4 pb-3 border-b border-[#e7e5e4]/60">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#c2410c] to-[#9a3412] shadow-sm">
             <Logo size={14} variant="dark" />
@@ -549,7 +577,8 @@ export function AIPanel({
           </button>
         </div>
       </div>
-      </>
+        </>
+      )}
     </aside>
   );
 }
