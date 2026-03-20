@@ -15,6 +15,9 @@ export interface RenderPdfResult {
 interface RenderOptions {
   scale?: number;
   shouldCancel?: () => boolean;
+  /** Number of pages to render eagerly on first load (default 5). Remaining pages
+   *  are left as skeleton divs and rendered lazily on scroll. */
+  initialPageCount?: number;
 }
 
 async function resolveOutlinePageNumber(
@@ -112,9 +115,9 @@ function createSkeletonElement(pageNum: number, width: number, height: number): 
 }
 
 /**
- * Create the actual rendered page element.
+ * Create the actual rendered page element (can be called for lazy rendering).
  */
-async function createPageElement(
+export async function renderSinglePage(
   pdfDoc: pdfjsLib.PDFDocumentProxy,
   pageNum: number,
   scale: number,
@@ -143,7 +146,7 @@ async function createPageElement(
 
   await page.render({ canvasContext: ctx, viewport }).promise;
 
-  // Text layer (render in background after canvas is done)
+  // Text layer (render asynchronously after canvas is done)
   const textLayerEl = document.createElement('div');
   textLayerEl.className = 'pdf-text-layer';
   textLayerEl.style.width = `${viewport.width}px`;
@@ -168,9 +171,146 @@ async function createPageElement(
 }
 
 /**
- * Render PDF pages into a DOM container with progressive loading.
- * Pages are rendered in parallel batches for performance, with skeletons shown immediately.
+ * Render PDF pages into a DOM container with progressive virtual scrolling.
+ * Only initialPageCount pages are rendered eagerly; the rest stay as skeleton
+ * divs and are rendered lazily via renderSinglePage when they enter the viewport.
  */
+interface LazyRenderState {
+  pdfDoc: pdfjsLib.PDFDocumentProxy;
+  scale: number;
+  dpr: number;
+  shouldCancel: () => boolean;
+  renderedPages: Set<number>;
+  pendingPages: Set<number>;
+  renderQueue: number[];
+  isProcessing: boolean;
+  observer: IntersectionObserver | null;
+  rootMargin: string;
+  /** How many pages to render per scroll-triggered batch. */
+  LAZY_BATCH: number;
+}
+
+function createLazyState(
+  pdfDoc: pdfjsLib.PDFDocumentProxy,
+  scale: number,
+  dpr: number,
+  shouldCancel: () => boolean
+): LazyRenderState {
+  return {
+    pdfDoc,
+    scale,
+    dpr,
+    shouldCancel,
+    renderedPages: new Set(),
+    pendingPages: new Set(),
+    renderQueue: [],
+    isProcessing: false,
+    observer: null,
+    rootMargin: '400px 0px', // pre-render 400px before viewport
+    LAZY_BATCH: 3,
+  };
+}
+
+function enqueueLazyPages(
+  container: HTMLElement,
+  state: LazyRenderState
+): void {
+  if (state.shouldCancel()) return;
+  const skeletons = container.querySelectorAll<HTMLElement>(
+    '.pdf-page-skeleton[data-page-number]'
+  );
+  for (const skeleton of skeletons) {
+    const pageNum = Number(skeleton.dataset.pageNumber);
+    if (!state.renderedPages.has(pageNum) && !state.pendingPages.has(pageNum)) {
+      state.renderQueue.push(pageNum);
+      state.pendingPages.add(pageNum);
+    }
+  }
+  if (!state.isProcessing) {
+    processRenderQueue(container, state);
+  }
+}
+
+function processRenderQueue(
+  container: HTMLElement,
+  state: LazyRenderState
+): void {
+  if (state.shouldCancel() || state.renderQueue.length === 0) {
+    state.isProcessing = false;
+    return;
+  }
+  state.isProcessing = true;
+
+  const batch = state.renderQueue.splice(0, state.LAZY_BATCH);
+
+  Promise.allSettled(
+    batch.map((pageNum) =>
+      renderSinglePage(state.pdfDoc, pageNum, state.scale, state.dpr).catch((err) => {
+        console.error(`[lazy] Page ${pageNum} render error:`, err);
+        const placeholder = document.createElement('div');
+        placeholder.className = 'pdf-page pdf-page-error';
+        placeholder.dataset.pageNumber = String(pageNum);
+        placeholder.textContent = `Page ${pageNum} failed to render`;
+        return placeholder;
+      })
+    )
+  ).then((results) => {
+    results.forEach((result, i) => {
+      const pageNum = batch[i];
+      state.pendingPages.delete(pageNum);
+      if (result.status === 'fulfilled') {
+        state.renderedPages.add(pageNum);
+        const skeleton = container.querySelector<HTMLElement>(
+          `.pdf-page-skeleton[data-page-number="${pageNum}"]`
+        );
+        if (skeleton) skeleton.replaceWith(result.value);
+      }
+    });
+    // Keep processing if more queued and not cancelled
+    if (!state.shouldCancel()) {
+      processRenderQueue(container, state);
+    } else {
+      state.isProcessing = false;
+    }
+  });
+}
+
+/**
+ * Set up lazy rendering via IntersectionObserver for skeleton pages.
+ * Returns a cleanup function.
+ */
+function setupLazyRendering(
+  container: HTMLElement,
+  state: LazyRenderState
+): () => void {
+  // Seed the queue with all unrendered skeletons
+  enqueueLazyPages(container, state);
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (state.isProcessing || state.shouldCancel()) return;
+      let needsEnqueue = false;
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          needsEnqueue = true;
+        }
+      }
+      if (needsEnqueue) enqueueLazyPages(container, state);
+    },
+    { rootMargin: state.rootMargin }
+  );
+
+  const skeletons = container.querySelectorAll<HTMLElement>(
+    '.pdf-page-skeleton[data-page-number]'
+  );
+  for (const skeleton of skeletons) {
+    observer.observe(skeleton);
+  }
+
+  state.observer = observer;
+  return () => observer.disconnect();
+}
+
 export async function renderPagesToContainer(
   file: File,
   container: HTMLElement,
@@ -203,28 +343,24 @@ export async function renderPagesToContainer(
   const skeletonWidth = firstViewport.width;
   const skeletonHeight = firstViewport.height;
 
-  // Show skeleton placeholders immediately
+  // Show skeleton placeholders for ALL pages immediately.
+  // Only initialPageCount pages will be rendered eagerly; the rest are
+  // rendered lazily via renderSinglePage when they scroll into view.
+  const initialCount = options.initialPageCount ?? 5;
   for (let i = 1; i <= totalPages; i++) {
     container.appendChild(createSkeletonElement(i, skeletonWidth, skeletonHeight));
   }
 
-  // Render pages in parallel batches (2 pages at a time)
-  const BATCH_SIZE = 2;
-  const renderedPages = new Map<number, HTMLElement>();
+  // Render the first batch eagerly (BATCH_SIZE=4 for faster first paint).
+  // Remaining pages are left as skeleton divs and rendered on scroll.
+  const initialBatchEnd = Math.min(initialCount, totalPages);
 
-  for (let batchStart = 0; batchStart < totalPages; batchStart += BATCH_SIZE) {
-    if (shouldCancel?.()) {
-      throw new Error('PDF rendering cancelled');
-    }
-
-    const batchEnd = Math.min(batchStart + BATCH_SIZE, totalPages);
+  if (initialBatchEnd > 0) {
     const batchPromises: Promise<HTMLElement>[] = [];
-
-    for (let pageNum = batchStart + 1; pageNum <= batchEnd; pageNum++) {
+    for (let pageNum = 1; pageNum <= initialBatchEnd; pageNum++) {
       batchPromises.push(
-        createPageElement(pdfDoc, pageNum, scale, dpr).catch((err) => {
+        renderSinglePage(pdfDoc, pageNum, scale, dpr).catch((err) => {
           console.error(`Page ${pageNum} render error:`, err);
-          // Return a placeholder on error
           const placeholder = document.createElement('div');
           placeholder.className = 'pdf-page pdf-page-error';
           placeholder.dataset.pageNumber = String(pageNum);
@@ -238,23 +374,29 @@ export async function renderPagesToContainer(
 
     const batchResults = await Promise.all(batchPromises);
     batchResults.forEach((pageEl, i) => {
-      const pageNum = batchStart + i + 1;
-      renderedPages.set(pageNum, pageEl);
-
+      const pageNum = i + 1;
       // Replace skeleton with actual page
       const skeleton = container.querySelector<HTMLElement>(
         `.pdf-page-skeleton[data-page-number="${pageNum}"]`
       );
-      if (skeleton) {
-        skeleton.replaceWith(pageEl);
-      }
+      if (skeleton) skeleton.replaceWith(pageEl);
     });
-
-    console.log(`Rendered pages ${batchStart + 1}-${batchEnd} / ${totalPages}`);
+    console.log(`Rendered initial pages 1-${initialBatchEnd} / ${totalPages}`);
   }
+
+  // Set up lazy rendering for remaining pages
+  const lazyState = createLazyState(pdfDoc, scale, dpr, shouldCancel ?? (() => false));
+  // Mark initial pages as already rendered
+  for (let i = 1; i <= initialBatchEnd; i++) {
+    lazyState.renderedPages.add(i);
+  }
+  const cleanupLazy = setupLazyRendering(container, lazyState);
 
   // Wait for outline extraction
   const outline = await outlinePromise;
+
+  // Expose cleanup on container for callers that need to teardown
+  (container as any).__lazyCleanup = cleanupLazy;
 
   return { totalPages, outline };
 }

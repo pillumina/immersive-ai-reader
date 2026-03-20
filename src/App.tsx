@@ -467,7 +467,7 @@ function App() {
   const handleUnpinFromCanvas = async (messageId: string) => {
     try {
       await unpinAiCardByMessageId(messageId);
-      setToast({ message: 'AI card removed from canvas', type: 'success' });
+      // Toast is shown via the 'ai-card-unpinned' event listener below.
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to unpin';
       setToast({ message, type: 'error' });

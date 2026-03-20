@@ -100,6 +100,17 @@ Current sprint target: AI 上下文感知增强 + 画布交互升级 + 导出分
 - [ ] 增量同步协议草案（时间戳 + 变更集 + 冲突字段）
 - [ ] 云端可选同步接口预留（不阻塞纯本地模式）
 
+---
+
+## Performance Optimizations (2026-03-20)
+
+- [x] PDF 懒加载渲染：前 5 页立即渲染，其余 IntersectionObserver 触发（每批 3 页），支持 shouldCancel 中断（2026-03-20）
+- [x] 滚动当前页检测：从 scroll+RAF+O(n) 遍历优化为 IntersectionObserver（零成本空闲时，2026-03-20）
+- [x] CSS content-visibility:auto + contain:layout style：离屏页面跳过渲染/布局计算（2026-03-20）
+- [x] 骨架屏 content-visibility:auto：未渲染页骨架也享受跳过计算收益（2026-03-20）
+
+---
+
 ## P2 - Nice to Have
 
 - [ ] Paper + GitHub repo linked workspace

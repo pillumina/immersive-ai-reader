@@ -9,7 +9,7 @@ export function useCanvasRendering(
   containerId: string,
   pdfDocument: PDFDocument | null,
   zoomLevel: number,
-  onUnpin?: (messageId: string) => void,
+  onPinnedIdsChange?: (messageId: string) => void,
 ) {
   const renderJobIdRef = useRef(0);
   const latestZoomRef = useRef(zoomLevel);
@@ -94,15 +94,15 @@ export function useCanvasRendering(
       expandBtn.textContent = 'Expand';
       actions.appendChild(openBtn);
       actions.appendChild(expandBtn);
-      // Add Unpin button for AI cards
-      if (options?.messageId && onUnpin) {
+      // Add Unpin button for AI cards — calls handleCanvasUnpin which deletes from DB.
+      if (options?.messageId) {
         const unpinBtn = document.createElement('button');
         unpinBtn.type = 'button';
         unpinBtn.className = 'pdf-ai-card-action pdf-ai-card-unpin';
         unpinBtn.textContent = 'Unpin';
         unpinBtn.addEventListener('click', (evt) => {
           evt.stopPropagation();
-          onUnpin(options.messageId!);
+          handleCanvasUnpin(options.messageId!);
         });
         actions.appendChild(unpinBtn);
       }
@@ -380,7 +380,7 @@ export function useCanvasRendering(
       setRenderError(null);
 
       // Declare skeleton array before try so finally can close over it.
-      let skeletonEls: HTMLElement[] = [];
+      const skeletonEls: HTMLElement[] = [];
 
       try {
         let containerEl = globalThis.document?.getElementById(containerId);
@@ -727,17 +727,22 @@ export function useCanvasRendering(
     const containerEl = globalThis.document?.getElementById(containerId);
     if (containerEl instanceof HTMLElement) {
       const card = containerEl.querySelector<HTMLElement>(`.pdf-ai-card[data-message-id="${messageId}"]`);
-      console.log('[unpin] card found:', !!card, 'messageId:', messageId);
       card?.remove();
       const highlight = containerEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${aiAnnotation.id}"]`);
-      console.log('[unpin] highlight found:', !!highlight);
       highlight?.remove();
-    } else {
-      console.warn('[unpin] container not found:', containerId);
     }
-    onUnpin?.(messageId);
+    onPinnedIdsChange?.(messageId);
     // Fire custom event so App can show toast
     globalThis.dispatchEvent(new CustomEvent('ai-card-unpinned', { detail: { messageId } }));
+  };
+
+  // Called by the canvas Unpin button — triggers the full deletion flow.
+  const handleCanvasUnpin = async (messageId: string) => {
+    try {
+      await unpinAiCardByMessageId(messageId);
+    } catch (error) {
+      console.error('[canvas-unpin] failed:', error);
+    }
   };
 
   useEffect(() => {
@@ -745,29 +750,48 @@ export function useCanvasRendering(
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(scroller instanceof HTMLElement) || !(containerEl instanceof HTMLElement)) return;
 
-    let rafId: number | null = null;
+    // Use IntersectionObserver instead of scroll+RAF+querySelectorAll.
+    // This fires only when a page actually enters/leaves the viewport — zero
+    // cost when the user isn't scrolling — and requires no O(n) DOM traversal.
+    const pageObserver = new IntersectionObserver(
+      (entries) => {
+        // Find the page closest to the top of the scroll container.
+        let bestRatio = -1;
+        let bestPage = totalPages || 1;
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            // intersectionRect / boundingClientRect gives us how "at top" this page is.
+            const ratio = entry.intersectionRect.height / entry.boundingClientRect.height;
+            if (ratio > bestRatio) {
+              bestRatio = ratio;
+              const pageNum = Number(
+                (entry.target as HTMLElement).dataset.pageNumber || '1'
+              );
+              bestPage = pageNum;
+            }
+          }
+        }
+        if (bestRatio >= 0) {
+          setCurrentPage(Math.min(Math.max(bestPage, 1), totalPages || bestPage));
+        }
+      },
+      {
+        root: scroller,
+        // Trigger when the top of a page approaches within 100px of the viewport top.
+        rootMargin: '-80px 0px -60% 0px',
+        // Only need to observe a few pages — the observer fires on enter+leave.
+        threshold: [0, 0.1, 0.5, 1.0],
+      }
+    );
 
-    const updateCurrentPage = () => {
-      if (rafId !== null) return; // Skip if a frame is already scheduled
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        const pageEls = containerEl.querySelectorAll<HTMLElement>('.pdf-page');
-        if (!pageEls.length) return;
-        const threshold = scroller.scrollTop + 40;
-        let page = 1;
-        pageEls.forEach((el, idx) => {
-          if (el.offsetTop <= threshold) page = idx + 1;
-        });
-        setCurrentPage(Math.min(Math.max(page, 1), totalPages || page));
-      });
+    // Observe all rendered pages; re-collect when totalPages changes.
+    const observe = () => {
+      const pages = containerEl.querySelectorAll<HTMLElement>('.pdf-page');
+      pages.forEach((p) => pageObserver.observe(p));
     };
+    observe();
 
-    updateCurrentPage();
-    scroller.addEventListener('scroll', updateCurrentPage, { passive: true });
-    return () => {
-      scroller.removeEventListener('scroll', updateCurrentPage);
-      if (rafId !== null) cancelAnimationFrame(rafId);
-    };
+    return () => pageObserver.disconnect();
   }, [scrollContainerId, containerId, totalPages]);
 
   const jumpToPage = (pageNumber: number) => {
@@ -827,6 +851,7 @@ export function useCanvasRendering(
     pinNoteToCurrentPage,
     dropAICardAtPoint,
     unpinAiCardByMessageId,
+    handleCanvasUnpin,
     locateAiCardByMessageId,
   };
 }
