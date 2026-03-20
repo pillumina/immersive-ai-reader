@@ -6,6 +6,7 @@ import { PDFDocument } from '@/types/document';
 interface SidebarProps {
   onUpload: () => void;
   onOpenSettings: () => void;
+  onToggleSidebar?: () => void;
   documents: PDFDocument[];
   currentDocumentId?: string;
   onSelectDocument: (id: string) => void;
@@ -24,6 +25,7 @@ type TabId = 'library' | 'pages';
 export function Sidebar({
   onUpload,
   onOpenSettings,
+  onToggleSidebar,
   documents,
   currentDocumentId,
   onSelectDocument,
@@ -65,25 +67,39 @@ export function Sidebar({
     <aside className="w-[260px] border-r border-[#E8E8E8] bg-white flex flex-col select-none overflow-hidden">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-[#F0F0F0]">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-[#E42313] flex items-center justify-center shrink-0">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.4V12h3l3 3-3 3h-3v1a4 4 0 1 1-8 0v-1H3l-3-3 3-3h3V9.4A4 4 0 0 1 12 2z"/>
             </svg>
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="text-[13px] font-semibold text-[#0D0D0D] leading-tight truncate">Immersive Reader</h1>
             <p className="text-[10px] text-[#7A7A7A] leading-none">Document + AI</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-[#7A7A7A] hover:bg-[#F5F5F5] hover:text-[#0D0D0D] transition-colors shrink-0"
-          title="Settings"
-        >
-          <Settings size={15} />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {onToggleSidebar && (
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-[#7A7A7A] hover:bg-[#F5F5F5] hover:text-[#0D0D0D] transition-colors"
+              title="Hide sidebar"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>
+              </svg>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#7A7A7A] hover:bg-[#F5F5F5] hover:text-[#0D0D0D] transition-colors"
+            title="Settings"
+          >
+            <Settings size={15} />
+          </button>
+        </div>
       </div>
 
       {/* Action row */}
@@ -146,34 +162,83 @@ export function Sidebar({
         {activeTab === 'library' && (
           <div className="px-2 py-1">
             {filteredDocs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                <div className="w-12 h-12 rounded-2xl bg-[#F5F5F5] flex items-center justify-center mb-3">
-                  <FileText size={20} className="text-[#D0D0D0]" />
+              <div className="flex flex-col items-center justify-center py-10 text-center px-5">
+                {/* Illustration */}
+                <div className="w-16 h-16 rounded-2xl bg-[#F5F5F5] flex items-center justify-center mb-4">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#D0D0D0" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="12" y1="12" x2="12" y2="18"/>
+                    <line x1="9" y1="15" x2="15" y2="15"/>
+                  </svg>
                 </div>
-                <p className="text-[12px] text-[#7A7A7A] font-medium">
-                  {searchQuery ? 'No results' : 'No documents yet'}
-                </p>
-                <p className="text-[11px] text-[#B0B0B0] mt-1">
-                  {searchQuery ? 'Try a different search' : 'Upload a PDF to get started'}
-                </p>
+                {searchQuery ? (
+                  <>
+                    <p className="text-[13px] font-semibold text-[#374151]">No results found</p>
+                    <p className="text-[11px] text-[#9CA3AF] mt-1 leading-relaxed">
+                      No documents match &ldquo;{searchQuery}&rdquo;
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="mt-3 text-[11px] text-[#E42313] font-medium hover:underline"
+                    >
+                      Clear search
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[13px] font-semibold text-[#374151]">Your library is empty</p>
+                    <p className="text-[11px] text-[#9CA3AF] mt-1 leading-relaxed max-w-[180px]">
+                      Upload a PDF to start reading and annotating with AI assistance
+                    </p>
+                    <button
+                      type="button"
+                      onClick={onUpload}
+                      className="mt-4 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#E42313] text-white text-[12px] font-semibold hover:bg-[#c71e10] transition-colors shadow-sm"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      Upload PDF
+                    </button>
+                  </>
+                )}
               </div>
             ) : (
-              sortedGroups.map((group) => (
-                <div key={group} className="mb-3">
-                  <p className="text-[10px] font-semibold text-[#B0B0B0] uppercase tracking-wider px-2 mb-1">
-                    {group}
-                  </p>
-                  {(grouped[group] || []).map((doc) => {
-                    const isActive = currentDocumentId === doc.id;
-                    return (
-                      <div
-                        key={doc.id}
-                        className={`group flex items-center gap-2 rounded-lg px-2 py-2 mb-0.5 cursor-pointer transition-all duration-100 ${
-                          isActive
-                            ? 'bg-[#FEF2F2]'
-                            : 'hover:bg-[#F8F8F8]'
-                        }`}
-                        onClick={() => onSelectDocument(doc.id)}
+              <>
+                {/* Library header stats */}
+                <div className="px-2 py-2 flex items-center justify-between">
+                  <span className="text-[11px] text-[#B0B0B0]">
+                    {filteredDocs.length} document{filteredDocs.length !== 1 ? 's' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onUpload}
+                    className="text-[11px] text-[#E42313] font-medium hover:text-[#c71e10] transition-colors"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {sortedGroups.map((group) => (
+                  <div key={group} className="mb-3">
+                    <p className="text-[10px] font-semibold text-[#B0B0B0] uppercase tracking-wider px-2 mb-1">
+                      {group}
+                    </p>
+                    {(grouped[group] || []).map((doc) => {
+                      const isActive = currentDocumentId === doc.id;
+                      return (
+                        <div
+                          key={doc.id}
+                          className={`group flex items-center gap-2 rounded-lg px-2 py-2 mb-0.5 cursor-pointer transition-all duration-100 ${
+                            isActive
+                              ? 'bg-[#FEF2F2]'
+                              : 'hover:bg-[#F8F8F8]'
+                          }`}
+                          onClick={() => onSelectDocument(doc.id)}
                       >
                         <div className={`shrink-0 rounded ${isActive ? 'text-[#E42313]' : 'text-[#B0B0B0] group-hover:text-[#7A7A7A]'} transition-colors`}>
                           <FileText size={13} />
@@ -206,7 +271,8 @@ export function Sidebar({
                     );
                   })}
                 </div>
-              ))
+              ))}
+            </>
             )}
           </div>
         )}

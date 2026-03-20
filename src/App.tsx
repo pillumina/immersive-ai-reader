@@ -52,6 +52,7 @@ function App() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
   const [focusMode, setFocusMode] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [splitActive, setSplitActive] = useState(false);
   const [comparePageSignal, setComparePageSignal] = useState<number | null>(null);
   const [comparePaneCommand, setComparePaneCommand] = useState<{
@@ -444,10 +445,11 @@ function App() {
 
   return (
     <main className="flex h-screen bg-white">
-      {!focusMode && (
+      {!focusMode && sidebarOpen && (
         <Sidebar
           onUpload={handleUpload}
           onOpenSettings={() => setSettingsOpen(true)}
+          onToggleSidebar={() => setSidebarOpen(false)}
           documents={documents}
           currentDocumentId={currentDocument?.id}
           onSelectDocument={selectDocument}
@@ -459,6 +461,22 @@ function App() {
           thumbnails={thumbnails}
           thumbnailsLoading={thumbnailsLoading}
         />
+      )}
+
+      {/* Collapsed sidebar strip */}
+      {!focusMode && !sidebarOpen && (
+        <div className="w-11 border-r border-[#E8E8E8] bg-white flex flex-col items-center py-3 gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-[#7A7A7A] hover:bg-[#F5F5F5] hover:text-[#0D0D0D] transition-colors"
+            title="Show sidebar"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>
+            </svg>
+          </button>
+        </div>
       )}
 
       <MainCanvas
