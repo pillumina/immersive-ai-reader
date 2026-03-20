@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef, DragEvent } from 'react';
-import { Check, Copy, GripVertical, Loader2, MapPin, Pin, RotateCcw, Square, Send, MessageSquare, StickyNote } from 'lucide-react';
+import { Check, Copy, GripVertical, Loader2, Pin, RotateCcw, Square, Send, MessageSquare, StickyNote, Search, BadgeCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message } from '@/types/conversation';
@@ -322,43 +322,41 @@ export function AIPanel({
         <>
         {/* Header */}
         <div className="px-4 pt-4 pb-3 border-b border-[#e7e5e4]/60">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#c2410c] to-[#9a3412] shadow-sm">
-            <Logo size={14} variant="dark" />
+          <div className="flex items-center gap-2.5 mb-2.5">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#c2410c] to-[#9a3412] flex items-center justify-center shrink-0 shadow-sm">
+              <Logo size={14} variant="dark" />
+            </div>
+            <div className="flex-1 min-w-0 flex items-center gap-2">
+              <h2 className="text-[13px] font-semibold text-[#1c1917] leading-tight">AI Assistant</h2>
+              {showPerfHints && sessionStats.total > 0 && (
+                <span
+                  className="inline-flex rounded-full border border-[#e7e5e4] bg-white/80 px-2 py-0.5 text-[10px] tabular-nums text-[#78716c]"
+                  title={`Prompt: ${sessionStats.prompt} | Completion: ${sessionStats.completion} | Avg latency: ${avgLatency}`}
+                >
+                  {sessionStats.total} tokens · avg {avgLatency}
+                </span>
+              )}
+            </div>
           </div>
-          <div>
-            <h2 className="text-[14px] font-semibold text-[#1c1917] leading-tight">AI Assistant</h2>
-            <p className="text-[10px] text-[#a8a29e] leading-none mt-0.5">Context-aware help</p>
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" className="quick-action-chip" onClick={onSummarize} title="Summarize the current document">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+              Summarize
+            </button>
+            <button type="button" className={`quick-action-chip${hasSelection ? '' : ' quick-action-chip--disabled'}`} onClick={onExplainTerm} title={hasSelection ? 'Explain the selected term' : 'Select text in the PDF first'}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Explain
+            </button>
+            <button type="button" className={`quick-action-chip${hasSelection ? '' : ' quick-action-chip--disabled'}`} onClick={onTranslateSelection} title={hasSelection ? 'Translate the selected text' : 'Select text in the PDF first'}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>
+              Translate
+            </button>
+            <button type="button" className="quick-action-chip" onClick={onExportNotes} title="Export all highlights and notes as Markdown">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export
+            </button>
           </div>
         </div>
-        {showPerfHints && sessionStats.total > 0 && (
-          <div
-            className="mt-2.5 inline-flex rounded-full border border-[#e7e5e4] bg-white/80 px-2.5 py-0.5 text-[10px] tabular-nums text-[#78716c]"
-            title={`Prompt: ${sessionStats.prompt} | Completion: ${sessionStats.completion} | Avg latency: ${avgLatency}`}
-          >
-            {sessionStats.total} tokens · avg {avgLatency}
-          </div>
-        )}
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          <button type="button" className="quick-action-chip" onClick={onSummarize} title="Summarize the current document">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
-            Summarize Doc
-          </button>
-          <button type="button" className={`quick-action-chip${hasSelection ? '' : ' quick-action-chip--disabled'}`} onClick={onExplainTerm} title={hasSelection ? 'Explain the selected term' : 'Select text in the PDF first, then click to explain'}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Explain ✦
-          </button>
-          <button type="button" className={`quick-action-chip${hasSelection ? '' : ' quick-action-chip--disabled'}`} onClick={onTranslateSelection} title={hasSelection ? 'Translate the selected text to Chinese' : 'Select text in the PDF first, then click to translate to Chinese'}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>
-            Translate ✦
-          </button>
-          <button type="button" className="quick-action-chip" onClick={onExportNotes} title="Export all highlights and notes as Markdown">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Export
-          </button>
-        </div>
-        <p className="mt-1.5 text-[9px] text-[#e7e5e4]">✦ = select text in PDF first</p>
-      </div>
 
       <div
         ref={messagesContainerRef}
@@ -415,16 +413,15 @@ export function AIPanel({
                       </div>
                     )}
                     {msg.role === 'assistant' && (
-                      <div className="ai-msg-toolbar mt-2 flex max-w-full flex-wrap items-center gap-1.5">
+                      <div className="ai-msg-toolbar mt-2 flex max-w-full flex-wrap items-center gap-0.5">
                         <button
                           type="button"
                           className="ai-msg-action"
                           onClick={() => void copyMessage(msg)}
                           disabled={isLoading}
-                          title={copiedMessageId === msg.id ? 'Copied' : 'Copy response'}
+                          title={copiedMessageId === msg.id ? 'Copied' : 'Copy'}
                         >
                           {copiedMessageId === msg.id ? <Check size={13} /> : <Copy size={13} />}
-                          <span>{copiedMessageId === msg.id ? 'Copied' : 'Copy'}</span>
                         </button>
                         {msg.id && (
                           <div
@@ -434,10 +431,9 @@ export function AIPanel({
                             onDragStart={(e) => handleDragAICard(e, msg)}
                             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.preventDefault(); }}
                             className="ai-msg-action cursor-grab active:cursor-grabbing"
-                            title="Drag to PDF canvas"
+                            title="Drag to canvas"
                           >
                             <GripVertical size={13} />
-                            <span>Drag</span>
                           </div>
                         )}
                         {msg.id && (
@@ -450,22 +446,9 @@ export function AIPanel({
                                 : onPinToCanvas(msg.id!, extractFirstCitationPage(msg.content))
                             }
                             disabled={isLoading}
-                            title={pinnedIdSet.has(msg.id || '') ? 'Remove AI card from canvas' : 'Pin as canvas card'}
+                            title={pinnedIdSet.has(msg.id || '') ? 'Unpin from canvas' : 'Pin to canvas'}
                           >
                             <Pin size={13} />
-                            <span>{pinnedIdSet.has(msg.id || '') ? 'Unpin' : 'Pin'}</span>
-                          </button>
-                        )}
-                        {msg.id && (
-                          <button
-                            type="button"
-                            className="ai-msg-action"
-                            onClick={() => onSendToRightPane(msg.id!, extractFirstCitationPage(msg.content))}
-                            disabled={isLoading}
-                            title="Open cited page in reference pane for verification"
-                          >
-                            <MapPin size={13} />
-                            <span>Verify</span>
                           </button>
                         )}
                         {msg.id && (
@@ -474,28 +457,32 @@ export function AIPanel({
                             className="ai-msg-action"
                             onClick={() => onLocateCanvasCard(msg.id!)}
                             disabled={isLoading}
-                            title="Locate card in canvas"
+                            title="Find in canvas"
                           >
-                            <MapPin size={13} />
-                            <span>Locate</span>
+                            <Search size={13} />
+                          </button>
+                        )}
+                        {msg.id && (
+                          <button
+                            type="button"
+                            className="ai-msg-action"
+                            onClick={() => onSendToRightPane(msg.id!, extractFirstCitationPage(msg.content))}
+                            disabled={isLoading}
+                            title="Verify cited page"
+                          >
+                            <BadgeCheck size={13} />
                           </button>
                         )}
                         {msg.status === 'error' && msg.id && (
                           <button
                             type="button"
-                            className="ai-msg-action"
+                            className="ai-msg-action ai-msg-action--danger"
                             onClick={() => onRetryMessage(msg.id!)}
                             disabled={isLoading}
-                            title="Retry with current route"
+                            title="Retry"
                           >
                             <RotateCcw size={13} />
-                            <span>Retry</span>
                           </button>
-                        )}
-                        {msg.status === 'error' && (
-                          <span className="text-[10px] text-slate-400">
-                            Need route switch? Use input mode (Auto/Chat/Doc) then resend.
-                          </span>
                         )}
                       </div>
                     )}

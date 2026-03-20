@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { FileUp, Settings, Trash2, Link, FileText, Library, Columns, Search } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Settings, Trash2, Link, FileText, Library, Columns, Search } from 'lucide-react';
 import { PDFDocument } from '@/types/document';
 import { Logo } from '@/components/ui/Logo';
 
@@ -99,14 +98,6 @@ export function Sidebar({
             <Settings size={15} />
           </button>
         </div>
-      </div>
-
-      {/* Action row */}
-      <div className="px-4 py-3 flex items-center gap-2 border-b border-[#f5f5f4]">
-        <Button size="sm" onClick={onUpload} className="flex-1">
-          <FileUp size={13} />
-          Upload PDF
-        </Button>
       </div>
 
       {/* Tab bar */}

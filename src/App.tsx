@@ -632,6 +632,7 @@ function App() {
             onOpenDocument={openDocTab}
             onUpload={handleUpload}
             onClearRecent={handleClearRecent}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
         </div>
 

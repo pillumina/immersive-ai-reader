@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, MoreHorizontal, Clock, FolderOpen, X, Pencil, ChevronDown, Check } from 'lucide-react';
+import { Plus, Trash2, MoreHorizontal, Clock, FolderOpen, X, Pencil, ChevronDown, Check, Settings } from 'lucide-react';
 import { PDFDocument } from '@/types/document';
 import type { Library as LibraryType } from '@/types/document';
 import { tagCommands } from '@/lib/tauri';
@@ -18,6 +18,7 @@ interface LibraryListProps {
   onRenameLibrary: (id: string, name: string) => void;
   onOpenDocument: (doc: PDFDocument) => void;
   onClearRecent: () => void;
+  onOpenSettings: () => void;
 }
 
 function LibraryList({
@@ -30,6 +31,7 @@ function LibraryList({
   onRenameLibrary,
   onOpenDocument,
   onClearRecent,
+  onOpenSettings,
 }: LibraryListProps) {
   const [contextMenu, setContextMenu] = useState<{ lib: LibraryType; x: number; y: number } | null>(null);
   const [newLibName, setNewLibName] = useState('');
@@ -74,6 +76,19 @@ function LibraryList({
 
   return (
     <div className="library-list-panel">
+      {/* Panel header with settings */}
+      <div className="library-section-header flex items-center justify-between px-3 pt-3 pb-2 border-b border-[#f5f5f4]">
+        <span className="text-[10px] font-semibold text-[#a8a29e] uppercase tracking-wider">Library</span>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="w-6 h-6 rounded-md flex items-center justify-center text-[#a8a29e] hover:bg-[#f5f5f4] hover:text-[#78716c] transition-colors"
+          title="Settings"
+        >
+          <Settings size={13} />
+        </button>
+      </div>
+
       {/* Recent section */}
       {recentDocuments.length > 0 && (
         <div className="library-section">
@@ -703,6 +718,7 @@ interface LibraryViewProps {
   onOpenDocument: (doc: PDFDocument) => void;
   onUpload: () => void;
   onClearRecent: () => void;
+  onOpenSettings: () => void;
 }
 
 export function LibraryView({
@@ -722,6 +738,7 @@ export function LibraryView({
   onOpenDocument,
   onUpload,
   onClearRecent,
+  onOpenSettings,
 }: LibraryViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [docTags, setDocTags] = useState<Record<string, string[]>>({});
@@ -759,6 +776,7 @@ export function LibraryView({
         onRenameLibrary={onRenameLibrary}
         onOpenDocument={onOpenDocument}
         onClearRecent={onClearRecent}
+        onOpenSettings={onOpenSettings}
       />
 
       {/* Center: document list */}
