@@ -303,12 +303,12 @@ export function MainCanvas({
     setContextMenu({ x: event.clientX, y: event.clientY });
   };
 
-  // Pointer-based drag feedback — fires when mouse enters/leaves during AI card drag
+  // Pointer-based drag feedback
   const handlePointerEnter = (_e: PointerEvent<HTMLDivElement>) => {
-    if (aiCardDragState.payload) setIsAICardDragOver(true);
+    if (aiCardDragState.isDragging) setIsAICardDragOver(true);
   };
   const handlePointerLeave = () => {
-    if (aiCardDragState.payload) setIsAICardDragOver(false);
+    if (aiCardDragState.isDragging) setIsAICardDragOver(false);
   };
 
   // Fallback for browser dev (HTML5 DnD still works there)

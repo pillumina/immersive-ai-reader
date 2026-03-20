@@ -1,13 +1,14 @@
 /**
- * Module-level drag state — bypasses dataTransfer limitations in Tauri WebView.
- * When a drag starts from an AI card, the payload is stored here.
- * The canvas drop handler reads from here instead of event.dataTransfer.
+ * Module-level drag state — used for cross-component drag-and-drop.
+ * Tauri WebView doesn't reliably fire dragover/drop events, so we use
+ * pointer events with document-level listeners instead.
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export const aiCardDragState = {
   payload: null as { messageId: string; content: string; pageHint?: number } | null,
+  isDragging: false,
 };
-import { useState, useRef, useEffect, useCallback, useMemo, DragEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, DragEvent, PointerEvent } from 'react';
 import { Check, Copy, GripVertical, Loader2, Pin, RotateCcw, Square, Send, MessageSquare, StickyNote, Search, BadgeCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -373,7 +374,6 @@ export function AIPanel({
             <div
               key={msg.id || idx}
               data-ai-message-id={msg.id || ''}
-              draggable={msg.role === 'assistant' && !!msg.id && !isLoading ? true : undefined}
               className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div className={`ai-msg group max-w-[85%] p-3 text-sm rounded-2xl leading-relaxed shadow-sm ${
@@ -425,6 +425,7 @@ export function AIPanel({
                           <div
                             draggable
                             className="ai-msg-action"
+                            style={{ cursor: 'grab' }}
                             title="Drag to canvas"
                             onDragStart={(e: DragEvent<HTMLElement>) => {
                               const payload = {
@@ -433,38 +434,43 @@ export function AIPanel({
                                 pageHint: extractFirstCitationPage(msg.content),
                               };
                               aiCardDragState.payload = payload;
+                              aiCardDragState.isDragging = true;
                               try {
                                 e.dataTransfer.setData('application/x-ai-card', JSON.stringify(payload));
                                 e.dataTransfer.effectAllowed = 'copy';
                               } catch { /* Tauri WebView: dataTransfer unavailable */ }
                             }}
-                            onPointerDown={(e: React.PointerEvent<HTMLElement>) => {
+                            onPointerDown={(e: PointerEvent<HTMLElement>) => {
                               if (e.button !== 0) return;
                               aiCardDragState.payload = {
                                 messageId: msg.id!,
                                 content: msg.content,
                                 pageHint: extractFirstCitationPage(msg.content),
                               };
-                              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-                            }}
-                            onPointerUp={(e: React.PointerEvent<HTMLElement>) => {
-                              (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-                              const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
-                              if (!scrollEl || !aiCardDragState.payload) return;
-                              const rect = scrollEl.getBoundingClientRect();
-                              const { clientX: cx, clientY: cy } = e;
-                              if (cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) {
-                                const dropEvent = new CustomEvent('ai-card-drop', {
-                                  detail: {
-                                    payload: aiCardDragState.payload,
-                                    clientX: cx,
-                                    clientY: cy,
-                                  },
-                                  bubbles: true,
-                                });
-                                scrollEl.dispatchEvent(dropEvent);
-                              }
-                              aiCardDragState.payload = null;
+                              aiCardDragState.isDragging = true;
+
+                              // Use document-level listeners — these always fire in Tauri WebView
+                              const onPointerMove = () => {};
+                              const onPointerUp = (ev: PointerEvent) => {
+                                globalThis.document?.removeEventListener('pointermove', onPointerMove);
+                                globalThis.document?.removeEventListener('pointerup', onPointerUp);
+                                if (!aiCardDragState.payload) return;
+                                const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
+                                if (scrollEl) {
+                                  const rect = scrollEl.getBoundingClientRect();
+                                  const { clientX: cx, clientY: cy } = ev;
+                                  if (cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) {
+                                    scrollEl.dispatchEvent(new CustomEvent('ai-card-drop', {
+                                      detail: { payload: aiCardDragState.payload, clientX: cx, clientY: cy },
+                                      bubbles: true,
+                                    }));
+                                  }
+                                }
+                                aiCardDragState.payload = null;
+                                aiCardDragState.isDragging = false;
+                              };
+                              globalThis.document?.addEventListener('pointermove', onPointerMove);
+                              globalThis.document?.addEventListener('pointerup', onPointerUp);
                             }}
                           >
                             <GripVertical size={13} />
