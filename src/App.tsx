@@ -107,6 +107,7 @@ function App() {
   const [noteInputOpen, setNoteInputOpen] = useState(false);
   const noteInputRef = useRef<HTMLInputElement>(null);
   const noteInputPositionRef = useRef<{ x: number; y: number } | undefined>(undefined);
+  const noteInputPageRef = useRef<number | undefined>(undefined);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
   const [focusMode, setFocusMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -338,18 +339,19 @@ function App() {
       setToast({ message, type: 'info' });
     }
   };
-  const handleAddNoteSelection = (position?: { x: number; y: number }) => {
+  const handleAddNoteSelection = (position?: { x: number; y: number }, targetPageNumber?: number) => {
     setNoteInputOpen(true);
-    // Store position so handleNoteInputSubmit can use it
     noteInputPositionRef.current = position;
+    noteInputPageRef.current = targetPageNumber;
   };
 
   const handleNoteInputSubmit = async (note: string) => {
     setNoteInputOpen(false);
     if (!note.trim()) return;
     try {
-      const created = await addNoteForSelection(note, noteInputPositionRef.current);
+      const created = await addNoteForSelection(note, noteInputPositionRef.current, noteInputPageRef.current);
       noteInputPositionRef.current = undefined;
+      noteInputPageRef.current = undefined;
       if (created) {
         setNotesAnnotations((prev) => [created, ...prev]);
       }

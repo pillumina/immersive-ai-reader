@@ -16,7 +16,7 @@ interface MainCanvasProps {
   outline: PdfOutlineItem[];
   onJumpToPage: (page: number) => void;
   onHighlightSelection: () => void;
-  onAddNoteSelection: (position?: { x: number; y: number }) => void;
+  onAddNoteSelection: (position?: { x: number; y: number }, targetPageNumber?: number) => void;
   onExplainSelection: () => void;
   onDropAICard: (payload: { messageId: string; content: string; pageHint?: number }, clientX: number, clientY: number) => void;
   documentId?: string;
@@ -56,7 +56,7 @@ export function MainCanvas({
 }: MainCanvasProps) {
   const [tocOpen, setTocOpen] = useState(false);
   const [tocQuery, setTocQuery] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; targetPageNumber?: number } | null>(null);
   const [isAICardDragOver, setIsAICardDragOver] = useState(false);
   const [splitMode, setSplitMode] = useState(false);
   const [comparePage, setComparePage] = useState(1);
@@ -301,7 +301,12 @@ export function MainCanvas({
 
   const handleContextMenu = (event: MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
-    setContextMenu({ x: event.clientX, y: event.clientY });
+    // Find which PDF page the right-click was over (before context menu renders)
+    const target = globalThis.document
+      ?.elementFromPoint(event.clientX, event.clientY)
+      ?.closest('.pdf-page') as HTMLElement | null;
+    const targetPageNumber = target ? Number(target.dataset.pageNumber || '0') || undefined : undefined;
+    setContextMenu({ x: event.clientX, y: event.clientY, targetPageNumber });
   };
 
   // Pointer-based drag feedback
@@ -652,7 +657,7 @@ export function MainCanvas({
           <button className="ctx-menu-item" onClick={() => { onHighlightSelection(); setContextMenu(null); }}>
             Highlight
           </button>
-          <button className="ctx-menu-item" onClick={() => { setContextMenu(null); onAddNoteSelection(contextMenu ?? undefined); }}>
+          <button className="ctx-menu-item" onClick={() => { setContextMenu(null); onAddNoteSelection(contextMenu ? { x: contextMenu.x, y: contextMenu.y } : undefined, contextMenu?.targetPageNumber); }}>
             Add Note
           </button>
           <button className="ctx-menu-item" onClick={() => { onExplainSelection(); setContextMenu(null); }}>

@@ -259,37 +259,36 @@ export function useCanvasRendering(
         (deleteBtn as HTMLElement).style.background = 'transparent';
       });
 
-      const dragHandle = document.createElement('div');
-      dragHandle.style.cssText = 'cursor:grab;font-size:11px;color:#94a3b8;user-select:none;padding:0 2px;letter-spacing:-1px';
-      dragHandle.textContent = '⠿';
-      dragHandle.title = 'Drag to reposition';
-      dragHandle.addEventListener('pointerdown', (e: PointerEvent) => {
+      // Whole-card drag (no need for a tiny drag handle)
+      card.addEventListener('pointerdown', (e: PointerEvent) => {
         if (e.button !== 0) return;
-        e.stopPropagation();
+        // Don't drag if user is trying to select text or click a button
+        if ((e.target as HTMLElement).closest('button, textarea, input')) return;
+        e.preventDefault();
         const startX = e.clientX;
         const startY = e.clientY;
-        let origLeft = 0;
-        let origTop = 0;
-        const style = card.style;
-        origLeft = parseFloat(style.left || '0');
-        origTop = parseFloat(style.top || '0');
+        const origLeft = parseFloat(card.style.left || '0');
+        const origTop = parseFloat(card.style.top || '0');
         let moved = false;
 
         const onMove = (ev: PointerEvent) => {
           moved = true;
+          card.style.cursor = 'grabbing';
           const dx = ev.clientX - startX;
           const dy = ev.clientY - startY;
           card.style.left = `${Math.max(origLeft + dx, 0)}px`;
           card.style.top = `${Math.max(origTop + dy, 0)}px`;
         };
-        const onUp = (_ev: PointerEvent) => {
+        const onUp = () => {
           globalThis.document?.removeEventListener('pointermove', onMove);
           globalThis.document?.removeEventListener('pointerup', onUp);
+          card.style.cursor = 'default';
           if (moved && options?.annotationId) {
-            // Update position in DB
-            const newX = parseFloat(card.style.left || '0');
-            const newY = parseFloat(card.style.top || '0');
-            void annotationCommands.updatePosition(options.annotationId, newX, newY);
+            void annotationCommands.updatePosition(
+              options.annotationId,
+              parseFloat(card.style.left || '0'),
+              parseFloat(card.style.top || '0')
+            );
           }
         };
         globalThis.document?.addEventListener('pointermove', onMove);
@@ -297,7 +296,6 @@ export function useCanvasRendering(
       });
 
       actionBar.appendChild(deleteBtn);
-      actionBar.appendChild(dragHandle);
       card.appendChild(actionBar);
     }
     if (kind === 'ai-card' && options?.messageId) {
@@ -621,7 +619,11 @@ export function useCanvasRendering(
     return count;
   };
 
-  const addNoteForSelection = async (content: string, position?: { x: number; y: number }) => {
+  const addNoteForSelection = async (
+    content: string,
+    position?: { x: number; y: number },
+    targetPageNumber?: number
+  ) => {
     if (!pdfDocument) throw new Error('请先上传或选择文档');
     const note = content.trim();
     if (!note) throw new Error('笔记内容不能为空');
@@ -657,33 +659,23 @@ export function useCanvasRendering(
       height = Math.min(rect.height, pageRect.height - y);
       selectedText = selection!.toString().trim();
     } else {
-      // Free-floating note: use right-click position or stack on current page
+      // Free-floating note: use right-click position on the known page
       const containerEl = globalThis.document?.getElementById(containerId);
-      pageNumber = currentPage || 1;
+      const pn = targetPageNumber ?? currentPage ?? 1;
+      const pageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pn}"]`);
 
-      if (position) {
-        // Convert viewport coords to page-relative coords
-        const target = globalThis.document
-          ?.elementFromPoint(position.x, position.y)
-          ?.closest('.pdf-page') as HTMLElement | null;
-        if (target) {
-          pageNumber = Number(target.dataset.pageNumber || '0') || currentPage || 1;
-          const pageRect = target.getBoundingClientRect();
-          x = Math.max(position.x - pageRect.left, 8);
-          y = Math.max(position.y - pageRect.top, 8);
-        } else {
-          // Fallback: stack on current page
-          const pageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
-          if (!pageEl) throw new Error('未找到当前页面');
-          const existingCards = pageEl.querySelectorAll('.pdf-note-card').length;
-          x = 20;
-          y = 24 + existingCards * 78;
-        }
+      if (pageEl && position) {
+        // Place at right-click viewport coords converted to page-relative
+        const pageRect = pageEl.getBoundingClientRect();
+        x = Math.max(position.x - pageRect.left, 8);
+        y = Math.max(position.y - pageRect.top, 8);
+        pageNumber = pn;
       } else {
-        // No position: stack on current page
-        const pageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
-        if (!pageEl) throw new Error('未找到当前页面');
-        const existingCards = pageEl.querySelectorAll('.pdf-note-card').length;
+        // Fallback: stack on current page
+        const targetEl = pageEl ?? containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${currentPage ?? 1}"]`);
+        if (!targetEl) throw new Error('未找到当前页面');
+        pageNumber = Number(targetEl.dataset.pageNumber || '0') || currentPage || 1;
+        const existingCards = targetEl.querySelectorAll('.pdf-note-card').length;
         x = 20;
         y = 24 + existingCards * 78;
       }
