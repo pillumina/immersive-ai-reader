@@ -1,5 +1,34 @@
 import { pdfjsLib } from '@/lib/pdf/pdfjs';
 
+/**
+ * Session-level thumbnail cache for rendered PDF pages.
+ * Keyed by document fingerprint (name + size) and page number.
+ * Snapshots are captured after each page render, so re-visiting a page
+ * shows the cached image immediately while the fresh canvas paints on top.
+ */
+const pageThumbnailCache = new Map<string, string>();
+
+function cacheKey(fingerprint: string, pageNum: number) {
+  return `${fingerprint}:${pageNum}`;
+}
+
+function getCachedThumbnail(fingerprint: string, pageNum: number): string | undefined {
+  return pageThumbnailCache.get(cacheKey(fingerprint, pageNum));
+}
+
+function setCachedThumbnail(fingerprint: string, pageNum: number, dataUrl: string): void {
+  // Evict oldest entries when cache grows large (LRU approximation).
+  if (pageThumbnailCache.size > 500) {
+    const firstKey = pageThumbnailCache.keys().next().value;
+    if (firstKey) pageThumbnailCache.delete(firstKey);
+  }
+  pageThumbnailCache.set(cacheKey(fingerprint, pageNum), dataUrl);
+}
+
+function clearThumbnailCache(): void {
+  pageThumbnailCache.clear();
+}
+
 export interface PdfOutlineItem {
   id: string;
   title: string;
@@ -115,13 +144,26 @@ function createSkeletonElement(pageNum: number, width: number, height: number): 
 }
 
 /**
- * Create the actual rendered page element (can be called for lazy rendering).
+ * Create a fingerprint for a PDF file to use as cache key.
+ * Uses name + size as a stable, fast identifier for the current session.
+ */
+export function fingerprintFile(file: File): string {
+  return `${file.name}@${file.size}`;
+}
+
+/**
+ * Create the actual rendered page element.
+ *
+ * If a `fingerprint` is provided, this function first checks the session
+ * thumbnail cache. A cached image is shown immediately while the full canvas
+ * renders on top, giving instant feedback when re-visiting pages.
  */
 export async function renderSinglePage(
   pdfDoc: pdfjsLib.PDFDocumentProxy,
   pageNum: number,
   scale: number,
-  dpr: number
+  dpr: number,
+  fingerprint?: string
 ): Promise<HTMLElement> {
   const page = await pdfDoc.getPage(pageNum);
   const viewport = page.getViewport({ scale });
@@ -131,6 +173,23 @@ export async function renderSinglePage(
   pageEl.dataset.pageNumber = String(pageNum);
   pageEl.style.width = `${viewport.width}px`;
   pageEl.style.height = `${viewport.height}px`;
+
+  // Show cached thumbnail immediately if available (instant feedback on re-visit).
+  if (fingerprint) {
+    const cached = getCachedThumbnail(fingerprint, pageNum);
+    if (cached) {
+      const cachedPreview = document.createElement('img');
+      cachedPreview.src = cached;
+      cachedPreview.className = 'pdf-page-cached-preview';
+      cachedPreview.style.cssText = [
+        'position:absolute;inset:0;width:100%;height:100%;',
+        'object-fit:cover;border-radius:inherit;pointer-events:none;',
+        'transition:opacity 0.2s ease;',
+      ].join('');
+      cachedPreview.dataset.cached = 'true';
+      pageEl.appendChild(cachedPreview);
+    }
+  }
 
   // Canvas layer
   const canvas = document.createElement('canvas');
@@ -145,6 +204,21 @@ export async function renderSinglePage(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   await page.render({ canvasContext: ctx, viewport }).promise;
+
+  // Cache the rendered canvas for future instant display.
+  if (fingerprint) {
+    try {
+      setCachedThumbnail(fingerprint, pageNum, canvas.toDataURL('image/jpeg', 0.75));
+    } catch {
+      // Storage errors are non-fatal.
+    }
+  }
+
+  // Fade out cached preview once fresh canvas is ready.
+  const cachedPreview = pageEl.querySelector<HTMLImageElement>('[data-cached]');
+  if (cachedPreview) {
+    cachedPreview.style.opacity = '0';
+  }
 
   // Text layer (render asynchronously after canvas is done)
   const textLayerEl = document.createElement('div');
@@ -180,6 +254,7 @@ interface LazyRenderState {
   scale: number;
   dpr: number;
   shouldCancel: () => boolean;
+  fingerprint: string;
   renderedPages: Set<number>;
   pendingPages: Set<number>;
   renderQueue: number[];
@@ -197,13 +272,15 @@ function createLazyState(
   pdfDoc: pdfjsLib.PDFDocumentProxy,
   scale: number,
   dpr: number,
-  shouldCancel: () => boolean
+  shouldCancel: () => boolean,
+  fingerprint: string
 ): LazyRenderState {
   return {
     pdfDoc,
     scale,
     dpr,
     shouldCancel,
+    fingerprint,
     renderedPages: new Set(),
     pendingPages: new Set(),
     renderQueue: [],
@@ -256,7 +333,7 @@ function processRenderQueue(
 
   Promise.allSettled(
     batch.map((pageNum) =>
-      renderSinglePage(state.pdfDoc, pageNum, state.scale, state.dpr).catch((err) => {
+      renderSinglePage(state.pdfDoc, pageNum, state.scale, state.dpr, state.fingerprint).catch((err) => {
         console.error(`[lazy] Page ${pageNum} render error:`, err);
         const placeholder = document.createElement('div');
         placeholder.className = 'pdf-page pdf-page-error';
@@ -343,6 +420,10 @@ export async function renderPagesToContainer(
   container.innerHTML = '';
   const dpr = Math.min(globalThis.window?.devicePixelRatio || 1, 2);
 
+  // Compute fingerprint for thumbnail cache and clear stale entries.
+  const fingerprint = fingerprintFile(file);
+  clearThumbnailCache();
+
   // Extract outline (non-blocking, happens while pages render)
   const outlinePromise = extractOutline(pdfDoc).then((extracted) => {
     const hasNavigable = extracted.some(
@@ -365,7 +446,7 @@ export async function renderPagesToContainer(
     container.appendChild(createSkeletonElement(i, skeletonWidth, skeletonHeight));
   }
 
-  // Render the first batch eagerly (BATCH_SIZE=4 for faster first paint).
+  // Render the first batch eagerly (batch of 4 for faster first paint).
   // Remaining pages are left as skeleton divs and rendered on scroll.
   const initialBatchEnd = Math.min(initialCount, totalPages);
 
@@ -373,7 +454,7 @@ export async function renderPagesToContainer(
     const batchPromises: Promise<HTMLElement>[] = [];
     for (let pageNum = 1; pageNum <= initialBatchEnd; pageNum++) {
       batchPromises.push(
-        renderSinglePage(pdfDoc, pageNum, scale, dpr).catch((err) => {
+        renderSinglePage(pdfDoc, pageNum, scale, dpr, fingerprint).catch((err) => {
           console.error(`Page ${pageNum} render error:`, err);
           const placeholder = document.createElement('div');
           placeholder.className = 'pdf-page pdf-page-error';
@@ -399,7 +480,7 @@ export async function renderPagesToContainer(
   }
 
   // Set up lazy rendering for remaining pages
-  const lazyState = createLazyState(pdfDoc, scale, dpr, shouldCancel ?? (() => false));
+  const lazyState = createLazyState(pdfDoc, scale, dpr, shouldCancel ?? (() => false), fingerprint);
   // Mark initial pages as already rendered and update maxLoadedPage
   lazyState.maxLoadedPage = initialBatchEnd;
   for (let i = 1; i <= initialBatchEnd; i++) {

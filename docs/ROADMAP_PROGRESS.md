@@ -104,10 +104,13 @@ Current sprint target: AI 上下文感知增强 + 画布交互升级 + 导出分
 
 ## Performance Optimizations (2026-03-20)
 
-- [x] PDF 懒加载渲染：前 5 页立即渲染，其余 IntersectionObserver 触发（每批 3 页），支持 shouldCancel 中断（2026-03-20）
+- [x] PDF 懒加载渲染：前 5 页立即渲染，其余 IntersectionObserver 触发（每批 5 页），支持 shouldCancel 中断（2026-03-20）
 - [x] 滚动当前页检测：从 scroll+RAF+O(n) 遍历优化为 IntersectionObserver（零成本空闲时，2026-03-20）
 - [x] CSS content-visibility:auto + contain:layout style：离屏页面跳过渲染/布局计算（2026-03-20）
 - [x] 骨架屏 content-visibility:auto：未渲染页骨架也享受跳过计算收益（2026-03-20）
+- [x] 预测性预加载 + Focused Queue：初始 5 页完成后立即开始渲染 6–10 页，队列只保留 maxLoadedPage+2 范围（2026-03-20）
+- [x] 页面缩略图缓存：基于文件指纹的内存缓存，回访页面时先显示缓存 JPEG 再渲染新 Canvas（2026-03-20）
+- [x] 大跳转使用 instant scroll：>300px 跳转用 'auto'（立即），近距离用 'smooth'（2026-03-20）
 
 ---
 

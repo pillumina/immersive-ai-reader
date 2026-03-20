@@ -800,7 +800,10 @@ export function useCanvasRendering(
     if (!(scroller instanceof HTMLElement) || !(containerEl instanceof HTMLElement)) return;
     const target = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
     if (!target) return;
-    scroller.scrollTo({ top: Math.max(target.offsetTop - 16, 0), behavior: 'smooth' });
+    // Use instant jump for large distances (PageUp/Down, TOC click, card pin).
+    // Use smooth scroll for small nudges (arrow keys).
+    const dist = Math.abs(target.offsetTop - 16 - scroller.scrollTop);
+    scroller.scrollTo({ top: Math.max(target.offsetTop - 16, 0), behavior: dist > 300 ? 'auto' : 'smooth' });
   };
 
   const flashPage = (pageNumber: number) => {

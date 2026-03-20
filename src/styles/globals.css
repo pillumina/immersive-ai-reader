@@ -162,6 +162,12 @@ h1, h2, h3, h4, h5, h6 {
   image-rendering: crisp-edges;
 }
 
+/* Cached thumbnail shown instantly when re-visiting a page.
+   Fades out once the fresh canvas has finished rendering. */
+.pdf-page-cached-preview {
+  z-index: 0;
+}
+
 .pdf-text-layer {
   position: absolute;
   inset: 0;
