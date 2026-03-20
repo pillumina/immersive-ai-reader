@@ -21,6 +21,23 @@ export function useCanvasRendering(
   const NOTE_PREFIX = '__NOTE__|';
   const AI_CARD_PREFIX = '__AICARD__|';
 
+  const deleteNoteCardFromDom = (annotationId: string) => {
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (!containerEl) return;
+    const card = containerEl.querySelector<HTMLElement>(`.pdf-note-card[data-note-annotation-id="${annotationId}"]`);
+    if (card) card.remove();
+  };
+
+  // Listen for note-card-delete events from canvas note delete buttons
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { annotationId } = (e as CustomEvent<{ annotationId: string }>).detail;
+      deleteNoteCardFromDom(annotationId);
+    };
+    globalThis.document?.addEventListener('note-card-delete', handler);
+    return () => globalThis.document?.removeEventListener('note-card-delete', handler);
+  }, []);
+
   const clearHighlights = () => {
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(containerEl instanceof HTMLElement)) return;
@@ -33,6 +50,16 @@ export function useCanvasRendering(
     });
     containerEl.querySelectorAll('.pdf-highlight').forEach((el) => el.remove());
   };
+
+  // Listen for note-card-delete events from canvas note delete buttons
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { annotationId } = (e as CustomEvent<{ annotationId: string }>).detail;
+      deleteNoteCardFromDom(annotationId);
+    };
+    globalThis.document?.addEventListener('note-card-delete', handler);
+    return () => globalThis.document?.removeEventListener('note-card-delete', handler);
+  }, []);
 
   const renderHighlight = (
     pageNumber: number,
@@ -193,24 +220,85 @@ export function useCanvasRendering(
         enterEdit();
       });
       card.style.cursor = 'default';
-      card.title = 'Double-click to edit. Drag to canvas.';
-
-      // Make note cards draggable to canvas
-      card.draggable = true;
+      card.title = 'Double-click to edit. Drag to reposition.';
       card.dataset.notePageNumber = String(pageNumber);
-      card.addEventListener('dragstart', (evt) => {
-        if (!(evt instanceof DragEvent)) return;
-        const notePayload = {
-          id: options?.annotationId || `note-${Date.now()}`,
-          annotationId: options?.annotationId || '',
-          content,
-          selectedText: options?.selectedText || '',
-          pageNumber,
-        };
-        evt.dataTransfer?.setData('application/x-note-card', JSON.stringify(notePayload));
-        evt.dataTransfer?.setData('text/plain', `__NOTECARD__${JSON.stringify(notePayload)}`);
-        evt.dataTransfer!.effectAllowed = 'copy';
+
+      // Action bar: delete + drag handle
+      const actionBar = document.createElement('div');
+      actionBar.className = 'note-card-actions';
+      actionBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:4px;border-top:1px solid rgba(13,148,136,0.12)';
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'note-card-del-btn';
+      deleteBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#94a3b8;font-size:13px;line-height:1;padding:0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:3px';
+      deleteBtn.style.cssText += ';transition:color 0.1s,background 0.1s';
+      deleteBtn.textContent = '×';
+      deleteBtn.title = 'Delete note';
+      deleteBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        const annotationId = options?.annotationId;
+        if (annotationId) {
+          globalThis.document?.dispatchEvent(new CustomEvent('note-card-delete', {
+            detail: { annotationId },
+            bubbles: true,
+          }));
+          // Dispatch to App level for DB deletion
+          globalThis.document?.dispatchEvent(new CustomEvent('note-card-delete-app', {
+            detail: { annotationId },
+            bubbles: true,
+          }));
+        }
       });
+      deleteBtn.addEventListener('mouseenter', () => {
+        (deleteBtn as HTMLElement).style.color = '#ef4444';
+        (deleteBtn as HTMLElement).style.background = 'rgba(239,68,68,0.08)';
+      });
+      deleteBtn.addEventListener('mouseleave', () => {
+        (deleteBtn as HTMLElement).style.color = '#94a3b8';
+        (deleteBtn as HTMLElement).style.background = 'transparent';
+      });
+
+      const dragHandle = document.createElement('div');
+      dragHandle.style.cssText = 'cursor:grab;font-size:11px;color:#94a3b8;user-select:none;padding:0 2px;letter-spacing:-1px';
+      dragHandle.textContent = '⠿';
+      dragHandle.title = 'Drag to reposition';
+      dragHandle.addEventListener('pointerdown', (e: PointerEvent) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        let origLeft = 0;
+        let origTop = 0;
+        const style = card.style;
+        origLeft = parseFloat(style.left || '0');
+        origTop = parseFloat(style.top || '0');
+        let moved = false;
+
+        const onMove = (ev: PointerEvent) => {
+          moved = true;
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+          card.style.left = `${Math.max(origLeft + dx, 0)}px`;
+          card.style.top = `${Math.max(origTop + dy, 0)}px`;
+        };
+        const onUp = (_ev: PointerEvent) => {
+          globalThis.document?.removeEventListener('pointermove', onMove);
+          globalThis.document?.removeEventListener('pointerup', onUp);
+          if (moved && options?.annotationId) {
+            // Update position in DB
+            const newX = parseFloat(card.style.left || '0');
+            const newY = parseFloat(card.style.top || '0');
+            void annotationCommands.updatePosition(options.annotationId, newX, newY);
+          }
+        };
+        globalThis.document?.addEventListener('pointermove', onMove);
+        globalThis.document?.addEventListener('pointerup', onUp);
+      });
+
+      actionBar.appendChild(deleteBtn);
+      actionBar.appendChild(dragHandle);
+      card.appendChild(actionBar);
     }
     if (kind === 'ai-card' && options?.messageId) {
       card.dataset.messageId = options.messageId;
@@ -533,7 +621,7 @@ export function useCanvasRendering(
     return count;
   };
 
-  const addNoteForSelection = async (content: string) => {
+  const addNoteForSelection = async (content: string, position?: { x: number; y: number }) => {
     if (!pdfDocument) throw new Error('请先上传或选择文档');
     const note = content.trim();
     if (!note) throw new Error('笔记内容不能为空');
@@ -569,17 +657,36 @@ export function useCanvasRendering(
       height = Math.min(rect.height, pageRect.height - y);
       selectedText = selection!.toString().trim();
     } else {
-      // Free-floating note: anchored to current page
+      // Free-floating note: use right-click position or stack on current page
       const containerEl = globalThis.document?.getElementById(containerId);
       pageNumber = currentPage || 1;
 
-      const pageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
-      if (!pageEl) throw new Error('未找到当前页面');
-
-      // Stack cards vertically to avoid overlap
-      const existingCards = pageEl.querySelectorAll('.pdf-note-card').length;
-      x = 20;
-      y = 24 + existingCards * 78;
+      if (position) {
+        // Convert viewport coords to page-relative coords
+        const target = globalThis.document
+          ?.elementFromPoint(position.x, position.y)
+          ?.closest('.pdf-page') as HTMLElement | null;
+        if (target) {
+          pageNumber = Number(target.dataset.pageNumber || '0') || currentPage || 1;
+          const pageRect = target.getBoundingClientRect();
+          x = Math.max(position.x - pageRect.left, 8);
+          y = Math.max(position.y - pageRect.top, 8);
+        } else {
+          // Fallback: stack on current page
+          const pageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
+          if (!pageEl) throw new Error('未找到当前页面');
+          const existingCards = pageEl.querySelectorAll('.pdf-note-card').length;
+          x = 20;
+          y = 24 + existingCards * 78;
+        }
+      } else {
+        // No position: stack on current page
+        const pageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
+        if (!pageEl) throw new Error('未找到当前页面');
+        const existingCards = pageEl.querySelectorAll('.pdf-note-card').length;
+        x = 20;
+        y = 24 + existingCards * 78;
+      }
       width = 8;
       height = 8;
     }
@@ -601,6 +708,7 @@ export function useCanvasRendering(
     }
     renderNoteCard(pageNumber, x, y, note, { annotationId: createdNote?.id, selectedText });
     selection?.removeAllRanges();
+    return createdNote;
   };
 
   const pinNoteToCurrentPage = async (

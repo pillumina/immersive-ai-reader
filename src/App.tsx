@@ -106,6 +106,7 @@ function App() {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [noteInputOpen, setNoteInputOpen] = useState(false);
   const noteInputRef = useRef<HTMLInputElement>(null);
+  const noteInputPositionRef = useRef<{ x: number; y: number } | undefined>(undefined);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
   const [focusMode, setFocusMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -269,6 +270,16 @@ function App() {
     return () => globalThis.removeEventListener('ai-card-unpinned', handler);
   }, []);
 
+  // Listen for note card delete from canvas
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { annotationId } = (e as CustomEvent<{ annotationId: string }>).detail;
+      void handleDeleteNote(annotationId);
+    };
+    globalThis.document?.addEventListener('note-card-delete-app', handler);
+    return () => globalThis.document?.removeEventListener('note-card-delete-app', handler);
+  }, []);
+
   useEffect(() => {
     if (pdfError) setToast({ message: pdfError, type: 'error' });
   }, [pdfError]);
@@ -327,15 +338,21 @@ function App() {
       setToast({ message, type: 'info' });
     }
   };
-  const handleAddNoteSelection = () => {
+  const handleAddNoteSelection = (position?: { x: number; y: number }) => {
     setNoteInputOpen(true);
+    // Store position so handleNoteInputSubmit can use it
+    noteInputPositionRef.current = position;
   };
 
   const handleNoteInputSubmit = async (note: string) => {
     setNoteInputOpen(false);
     if (!note.trim()) return;
     try {
-      await addNoteForSelection(note);
+      const created = await addNoteForSelection(note, noteInputPositionRef.current);
+      noteInputPositionRef.current = undefined;
+      if (created) {
+        setNotesAnnotations((prev) => [created, ...prev]);
+      }
       setToast({ message: 'Note added', type: 'success' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add note';

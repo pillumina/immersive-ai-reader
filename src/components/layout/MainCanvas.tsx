@@ -16,7 +16,7 @@ interface MainCanvasProps {
   outline: PdfOutlineItem[];
   onJumpToPage: (page: number) => void;
   onHighlightSelection: () => void;
-  onAddNoteSelection: () => void;
+  onAddNoteSelection: (position?: { x: number; y: number }) => void;
   onExplainSelection: () => void;
   onDropAICard: (payload: { messageId: string; content: string; pageHint?: number }, clientX: number, clientY: number) => void;
   documentId?: string;
@@ -652,7 +652,7 @@ export function MainCanvas({
           <button className="ctx-menu-item" onClick={() => { onHighlightSelection(); setContextMenu(null); }}>
             Highlight
           </button>
-          <button className="ctx-menu-item" onClick={() => { setContextMenu(null); onAddNoteSelection(); }}>
+          <button className="ctx-menu-item" onClick={() => { setContextMenu(null); onAddNoteSelection(contextMenu ?? undefined); }}>
             Add Note
           </button>
           <button className="ctx-menu-item" onClick={() => { onExplainSelection(); setContextMenu(null); }}>
