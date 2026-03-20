@@ -104,6 +104,7 @@ function App() {
   const [notesAnnotations, setNotesAnnotations] = useState<any[]>([]);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [noteInputOpen, setNoteInputOpen] = useState(false);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
   const [focusMode, setFocusMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -325,24 +326,20 @@ function App() {
       setToast({ message, type: 'info' });
     }
   };
-  const handleAddNoteSelection = async () => {
-    globalThis.setTimeout(() => {
-      const note = window.prompt('Add a note:');
-      if (note === null) return;
-      if (!note.trim()) {
-        setToast({ message: 'Note content cannot be empty', type: 'info' });
-        return;
-      }
-      void (async () => {
-        try {
-          await addNoteForSelection(note);
-          setToast({ message: 'Note added', type: 'success' });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to add note';
-          setToast({ message, type: 'info' });
-        }
-      })();
-    }, 50);
+  const handleAddNoteSelection = () => {
+    setNoteInputOpen(true);
+  };
+
+  const handleNoteInputSubmit = async (note: string) => {
+    setNoteInputOpen(false);
+    if (!note.trim()) return;
+    try {
+      await addNoteForSelection(note);
+      setToast({ message: 'Note added', type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to add note';
+      setToast({ message, type: 'info' });
+    }
   };
   const handleSummarize = () => {
     if (!currentDocument) {
@@ -795,6 +792,39 @@ function App() {
           type={toast.type}
           onClose={() => setToast(null)}
         />
+      )}
+
+      {noteInputOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
+          <div className="bg-white rounded-2xl shadow-2xl border border-[#e7e5e4] p-5 w-[360px] flex flex-col gap-3 animate-in fade-in zoom-in-95">
+            <p className="text-sm font-semibold text-[#1c1917]">Add Note</p>
+            <input
+              autoFocus
+              className="w-full px-3 py-2 rounded-xl border border-[#e7e5e4] text-sm text-[#1c1917] bg-[#fafaf9] focus:outline-none focus:border-[#c2410c] focus:ring-1 focus:ring-[#c2410c]/30 transition-colors"
+              placeholder="Your note..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleNoteInputSubmit((e.target as HTMLInputElement).value);
+                }
+                if (e.key === 'Escape') setNoteInputOpen(false);
+              }}
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#78716c] hover:bg-[#f5f5f4] transition-colors"
+                onClick={() => setNoteInputOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#c2410c] text-white hover:bg-[#9a3412] transition-colors"
+                onClick={(e) => handleNoteInputSubmit((e.currentTarget.parentElement?.previousElementSibling?.querySelector('input') as HTMLInputElement)?.value ?? '')}
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
