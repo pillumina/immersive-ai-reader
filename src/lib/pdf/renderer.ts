@@ -188,6 +188,9 @@ interface LazyRenderState {
   rootMargin: string;
   /** How many pages to render per scroll-triggered batch. */
   LAZY_BATCH: number;
+  /** The highest page number currently rendered or in-flight.
+   *  Used to keep the queue focused near the visible front. */
+  maxLoadedPage: number;
 }
 
 function createLazyState(
@@ -207,7 +210,8 @@ function createLazyState(
     isProcessing: false,
     observer: null,
     rootMargin: '400px 0px', // pre-render 400px before viewport
-    LAZY_BATCH: 3,
+    LAZY_BATCH: 5,
+    maxLoadedPage: 0,
   };
 }
 
@@ -216,11 +220,18 @@ function enqueueLazyPages(
   state: LazyRenderState
 ): void {
   if (state.shouldCancel()) return;
+
+  // Only enqueue pages that are near the visible front (within LOOKAHEAD of
+  // the highest page currently rendered or pending). This prevents the queue
+  // from flooding with far-away pages and keeps render budget focused.
+  const LOOKAHEAD = 2;
+  const cutoff = state.maxLoadedPage + LOOKAHEAD;
   const skeletons = container.querySelectorAll<HTMLElement>(
     '.pdf-page-skeleton[data-page-number]'
   );
   for (const skeleton of skeletons) {
     const pageNum = Number(skeleton.dataset.pageNumber);
+    if (pageNum > cutoff) continue;
     if (!state.renderedPages.has(pageNum) && !state.pendingPages.has(pageNum)) {
       state.renderQueue.push(pageNum);
       state.pendingPages.add(pageNum);
@@ -255,17 +266,20 @@ function processRenderQueue(
       })
     )
   ).then((results) => {
+    let newMaxLoaded = state.maxLoadedPage;
     results.forEach((result, i) => {
       const pageNum = batch[i];
       state.pendingPages.delete(pageNum);
       if (result.status === 'fulfilled') {
         state.renderedPages.add(pageNum);
+        if (pageNum > newMaxLoaded) newMaxLoaded = pageNum;
         const skeleton = container.querySelector<HTMLElement>(
           `.pdf-page-skeleton[data-page-number="${pageNum}"]`
         );
         if (skeleton) skeleton.replaceWith(result.value);
       }
     });
+    state.maxLoadedPage = newMaxLoaded;
     // Keep processing if more queued and not cancelled
     if (!state.shouldCancel()) {
       processRenderQueue(container, state);
@@ -386,11 +400,25 @@ export async function renderPagesToContainer(
 
   // Set up lazy rendering for remaining pages
   const lazyState = createLazyState(pdfDoc, scale, dpr, shouldCancel ?? (() => false));
-  // Mark initial pages as already rendered
+  // Mark initial pages as already rendered and update maxLoadedPage
+  lazyState.maxLoadedPage = initialBatchEnd;
   for (let i = 1; i <= initialBatchEnd; i++) {
     lazyState.renderedPages.add(i);
   }
   const cleanupLazy = setupLazyRendering(container, lazyState);
+
+  // Predictive preload: immediately queue the next LAZY_BATCH pages after initial
+  // render completes, without waiting for scroll/IntersectionObserver.
+  // This hides the latency of pages 6–10 so they tend to be ready on arrival.
+  if (totalPages > initialBatchEnd) {
+    for (let pageNum = initialBatchEnd + 1; pageNum <= Math.min(initialBatchEnd + lazyState.LAZY_BATCH, totalPages); pageNum++) {
+      if (!lazyState.renderedPages.has(pageNum) && !lazyState.pendingPages.has(pageNum)) {
+        lazyState.renderQueue.push(pageNum);
+        lazyState.pendingPages.add(pageNum);
+      }
+    }
+    processRenderQueue(container, lazyState);
+  }
 
   // Wait for outline extraction
   const outline = await outlinePromise;
