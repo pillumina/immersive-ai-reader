@@ -69,6 +69,20 @@ impl DocumentRepository {
         Ok(docs)
     }
 
+    pub async fn find_by_file_path(&self, file_path: &str) -> Result<Option<Document>> {
+        let doc = sqlx::query_as(
+            r#"SELECT id, file_name, file_path, file_size, page_count, text_content, library_id, created_at, updated_at FROM documents WHERE file_path = ?"#,
+        )
+        .bind(file_path)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(doc)
+    }
+
+    pub async fn upsert(&self, doc: &Document) -> Result<()> {
+        self.save(doc).await
+    }
+
     pub async fn delete(&self, id: &str) -> Result<()> {
         sqlx::query(r#"DELETE FROM documents WHERE id = ?"#)
             .bind(id)

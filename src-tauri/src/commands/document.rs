@@ -10,9 +10,28 @@ pub async fn create_document(
     request: CreateDocumentRequest,
     repo: State<'_, DocumentRepository>,
 ) -> Result<Document, String> {
-    let doc = Document::from_request(request);
-    repo.save(&doc).await.map_err(|e| e.to_string())?;
-    Ok(doc)
+    // Check if a document with this file_path already exists — if so, reuse its id
+    // so that conversations and notes remain associated with the same document.
+    if let Some(existing) = repo.find_by_file_path(&request.file_path).await.map_err(|e| e.to_string())? {
+        // Update metadata but preserve the existing id and created_at (conversations/notes use id)
+        let updated = Document {
+            id: existing.id,
+            file_name: request.file_name,
+            file_path: request.file_path,
+            file_size: request.file_size,
+            page_count: request.page_count,
+            text_content: Some(request.text_content),
+            library_id: existing.library_id, // preserve library assignment
+            created_at: existing.created_at,
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        };
+        repo.upsert(&updated).await.map_err(|e| e.to_string())?;
+        Ok(updated)
+    } else {
+        let doc = Document::from_request(request);
+        repo.save(&doc).await.map_err(|e| e.to_string())?;
+        Ok(doc)
+    }
 }
 
 #[tauri::command]
