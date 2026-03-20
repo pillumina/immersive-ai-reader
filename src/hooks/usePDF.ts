@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef } from 'react';
-import { PDFDocument } from '@/types/document';
+import { PDFDocument, Library } from '@/types/document';
 import { validatePDFFile } from '@/lib/pdf/validator';
 import { extractTextFromPDF, checkPageLimit } from '@/lib/pdf/parser';
-import { BackendDocument, documentCommands } from '@/lib/tauri';
+import { BackendDocument, documentCommands, libraryCommands } from '@/lib/tauri';
 import { formatFileSize } from '@/lib/utils/file';
 
 export function usePDF() {
@@ -20,6 +20,7 @@ export function usePDF() {
     pageCount: doc.page_count,
     textContent: doc.text_content || '',
     fileBlob,
+    libraryId: doc.library_id ?? null,
     createdAt: new Date(doc.created_at),
     updatedAt: new Date(doc.updated_at),
   }), []);
@@ -66,7 +67,7 @@ export function usePDF() {
     return docs.filter((doc) => !!doc.file_path?.trim());
   }, [mapBackendDoc]);
 
-  const uploadPDF = useCallback(async (file: File, sourcePath: string = '') => {
+  const uploadPDF = useCallback(async (file: File, sourcePath: string = '', libraryId?: string) => {
     setIsLoading(true);
     setError(null);
 
@@ -100,6 +101,7 @@ export function usePDF() {
         file_size: file.size,
         page_count: pageCount,
         text_content: textContent,
+        library_id: libraryId,
       });
 
       // Convert to frontend format
@@ -251,6 +253,53 @@ export function usePDF() {
     }
   }, [loadDocuments, mapBackendDoc]);
 
+  const updateDocumentLibrary = useCallback(async (id: string, libraryId: string | null) => {
+    try {
+      await documentCommands.updateLibrary(id, libraryId);
+      await loadDocuments();
+      if (currentDocument?.id === id) {
+        const updated = await documentCommands.getById(id);
+        if (updated) {
+          const frontendDoc = mapBackendDoc(updated, currentDocument.fileBlob);
+          setCurrentDocument(frontendDoc);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to update document library:', err);
+    }
+  }, [currentDocument, loadDocuments, mapBackendDoc]);
+
+  // Library management
+  const loadLibraries = useCallback(async (): Promise<Library[]> => {
+    const libs = await libraryCommands.getAll();
+    return libs.map((lib) => ({
+      id: lib.id,
+      name: lib.name,
+      color: lib.color,
+      createdAt: new Date(lib.created_at),
+      updatedAt: new Date(lib.updated_at),
+    }));
+  }, []);
+
+  const createLibrary = useCallback(async (name: string, color?: string): Promise<Library> => {
+    const lib = await libraryCommands.create(name, color);
+    return {
+      id: lib.id,
+      name: lib.name,
+      color: lib.color,
+      createdAt: new Date(lib.created_at),
+      updatedAt: new Date(lib.updated_at),
+    };
+  }, []);
+
+  const updateLibrary = useCallback(async (id: string, name: string, color: string) => {
+    await libraryCommands.update(id, name, color);
+  }, []);
+
+  const deleteLibrary = useCallback(async (id: string) => {
+    await libraryCommands.delete(id);
+  }, []);
+
   return {
     currentDocument,
     documents,
@@ -263,6 +312,11 @@ export function usePDF() {
     selectDocument,
     deleteDocument: deleteDocumentById,
     relinkDocument,
+    updateDocumentLibrary,
+    loadLibraries,
+    createLibrary,
+    updateLibrary,
+    deleteLibrary,
     formatFileSize,
   };
 }

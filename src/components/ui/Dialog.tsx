@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 
 interface DialogProps {
   open: boolean;
@@ -15,11 +16,35 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
   );
 }
 
-export function DialogContent({ children, className = '' }: { children: ReactNode; className?: string }) {
+export function DialogContent({
+  children,
+  className = '',
+  title = 'Dialog',
+  description,
+}: {
+  children: ReactNode;
+  className?: string;
+  title?: string;
+  description?: string;
+}) {
+  const descId = description ? `dialog-desc-${Math.random().toString(36).slice(2)}` : undefined;
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 bg-[#0f172a]/30 backdrop-blur-[3px] animate-in" />
-      <DialogPrimitive.Content className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white p-0 rounded-2xl shadow-2xl border border-[#E5EAF3] overflow-hidden ${className}`}>
+      <DialogPrimitive.Overlay className="dialog-overlay" />
+      <DialogPrimitive.Content
+        className={`dialog-content ${className}`}
+        aria-describedby={descId}
+      >
+        <VisuallyHidden asChild>
+          <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
+        </VisuallyHidden>
+        {description && (
+          <VisuallyHidden asChild>
+            <DialogPrimitive.Description id={descId}>
+              {description}
+            </DialogPrimitive.Description>
+          </VisuallyHidden>
+        )}
         {children}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

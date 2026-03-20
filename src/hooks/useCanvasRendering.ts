@@ -372,8 +372,15 @@ export function useCanvasRendering(
     const jobId = renderJobIdRef.current;
 
     const renderDocument = async () => {
+      if (!containerId || !pdfDocument) {
+        setIsRendering(false);
+        return;
+      }
       setIsRendering(true);
       setRenderError(null);
+
+      // Declare skeleton array before try so finally can close over it.
+      let skeletonEls: HTMLElement[] = [];
 
       try {
         let containerEl = globalThis.document?.getElementById(containerId);
@@ -383,6 +390,37 @@ export function useCanvasRendering(
         }
         if (!(containerEl instanceof HTMLElement)) {
           throw new Error(`Container element not found: ${containerId}`);
+        }
+
+        // Skip re-render if pages are already rendered (e.g., tab switching back).
+        if (containerEl.childNodes.length > 0) {
+          setIsRendering(false);
+          return;
+        }
+
+        // Show skeleton placeholders while PDF parses.
+        for (let i = 0; i < 2; i++) {
+          const wrapper = document.createElement('div');
+          wrapper.style.cssText = 'width: 612px; margin: 0 auto 16px; position: relative; padding-top: 129.4%;';
+          const skeleton = document.createElement('div');
+          skeleton.className = 'pdf-page-skeleton';
+          skeleton.style.cssText = 'position: absolute; inset: 0;';
+          const shimmer = document.createElement('div');
+          shimmer.style.cssText = [
+            'position: absolute; inset: 0;',
+            'background: linear-gradient(135deg, #fafaf9 0%, #f5f5f4 100%);',
+          ].join('');
+          const wave = document.createElement('div');
+          wave.style.cssText = [
+            'position: absolute; inset: 0;',
+            'background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);',
+            'animation: skeletonShimmer 1.8s ease-in-out infinite;',
+          ].join('');
+          shimmer.appendChild(wave);
+          skeleton.appendChild(shimmer);
+          wrapper.appendChild(skeleton);
+          containerEl.appendChild(wrapper);
+          skeletonEls.push(skeleton);
         }
 
         console.log('PDF container element:', containerEl);
@@ -427,6 +465,8 @@ export function useCanvasRendering(
         setRenderError(message);
       } finally {
         if (jobId === renderJobIdRef.current) {
+          // Remove skeleton placeholders added before render started.
+          skeletonEls.forEach((el) => el.parentElement?.remove());
           setIsRendering(false);
         }
       }
@@ -701,20 +741,29 @@ export function useCanvasRendering(
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(scroller instanceof HTMLElement) || !(containerEl instanceof HTMLElement)) return;
 
+    let rafId: number | null = null;
+
     const updateCurrentPage = () => {
-      const pageEls = containerEl.querySelectorAll<HTMLElement>('.pdf-page');
-      if (!pageEls.length) return;
-      const threshold = scroller.scrollTop + 40;
-      let page = 1;
-      pageEls.forEach((el, idx) => {
-        if (el.offsetTop <= threshold) page = idx + 1;
+      if (rafId !== null) return; // Skip if a frame is already scheduled
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const pageEls = containerEl.querySelectorAll<HTMLElement>('.pdf-page');
+        if (!pageEls.length) return;
+        const threshold = scroller.scrollTop + 40;
+        let page = 1;
+        pageEls.forEach((el, idx) => {
+          if (el.offsetTop <= threshold) page = idx + 1;
+        });
+        setCurrentPage(Math.min(Math.max(page, 1), totalPages || page));
       });
-      setCurrentPage(Math.min(Math.max(page, 1), totalPages || page));
     };
 
     updateCurrentPage();
     scroller.addEventListener('scroll', updateCurrentPage, { passive: true });
-    return () => scroller.removeEventListener('scroll', updateCurrentPage);
+    return () => {
+      scroller.removeEventListener('scroll', updateCurrentPage);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [scrollContainerId, containerId, totalPages]);
 
   const jumpToPage = (pageNumber: number) => {

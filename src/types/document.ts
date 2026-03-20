@@ -6,8 +6,22 @@ export interface PDFDocument {
   pageCount: number;
   textContent: string;
   fileBlob: Blob | null;
+  libraryId: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface Library {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
 }
 
 export interface BoundingBox {

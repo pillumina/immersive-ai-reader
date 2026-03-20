@@ -14,11 +14,13 @@ export interface AIProfile {
 }
 
 export type ChatInputMode = 'auto' | 'chat' | 'doc';
+export type ThemeOption = 'light' | 'dark' | 'warm-dark';
 
 export interface UISettings {
   showChatPerfHints: boolean;
   chatInputModeDefault: ChatInputMode;
   rememberRoutePreferenceAcrossSessions: boolean;
+  theme?: ThemeOption;
 }
 
 export interface Settings {

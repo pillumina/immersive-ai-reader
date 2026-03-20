@@ -6,7 +6,7 @@ mod security;
 
 use tauri::Manager;
 use database::connection::init_database;
-use database::repositories::{document_repo::DocumentRepository, annotation_repo::AnnotationRepository, conversation_repo::ConversationRepository};
+use database::repositories::{document_repo::DocumentRepository, annotation_repo::AnnotationRepository, conversation_repo::ConversationRepository, library_repo::LibraryRepository, tag_repo::TagRepository};
 use ai::client::AIClient;
 use commands::ai::StreamRegistry;
 
@@ -16,7 +16,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
-            // Get app data directory using Manager trait
             let app_dir = app.path()
                 .app_data_dir()
                 .expect("Failed to get app data dir");
@@ -26,15 +25,15 @@ pub fn run() {
             let db_path = app_dir.join("reader.db");
             let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
-            // Initialize database
             let pool = tauri::async_runtime::block_on(async {
                 init_database(&db_url).await.expect("Failed to init database")
             });
 
-            // Register repositories as state
             app.manage(DocumentRepository::new(pool.clone()));
             app.manage(AnnotationRepository::new(pool.clone()));
-            app.manage(ConversationRepository::new(pool));
+            app.manage(ConversationRepository::new(pool.clone()));
+            app.manage(LibraryRepository::new(pool.clone()));
+            app.manage(TagRepository::new(pool.clone()));
             app.manage(AIClient::new());
             app.manage(StreamRegistry::default());
 
@@ -45,10 +44,12 @@ pub fn run() {
             commands::document::create_document,
             commands::document::get_document,
             commands::document::get_all_documents,
+            commands::document::get_documents_by_library,
             commands::document::delete_document,
             commands::document::open_pdf_file,
             commands::document::read_pdf_file,
             commands::document::update_document_file_path,
+            commands::document::update_document_library,
 
             // Annotation commands
             commands::annotation::create_annotation,
@@ -61,6 +62,21 @@ pub fn run() {
             commands::conversation::get_conversation,
             commands::conversation::add_message,
             commands::conversation::get_messages,
+
+            // Library commands
+            commands::library::create_library,
+            commands::library::get_library,
+            commands::library::get_all_libraries,
+            commands::library::update_library,
+            commands::library::delete_library,
+
+            // Tag commands
+            commands::tag::get_all_tags,
+            commands::tag::search_tags,
+            commands::tag::get_document_tags,
+            commands::tag::add_tag_to_document,
+            commands::tag::remove_tag_from_document,
+            commands::tag::delete_tag,
 
             // AI commands
             commands::ai::send_chat_message,

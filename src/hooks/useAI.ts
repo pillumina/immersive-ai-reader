@@ -327,6 +327,11 @@ export function useAI(
   const responseCacheRef = useRef<Map<string, CachedAnswer>>(new Map());
   const lastDocumentIdRef = useRef<string>(documentId);
 
+  // RAF-based streaming throttle: accumulate content in refs, flush to state at 60fps max.
+  const streamingFlushRafRef = useRef<number | null>(null);
+  const streamingContentRef = useRef<string>('');
+  const streamingAssistantIdRef = useRef<string | null>(null);
+
   const rememberPreference = options.rememberRoutePreferenceAcrossSessions ?? true;
 
   const persistRoutePreferenceHistory = useCallback((history: PreferenceMode[]) => {
@@ -400,8 +405,15 @@ export function useAI(
     prompt: string,
     history: Message[],
   ): Promise<{ content: string; usage: MessageUsage; stopped: boolean }> => {
+    // Reset streaming throttle refs at the start of each stream.
+    streamingContentRef.current = '';
+    streamingAssistantIdRef.current = null;
+    if (streamingFlushRafRef.current !== null) {
+      cancelAnimationFrame(streamingFlushRafRef.current);
+      streamingFlushRafRef.current = null;
+    }
+
     let expectedStreamId: string | null = null;
-    let fullContent = '';
     const streamStartedAt = Date.now();
     let firstTokenAt: number | null = null;
     let unlistenDone: (() => void) | null = null;
@@ -415,12 +427,22 @@ export function useAI(
       if (firstTokenAt === null) {
         firstTokenAt = Date.now();
       }
-      fullContent += delta;
-      setMessages((prev) => prev.map((m) => (
-        m.id === assistantId
-          ? { ...m, status: 'streaming', content: fullContent }
-          : m
-      )));
+      streamingContentRef.current += delta;
+      streamingAssistantIdRef.current = assistantId;
+
+      // Throttle: flush at most once per animation frame.
+      if (streamingFlushRafRef.current === null) {
+        streamingFlushRafRef.current = requestAnimationFrame(() => {
+          streamingFlushRafRef.current = null;
+          const content = streamingContentRef.current;
+          const aid = streamingAssistantIdRef.current;
+          if (aid) {
+            setMessages((prev) => prev.map((m) =>
+              m.id === aid ? { ...m, status: 'streaming', content } : m
+            ));
+          }
+        });
+      }
     });
 
     return await new Promise(async (resolve, reject) => {
@@ -435,7 +457,7 @@ export function useAI(
         await cleanup();
         activeStreamIdRef.current = null;
         resolve({
-          content: event.payload.content || fullContent,
+          content: event.payload.content || streamingContentRef.current,
           usage: {
             latencyMs: normalizeTokenNumber(event.payload.latency_ms),
             ttftMs: firstTokenAt ? firstTokenAt - streamStartedAt : undefined,
@@ -517,7 +539,7 @@ export function useAI(
             }
             resolve(false);
           }
-        }, 24);
+        }, 40);
       }),
     []
   );

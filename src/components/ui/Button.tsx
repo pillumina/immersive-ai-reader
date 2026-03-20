@@ -17,8 +17,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           : 'h-10 px-4 text-sm';
     const variants =
       variant === 'primary'
-        ? 'bg-[#E42313] text-white hover:bg-[#c71e10] shadow-sm hover:shadow focus-visible:ring-[#E42313]/30'
-        : 'bg-white/90 text-[#1F2937] border border-[#D9DEE8] hover:bg-white hover:border-[#c5ccd8] focus-visible:ring-slate-400/30';
+        ? 'bg-[#c2410c] text-white hover:bg-[#9a3412] shadow-sm hover:shadow focus-visible:ring-[#c2410c]/30'
+        : 'bg-white/90 text-[#1c1917] border border-[#e7e5e4] hover:bg-white hover:border-[#d6d3d1] focus-visible:ring-[#a8a29e]/30';
 
     return (
       <button

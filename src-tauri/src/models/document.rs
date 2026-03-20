@@ -10,6 +10,7 @@ pub struct Document {
     pub file_size: i64,
     pub page_count: i32,
     pub text_content: Option<String>,
+    pub library_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -21,6 +22,7 @@ pub struct CreateDocumentRequest {
     pub file_size: i64,
     pub page_count: i32,
     pub text_content: String,
+    pub library_id: Option<String>,
 }
 
 impl Document {
@@ -33,6 +35,7 @@ impl Document {
             file_size: req.file_size,
             page_count: req.page_count,
             text_content: Some(req.text_content),
+            library_id: req.library_id,
             created_at: now.clone(),
             updated_at: now,
         }

@@ -24,14 +24,23 @@ export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
   const [visible, setVisible] = useState(false);
   const [exiting, setExiting] = useState(false);
 
+  // Mount animation
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
-    const timer = setTimeout(() => {
-      setExiting(true);
-      setTimeout(onClose, 280);
-    }, duration);
+  }, []);
+
+  // Auto-dismiss timer
+  useEffect(() => {
+    const timer = setTimeout(() => setExiting(true), duration);
     return () => clearTimeout(timer);
-  }, [onClose, duration]);
+  }, [duration]);
+
+  // Wait for exit animation to finish, then notify parent
+  useEffect(() => {
+    if (!exiting) return;
+    const timer = setTimeout(onClose, 280);
+    return () => clearTimeout(timer);
+  }, [exiting, onClose]);
 
   const Icon = icons[type];
 
@@ -47,10 +56,7 @@ export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
       <Icon size={16} className="shrink-0 opacity-90" />
       <span className="text-[13px] leading-snug font-medium">{message}</span>
       <button
-        onClick={() => {
-          setExiting(true);
-          setTimeout(onClose, 280);
-        }}
+        onClick={() => setExiting(true)}
         className="ml-1 shrink-0 rounded-full p-0.5 transition-colors hover:bg-white/15"
       >
         <X size={14} />

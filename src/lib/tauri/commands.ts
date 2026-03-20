@@ -23,8 +23,23 @@ export interface BackendDocument {
   file_size: number;
   page_count: number;
   text_content: string | null;
+  library_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface BackendLibrary {
+  id: string;
+  name: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BackendTag {
+  id: string;
+  name: string;
+  created_at: string;
 }
 
 export interface BackendConversation {
@@ -61,6 +76,7 @@ export const documentCommands = {
     file_size: number;
     page_count: number;
     text_content: string;
+    library_id?: string;
   }): Promise<BackendDocument> => {
     return await invoke<BackendDocument>('create_document', { request });
   },
@@ -71,6 +87,10 @@ export const documentCommands = {
 
   getAll: async (): Promise<BackendDocument[]> => {
     return await invoke<BackendDocument[]>('get_all_documents');
+  },
+
+  getByLibrary: async (libraryId: string): Promise<BackendDocument[]> => {
+    return await invoke<BackendDocument[]>('get_documents_by_library', { libraryId });
   },
 
   delete: async (id: string): Promise<void> => {
@@ -92,6 +112,62 @@ export const documentCommands = {
       fileName,
       fileSize,
     });
+  },
+
+  updateLibrary: async (id: string, libraryId: string | null): Promise<void> => {
+    await invoke('update_document_library', { id, libraryId });
+  },
+};
+
+// Library commands
+export const libraryCommands = {
+  create: async (name: string, color?: string): Promise<BackendLibrary> => {
+    return await invoke<BackendLibrary>('create_library', {
+      request: { name, color },
+    });
+  },
+
+  getById: async (id: string): Promise<BackendLibrary | null> => {
+    return await invoke<BackendLibrary | null>('get_library', { id });
+  },
+
+  getAll: async (): Promise<BackendLibrary[]> => {
+    return await invoke<BackendLibrary[]>('get_all_libraries');
+  },
+
+  update: async (id: string, name: string, color: string): Promise<void> => {
+    await invoke('update_library', { id, name, color });
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await invoke('delete_library', { id });
+  },
+};
+
+// Tag commands
+export const tagCommands = {
+  getAll: async (): Promise<BackendTag[]> => {
+    return await invoke<BackendTag[]>('get_all_tags');
+  },
+
+  search: async (prefix: string): Promise<BackendTag[]> => {
+    return await invoke<BackendTag[]>('search_tags', { prefix });
+  },
+
+  getByDocument: async (documentId: string): Promise<BackendTag[]> => {
+    return await invoke<BackendTag[]>('get_document_tags', { documentId });
+  },
+
+  addToDocument: async (documentId: string, tagName: string): Promise<void> => {
+    await invoke('add_tag_to_document', { documentId, tagName });
+  },
+
+  removeFromDocument: async (documentId: string, tagName: string): Promise<void> => {
+    await invoke('remove_tag_from_document', { documentId, tagName });
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await invoke('delete_tag', { id });
   },
 };
 

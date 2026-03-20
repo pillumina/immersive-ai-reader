@@ -74,3 +74,24 @@ pub async fn update_document_file_path(
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn get_documents_by_library(
+    library_id: String,
+    repo: State<'_, DocumentRepository>,
+) -> Result<Vec<Document>, String> {
+    repo.get_by_library(&library_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_document_library(
+    id: String,
+    library_id: Option<String>,
+    repo: State<'_, DocumentRepository>,
+) -> Result<(), String> {
+    repo.update_library(&id, library_id.as_deref())
+        .await
+        .map_err(|e| e.to_string())
+}

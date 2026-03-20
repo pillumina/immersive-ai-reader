@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { AIConfig, AIProfile, AIProvider, ChatInputMode } from '@/types/settings';
+import { AIConfig, AIProfile, AIProvider, ChatInputMode, ThemeOption } from '@/types/settings';
 import { Dialog, DialogContent } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Logo } from '@/components/ui/Logo';
 import { AI_PROVIDER_PRESETS, getPresetByProvider } from '@/constants/aiProviders';
-import { Plus, Trash2, Cpu, MessageSquare, Info, ChevronRight, Check, X, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Cpu, MessageSquare, Info, ChevronRight, Check, X, Eye, EyeOff, Palette } from 'lucide-react';
 import { AIConnectivityResult } from '@/lib/tauri';
 
-type SettingsSection = 'provider' | 'chat' | 'about';
+type SettingsSection = 'provider' | 'chat' | 'appearance' | 'about';
 
 interface SettingsModalProps {
   open: boolean;
@@ -30,6 +31,8 @@ interface SettingsModalProps {
   onClearRoutePreferenceMemory: () => void;
   rememberRoutePreferenceAcrossSessions: boolean;
   onToggleRememberRoutePreferenceAcrossSessions: (enabled: boolean) => void;
+  currentTheme?: ThemeOption;
+  onChangeTheme: (theme: ThemeOption) => void;
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
@@ -93,6 +96,8 @@ export function SettingsModal({
   onClearRoutePreferenceMemory,
   rememberRoutePreferenceAcrossSessions,
   onToggleRememberRoutePreferenceAcrossSessions,
+  currentTheme,
+  onChangeTheme,
 }: SettingsModalProps) {
   const activeProfile = profiles.find((p) => p.id === activeProfileId) ?? null;
 
@@ -176,12 +181,13 @@ export function SettingsModal({
   const navItems: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
     { id: 'provider', label: 'AI Provider', icon: <Cpu size={14} /> },
     { id: 'chat', label: 'Chat & Routing', icon: <MessageSquare size={14} /> },
+    { id: 'appearance', label: 'Appearance', icon: <Palette size={14} /> },
     { id: 'about', label: 'About', icon: <Info size={14} /> },
   ];
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="settings-modal">
+      <DialogContent className="settings-modal" title="Settings" description="Configure your AI reader experience: provider, chat behavior, and appearance">
         {/* Header */}
         <div className="settings-header">
           <div>
@@ -460,6 +466,69 @@ export function SettingsModal({
               </div>
             )}
 
+            {/* ── Appearance ── */}
+            {section === 'appearance' && (
+              <div className="settings-section">
+                <SectionHeader
+                  title="Appearance"
+                  subtitle="Customize the look and feel of the app"
+                />
+
+                <div className="settings-group">
+                  <p className="settings-group__label">Color Theme</p>
+                  <div className="theme-grid">
+                    <button
+                      type="button"
+                      onClick={() => onChangeTheme('light')}
+                      className={`theme-card ${(currentTheme ?? 'light') === 'light' ? 'theme-card--active' : ''}`}
+                    >
+                      <div className="theme-card__preview theme-card__preview--light">
+                        <div className="theme-card__swatch" style={{ background: '#fafaf9', borderColor: '#e7e5e4' }} />
+                        <div className="theme-card__swatch" style={{ background: '#ffffff', borderColor: '#e7e5e4' }} />
+                        <div className="theme-card__accent" style={{ background: '#c2410c' }} />
+                      </div>
+                      <span className="theme-card__label">Warm Light</span>
+                      {(currentTheme ?? 'light') === 'light' && (
+                        <Check size={12} className="theme-card__check" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onChangeTheme('dark')}
+                      className={`theme-card ${currentTheme === 'dark' ? 'theme-card--active' : ''}`}
+                    >
+                      <div className="theme-card__preview theme-card__preview--dark">
+                        <div className="theme-card__swatch" style={{ background: '#18181b', borderColor: '#3f3f46' }} />
+                        <div className="theme-card__swatch" style={{ background: '#232326', borderColor: '#3f3f46' }} />
+                        <div className="theme-card__accent" style={{ background: '#ea580c' }} />
+                      </div>
+                      <span className="theme-card__label">Dark</span>
+                      {currentTheme === 'dark' && (
+                        <Check size={12} className="theme-card__check" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onChangeTheme('warm-dark')}
+                      className={`theme-card ${currentTheme === 'warm-dark' ? 'theme-card--active' : ''}`}
+                    >
+                      <div className="theme-card__preview theme-card__preview--warm-dark">
+                        <div className="theme-card__swatch" style={{ background: '#1c1917', borderColor: '#3d3835' }} />
+                        <div className="theme-card__swatch" style={{ background: '#272220', borderColor: '#3d3835' }} />
+                        <div className="theme-card__accent" style={{ background: '#ea580c' }} />
+                      </div>
+                      <span className="theme-card__label">Warm Dark</span>
+                      {currentTheme === 'warm-dark' && (
+                        <Check size={12} className="theme-card__check" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── About ── */}
             {section === 'about' && (
               <div className="settings-section">
@@ -469,9 +538,7 @@ export function SettingsModal({
                 />
                 <div className="settings-about-card">
                   <div className="settings-about-card__logo">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#E42313" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.4V12h3l3 3-3 3h-3v1a4 4 0 1 1-8 0v-1H3l-3-3 3-3h3V9.4A4 4 0 0 1 12 2z"/>
-                    </svg>
+                    <Logo size={32} />
                   </div>
                   <div className="settings-about-card__info">
                     <p className="settings-about-card__name">Immersive Reader</p>

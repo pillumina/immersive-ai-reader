@@ -11,6 +11,7 @@ const UISettingsSchema = z.object({
   showChatPerfHints: z.boolean(),
   chatInputModeDefault: z.enum(['auto', 'chat', 'doc']),
   rememberRoutePreferenceAcrossSessions: z.boolean(),
+  theme: z.enum(['light', 'dark', 'warm-dark']).optional(),
 });
 
 const StoredProfileSchema = z.object({
@@ -36,6 +37,7 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   showChatPerfHints: true,
   chatInputModeDefault: 'auto',
   rememberRoutePreferenceAcrossSessions: true,
+  theme: 'light',
 };
 
 /**

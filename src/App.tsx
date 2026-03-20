@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MainCanvas } from '@/components/layout/MainCanvas';
 import { AIPanel } from '@/components/layout/AIPanel';
+import { TopBar, AppTab } from '@/components/layout/TopBar';
+import { LibraryView } from '@/components/features/LibraryView';
 import { SettingsModal } from '@/components/features/SettingsModal';
 import { NotesManager } from '@/components/features/NotesManager';
 import { Toast } from '@/components/ui/Toast';
@@ -9,9 +11,11 @@ import { usePDF } from '@/hooks/usePDF';
 import { usePDFThumbnails } from '@/hooks/usePDFThumbnails';
 import { useAI } from '@/hooks/useAI';
 import { useSettings } from '@/hooks/useSettings';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useCanvasRendering } from '@/hooks/useCanvasRendering';
 import { AIConfig } from '@/types/settings';
-import { aiCommands, annotationCommands } from '@/lib/tauri';
+import { aiCommands, annotationCommands, tagCommands } from '@/lib/tauri';
+import { PDFDocument } from '@/types/document';
 
 interface ToastState {
   message: string;
@@ -28,6 +32,12 @@ function App() {
     selectDocument,
     deleteDocument,
     relinkDocument,
+    loadDocuments,
+    loadLibraries,
+    createLibrary,
+    updateLibrary,
+    deleteLibrary,
+    updateDocumentLibrary,
     error: pdfError,
     isLoading: pdfLoading,
   } = usePDF();
@@ -45,6 +55,52 @@ function App() {
     renameProfile,
   } = useSettings();
 
+  // ─── Tab management ────────────────────────────────────────────
+  const [tabs, setTabs] = useState<AppTab[]>([{ id: 'library', label: 'Library', type: 'library' }]);
+  const [activeTabId, setActiveTabId] = useState('library');
+
+  // ─── Library management state ────────────────────────────────
+  const [libraries, setLibraries] = useState<any[]>([]);
+  const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [recentDocuments, setRecentDocuments] = useState<PDFDocument[]>([]);
+  const recentDocIdsRef = useRef<Set<string>>(new Set());
+
+  const openDocTab = useCallback((doc: PDFDocument) => {
+    const tabId = `doc-${doc.id}`;
+    setTabs((prev) => {
+      if (prev.some((t) => t.id === tabId)) return prev;
+      return [...prev, { id: tabId, label: doc.fileName, type: 'document', documentId: doc.id }];
+    });
+    setActiveTabId(tabId);
+    // Track recents
+    recentDocIdsRef.current.delete(doc.id);
+    const newSet = new Set([doc.id, ...recentDocIdsRef.current]);
+    recentDocIdsRef.current = newSet;
+    // Keep only the 8 most recent
+    setRecentDocuments(
+      documents.filter((d) => newSet.has(d.id)).slice(0, 8)
+    );
+  }, [documents]);
+
+  const handleCloseTab = useCallback((tabId: string) => {
+    if (tabId === 'library') return;
+    setTabs((prev) => prev.filter((t) => t.id !== tabId));
+    if (activeTabId === tabId) {
+      setActiveTabId('library');
+    }
+  }, [activeTabId]);
+
+  const handleSelectTab = useCallback((tabId: string) => {
+    setActiveTabId(tabId);
+    if (tabId !== 'library' && tabId.startsWith('doc-')) {
+      const docId = tabId.replace('doc-', '');
+      void selectDocument(docId);
+    }
+  }, [selectDocument]);
+
+  // ─── UI state ─────────────────────────────────────────────────
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notesManagerOpen, setNotesManagerOpen] = useState(false);
   const [notesAnnotations, setNotesAnnotations] = useState<any[]>([]);
@@ -62,7 +118,7 @@ function App() {
     nonce: number;
   } | null>(null);
 
-  // Canvas rendering
+  // ─── Canvas rendering ────────────────────────────────────────
   const {
     isRendering,
     renderError,
@@ -78,8 +134,8 @@ function App() {
     unpinAiCardByMessageId,
     locateAiCardByMessageId,
   } = useCanvasRendering(
-    'pdf-scroll-container',
-    'pdf-pages-container',
+    activeTabId === 'library' ? '' : 'pdf-scroll-container',
+    activeTabId === 'library' ? '' : 'pdf-pages-container',
     currentDocument,
     zoomLevel,
     (messageId: string) => setPinnedMessageIds((prev) => prev.filter((id) => id !== messageId))
@@ -123,21 +179,42 @@ function App() {
     { rememberRoutePreferenceAcrossSessions: uiSettings.rememberRoutePreferenceAcrossSessions }
   );
 
-  useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
+  // ─── Load data on mount ───────────────────────────────────────
+  useEffect(() => { void loadSettings(); }, [loadSettings]);
 
   useEffect(() => {
-    restoreLastDocument();
+    void (async () => {
+      const libs = await loadLibraries();
+      setLibraries(libs);
+    })();
+  }, [loadLibraries]);
+
+  useEffect(() => {
+    void loadDocuments();
+  }, [loadDocuments]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const tags = await tagCommands.getAll();
+        setAllTags(tags.map((t: any) => t.name));
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    void restoreLastDocument();
   }, [restoreLastDocument]);
 
   useEffect(() => {
     if (currentDocument) {
-      loadHistory();
+      void loadHistory();
     }
   }, [currentDocument, loadHistory]);
 
-  // Load notes for Notes Manager
+  // ─── Load notes for Notes Manager ───────────────────────────
   useEffect(() => {
     const loadNotes = async () => {
       if (!currentDocument?.id) {
@@ -153,10 +230,11 @@ function App() {
       }
     };
     if (notesManagerOpen) {
-      loadNotes();
+      void loadNotes();
     }
   }, [currentDocument?.id, notesManagerOpen]);
 
+  // ─── Load pinned AI cards ────────────────────────────────────
   useEffect(() => {
     const refresh = async () => {
       if (!currentDocument?.id) {
@@ -182,36 +260,29 @@ function App() {
     void refresh();
   }, [currentDocument?.id, AI_CARD_PREFIX]);
 
+  // ─── Toast on errors ─────────────────────────────────────────
   useEffect(() => {
-    if (renderError) {
-      setToast({ message: renderError, type: 'error' });
-    }
+    if (renderError) setToast({ message: renderError, type: 'error' });
   }, [renderError]);
 
-  // Listen for ai-card-unpinned events from PDF canvas cards
   useEffect(() => {
-    const handler = () => {
-      setToast({ message: 'AI card removed from canvas', type: 'success' });
-    };
+    const handler = () => setToast({ message: 'AI card removed from canvas', type: 'success' });
     globalThis.addEventListener('ai-card-unpinned', handler);
     return () => globalThis.removeEventListener('ai-card-unpinned', handler);
   }, []);
 
   useEffect(() => {
-    if (pdfError) {
-      setToast({ message: pdfError, type: 'error' });
-    }
+    if (pdfError) setToast({ message: pdfError, type: 'error' });
   }, [pdfError]);
 
   useEffect(() => {
-    if (aiError) {
-      setToast({ message: aiError, type: 'error' });
-    }
+    if (aiError) setToast({ message: aiError, type: 'error' });
   }, [aiError]);
 
+  // ─── Handlers ────────────────────────────────────────────────
   const handleUpload = async () => {
     try {
-      setToast({ message: 'Opening PDF file...', type: 'info' });
+      setToast({ message: 'Opening PDF file…', type: 'info' });
       await openPDFFile();
       setToast({ message: 'PDF loaded successfully!', type: 'success' });
     } catch (error) {
@@ -230,6 +301,25 @@ function App() {
   const handleZoomByFactor = (factor: number) => {
     setZoomLevel(prev => Math.min(Math.max(prev * factor, 0.3), 3));
   };
+  const handleResetZoom = () => setZoomLevel(1);
+
+  // Escape closes TOC, context menus, etc. handled by individual components;
+  // this catches any remaining open state at the app level.
+  const handleEscape = () => {
+    // Handled by individual components via their own keydown/close handlers.
+  };
+
+  useKeyboardShortcuts({
+    onZoomIn: handleZoomIn,
+    onZoomOut: handleZoomOut,
+    onResetZoom: handleResetZoom,
+    onJumpToPage: jumpToPage,
+    onCloseTab: handleCloseTab,
+    onEscape: handleEscape,
+    activeTabId,
+    currentPage,
+    totalPages,
+  });
   const handleHighlightSelection = async () => {
     try {
       const count = await highlightSelection();
@@ -240,7 +330,6 @@ function App() {
     }
   };
   const handleAddNoteSelection = async () => {
-    // Defer prompt so context menu closes first and selection is preserved
     globalThis.setTimeout(() => {
       const note = window.prompt('Add a note:');
       if (note === null) return;
@@ -264,7 +353,7 @@ function App() {
       setToast({ message: 'No document loaded', type: 'info' });
       return;
     }
-    sendMessage('Please summarize the current document in: 1) key contributions, 2) methodology, 3) limitations, 4) practical takeaways.');
+    void sendMessage('Please summarize the current document in: 1) key contributions, 2) methodology, 3) limitations, 4) practical takeaways.');
   };
   const handleTranslateSelection = () => {
     const text = globalThis.getSelection?.()?.toString().trim();
@@ -272,7 +361,7 @@ function App() {
       setToast({ message: 'Select some text first', type: 'info' });
       return;
     }
-    sendMessage(`Translate the following text into Chinese, preserve technical terms in English when needed, and provide concise explanation:\n\n${text}`);
+    void sendMessage(`Translate the following text into Chinese, preserve technical terms in English when needed, and provide concise explanation:\n\n${text}`);
   };
   const handleExplainTerm = async () => {
     const term = globalThis.getSelection?.()?.toString().trim();
@@ -443,92 +532,210 @@ function App() {
     })();
   };
 
+  // ─── Library handlers ────────────────────────────────────────
+  const handleCreateLibrary = async (name: string) => {
+    try {
+      const lib = await createLibrary(name);
+      setLibraries((prev) => [...prev, lib]);
+      setToast({ message: `Library "${name}" created`, type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create library';
+      setToast({ message, type: 'error' });
+    }
+  };
+
+  const handleDeleteLibrary = async (id: string) => {
+    try {
+      await deleteLibrary(id);
+      setLibraries((prev) => prev.filter((l) => l.id !== id));
+      if (selectedLibraryId === id) setSelectedLibraryId(null);
+      setToast({ message: 'Library deleted', type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete library';
+      setToast({ message, type: 'error' });
+    }
+  };
+
+  const handleRenameLibrary = async (id: string, name: string) => {
+    try {
+      const lib = libraries.find((l) => l.id === id);
+      if (!lib) return;
+      await updateLibrary(id, name, lib.color);
+      setLibraries((prev) => prev.map((l) => l.id === id ? { ...l, name } : l));
+      setToast({ message: `Renamed to "${name}"`, type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to rename library';
+      setToast({ message, type: 'error' });
+    }
+  };
+
+  const handleDeleteDocument = async (id: string) => {
+    try {
+      await deleteDocument(id);
+      void loadDocuments();
+      if (selectedDocumentId === id) setSelectedDocumentId(null);
+      setToast({ message: 'Document removed', type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete document';
+      setToast({ message, type: 'error' });
+    }
+  };
+
+  const handleUpdateDocLibrary = async (docId: string, libraryId: string | null) => {
+    try {
+      await updateDocumentLibrary(docId, libraryId);
+      void loadDocuments();
+      setToast({ message: 'Document moved', type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to move document';
+      setToast({ message, type: 'error' });
+    }
+  };
+
+  const handleClearRecent = () => {
+    recentDocIdsRef.current = new Set();
+    setRecentDocuments([]);
+  };
+
+  // ─── Render ──────────────────────────────────────────────────
+  const isLibraryTab = activeTabId === 'library';
+
   return (
-    <main className="flex h-screen bg-white">
-      {!focusMode && sidebarOpen && (
-        <Sidebar
-          onUpload={handleUpload}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onToggleSidebar={() => setSidebarOpen(false)}
-          documents={documents}
-          currentDocumentId={currentDocument?.id}
-          onSelectDocument={selectDocument}
-          onDeleteDocument={deleteDocument}
-          onRelinkDocument={relinkDocument}
-          totalPages={totalPages}
-          currentPage={currentPage}
-          onJumpToPage={jumpToPage}
-          thumbnails={thumbnails}
-          thumbnailsLoading={thumbnailsLoading}
-        />
-      )}
-
-      {/* Collapsed sidebar strip */}
-      {!focusMode && !sidebarOpen && (
-        <div className="w-11 border-r border-[#E8E8E8] bg-white flex flex-col items-center py-3 gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-[#7A7A7A] hover:bg-[#F5F5F5] hover:text-[#0D0D0D] transition-colors"
-            title="Show sidebar"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>
-            </svg>
-          </button>
-        </div>
-      )}
-
-      <MainCanvas
-        zoomLevel={zoomLevel}
-        onZoomIn={handleZoomIn}
-        onZoomOut={handleZoomOut}
-        onZoomByFactor={handleZoomByFactor}
-        hasDocument={!!currentDocument}
-        isLoading={pdfLoading || isRendering}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        outline={outline}
-        onJumpToPage={jumpToPage}
-        onHighlightSelection={handleHighlightSelection}
-        onAddNoteSelection={handleAddNoteSelection}
-        onOpenNotesManager={() => setNotesManagerOpen(true)}
-        onExplainSelection={() => { void handleExplainTerm(); }}
-        onDropAICard={handleDropAICard}
-        documentId={currentDocument?.id}
-        onToggleFocusMode={() => setFocusMode((v) => !v)}
-        isFocusMode={focusMode}
-        comparePageSignal={comparePageSignal}
-        comparePaneCommand={comparePaneCommand}
-        onSplitModeChange={setSplitActive}
+    <div
+      data-theme={uiSettings.theme}
+      className={`flex flex-col h-screen overflow-hidden ${uiSettings.theme ? '' : 'bg-white'}`}
+    >
+      {/* Top bar */}
+      <TopBar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onSelectTab={handleSelectTab}
+        onCloseTab={handleCloseTab}
+        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+        sidebarOpen={sidebarOpen}
       />
 
-      {!focusMode && !splitActive && (
-        <AIPanel
-          messages={messages}
-          isLoading={aiLoading}
-          showPerfHints={uiSettings.showChatPerfHints}
-          defaultInputMode={uiSettings.chatInputModeDefault}
-          onSendMessage={(content, mode) => { void sendMessage(content, mode || 'auto'); }}
-          onExplainTerm={() => { void handleExplainTerm(); }}
-          onRetryMessage={(messageId, mode) => { void retryAssistantMessage(messageId, mode); }}
-          onStopGeneration={stopGeneration}
-          onPinToCanvas={handlePinMessageToCanvas}
-          onUnpinFromCanvas={handleUnpinFromCanvas}
-          onLocateCanvasCard={handleLocateCanvasCard}
-          onSendToRightPane={handleSendToRightPane}
-          onSummarize={handleSummarize}
-          onTranslateSelection={handleTranslateSelection}
-          onExportNotes={handleExportNotes}
-          onJumpToCitation={handleJumpToCitation}
-          pendingRouteConfirmation={pendingRouteConfirmation}
-          onConfirmRouteAsChat={() => { void confirmPendingRoute('chat'); }}
-          onConfirmRouteAsDoc={() => { void confirmPendingRoute('doc'); }}
-          onDismissRouteConfirm={dismissPendingRoute}
-          pinnedMessageIds={pinnedMessageIds}
-          onOpenNotesManager={() => setNotesManagerOpen(true)}
-        />
-      )}
+      {/* Main content area — always rendered, visibility toggled via CSS */}
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Library view — always in DOM, shown when library tab active */}
+        <div className={`absolute inset-0 transition-opacity duration-150 ${isLibraryTab ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+          <LibraryView
+            documents={documents}
+            libraries={libraries}
+            allTags={allTags}
+            recentDocuments={recentDocuments}
+            selectedLibraryId={selectedLibraryId}
+            selectedDocumentId={selectedDocumentId}
+            onSelectLibrary={(id) => { setSelectedLibraryId(id); setSelectedDocumentId(null); }}
+            onSelectDocument={setSelectedDocumentId}
+            onCreateLibrary={handleCreateLibrary}
+            onDeleteLibrary={handleDeleteLibrary}
+            onRenameLibrary={handleRenameLibrary}
+            onDeleteDocument={handleDeleteDocument}
+            onUpdateDocumentLibrary={handleUpdateDocLibrary}
+            onOpenDocument={openDocTab}
+            onUpload={handleUpload}
+            onClearRecent={handleClearRecent}
+          />
+        </div>
+
+        {/* Document reader — always in DOM, shown when document tab active */}
+        <main className={`flex flex-1 min-h-0 transition-opacity duration-150 ${!isLibraryTab ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+          {!focusMode && sidebarOpen && (
+            <Sidebar
+              onUpload={handleUpload}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onToggleSidebar={() => setSidebarOpen(false)}
+              documents={documents}
+              currentDocumentId={currentDocument?.id}
+              onSelectDocument={async (id) => {
+                await selectDocument(id);
+                const existingTab = tabs.find((t) => t.documentId === id);
+                if (existingTab) setActiveTabId(existingTab.id);
+              }}
+              onDeleteDocument={async (id) => {
+                await handleDeleteDocument(id);
+                const tabId = `doc-${id}`;
+                setTabs((prev) => prev.filter((t) => t.id !== tabId));
+                if (activeTabId === tabId) setActiveTabId('library');
+              }}
+              onRelinkDocument={relinkDocument}
+              totalPages={totalPages}
+              currentPage={currentPage}
+              onJumpToPage={jumpToPage}
+              thumbnails={thumbnails}
+              thumbnailsLoading={thumbnailsLoading}
+            />
+          )}
+
+          {/* Collapsed sidebar strip */}
+          {!focusMode && !sidebarOpen && (
+            <div className="w-11 border-r border-[#e7e5e4] bg-white flex flex-col items-center py-3 gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-[#78716c] hover:bg-[#f5f5f4] hover:text-[#1c1917] transition-colors"
+                title="Show sidebar"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>
+                </svg>
+              </button>
+            </div>
+          )}
+
+          <MainCanvas
+            zoomLevel={zoomLevel}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onZoomByFactor={handleZoomByFactor}
+            hasDocument={!!currentDocument}
+            isLoading={pdfLoading || isRendering}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            outline={outline}
+            onJumpToPage={jumpToPage}
+            onHighlightSelection={handleHighlightSelection}
+            onAddNoteSelection={handleAddNoteSelection}
+            onOpenNotesManager={() => setNotesManagerOpen(true)}
+            onExplainSelection={() => { void handleExplainTerm(); }}
+            onDropAICard={handleDropAICard}
+            documentId={currentDocument?.id}
+            onToggleFocusMode={() => setFocusMode((v) => !v)}
+            isFocusMode={focusMode}
+            comparePageSignal={comparePageSignal}
+            comparePaneCommand={comparePaneCommand}
+            onSplitModeChange={setSplitActive}
+          />
+
+          {!focusMode && !splitActive && (
+            <AIPanel
+              messages={messages}
+              isLoading={aiLoading}
+              showPerfHints={uiSettings.showChatPerfHints}
+              defaultInputMode={uiSettings.chatInputModeDefault}
+              onSendMessage={(content, mode) => { void sendMessage(content, mode || 'auto'); }}
+              onExplainTerm={() => { void handleExplainTerm(); }}
+              onRetryMessage={(messageId, mode) => { void retryAssistantMessage(messageId, mode); }}
+              onStopGeneration={stopGeneration}
+              onPinToCanvas={handlePinMessageToCanvas}
+              onUnpinFromCanvas={handleUnpinFromCanvas}
+              onLocateCanvasCard={handleLocateCanvasCard}
+              onSendToRightPane={handleSendToRightPane}
+              onSummarize={handleSummarize}
+              onTranslateSelection={handleTranslateSelection}
+              onExportNotes={handleExportNotes}
+              onJumpToCitation={handleJumpToCitation}
+              pendingRouteConfirmation={pendingRouteConfirmation}
+              onConfirmRouteAsChat={() => { void confirmPendingRoute('chat'); }}
+              onConfirmRouteAsDoc={() => { void confirmPendingRoute('doc'); }}
+              onDismissRouteConfirm={dismissPendingRoute}
+              pinnedMessageIds={pinnedMessageIds}
+              onOpenNotesManager={() => setNotesManagerOpen(true)}
+            />
+          )}
+        </main>
+      </div>
 
       <SettingsModal
         open={settingsOpen}
@@ -561,6 +768,8 @@ function App() {
         onToggleRememberRoutePreferenceAcrossSessions={(enabled) =>
           updateUiSettings({ rememberRoutePreferenceAcrossSessions: enabled })
         }
+        currentTheme={uiSettings.theme}
+        onChangeTheme={(theme) => updateUiSettings({ theme })}
         onSaveActiveProfile={handleSaveSettings}
         onTestConnectivity={async (config) => {
           return await aiCommands.testConnectivity(
@@ -598,7 +807,7 @@ function App() {
           onClose={() => setToast(null)}
         />
       )}
-    </main>
+    </div>
   );
 }
 

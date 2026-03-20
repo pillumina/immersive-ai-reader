@@ -3,6 +3,7 @@ import { Check, Copy, GripVertical, Loader2, MapPin, Pin, RotateCcw, Square, Sen
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message } from '@/types/conversation';
+import { Logo } from '@/components/ui/Logo';
 import { ChatInputMode } from '@/types/settings';
 import { Input } from '@/components/ui/Input';
 
@@ -61,9 +62,21 @@ export function AIPanel({
 }: AIPanelProps) {
   const [input, setInput] = useState('');
   const [inputMode, setInputMode] = useState<ChatInputMode>(defaultInputMode);
+  const [hasSelection, setHasSelection] = useState(false);
+
   useEffect(() => {
     setInputMode(defaultInputMode);
   }, [defaultInputMode]);
+
+  // Track whether text is selected in the PDF for quick-action chip state.
+  useEffect(() => {
+    const checkSelection = () => {
+      const sel = globalThis.getSelection?.();
+      setHasSelection(!!(sel && !sel.isCollapsed && sel.toString().trim().length > 0));
+    };
+    globalThis.addEventListener('mouseup', checkSelection);
+    return () => globalThis.removeEventListener('mouseup', checkSelection);
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -257,12 +270,12 @@ export function AIPanel({
   };
 
   return (
-    <aside className="w-[380px] border-l border-[#E3E8F0]/60 bg-gradient-to-b from-[#FCFDFF] to-[#F8FAFC] flex flex-col select-none">
+    <aside className="w-[380px] border-l border-[#e7e5e4]/60 bg-gradient-to-b from-[#fafaf9] to-[#fafaf9] flex flex-col select-none">
       {/* Tab Bar */}
-      <div className="flex items-center border-b border-[#E3E8F0]/60 px-1">
+      <div className="flex items-center border-b border-[#e7e5e4]/60 px-1">
         <button
           type="button"
-          className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 border-[#E42313] text-[#E42313]"
+          className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 border-[#c2410c] text-[#c2410c]"
         >
           <MessageSquare size={13} />
           Chat
@@ -270,7 +283,7 @@ export function AIPanel({
         <button
           type="button"
           onClick={onOpenNotesManager}
-          className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 border-transparent text-[#94A3B8] hover:text-[#64748B] transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 border-transparent text-[#a8a29e] hover:text-[#78716c] transition-colors"
           title="Note Management"
         >
           <StickyNote size={13} />
@@ -280,19 +293,19 @@ export function AIPanel({
 
       <>
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 border-b border-[#E3E8F0]/60">
+      <div className="px-4 pt-4 pb-3 border-b border-[#e7e5e4]/60">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#E42313] to-[#B91C1C] shadow-sm">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.5-.8 2.8-2 3.4V12h3l3 3-3 3h-3v1a4 4 0 1 1-8 0v-1H3l-3-3 3-3h3V9.4A4 4 0 0 1 12 2z"/></svg>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#c2410c] to-[#9a3412] shadow-sm">
+            <Logo size={14} variant="dark" />
           </div>
           <div>
-            <h2 className="text-[14px] font-semibold text-[#111827] leading-tight">AI Assistant</h2>
-            <p className="text-[10px] text-[#94A3B8] leading-none mt-0.5">Context-aware help</p>
+            <h2 className="text-[14px] font-semibold text-[#1c1917] leading-tight">AI Assistant</h2>
+            <p className="text-[10px] text-[#a8a29e] leading-none mt-0.5">Context-aware help</p>
           </div>
         </div>
         {showPerfHints && sessionStats.total > 0 && (
           <div
-            className="mt-2.5 inline-flex rounded-full border border-[#E5EAF3] bg-white/80 px-2.5 py-0.5 text-[10px] tabular-nums text-[#64748B]"
+            className="mt-2.5 inline-flex rounded-full border border-[#e7e5e4] bg-white/80 px-2.5 py-0.5 text-[10px] tabular-nums text-[#78716c]"
             title={`Prompt: ${sessionStats.prompt} | Completion: ${sessionStats.completion} | Avg latency: ${avgLatency}`}
           >
             {sessionStats.total} tokens · avg {avgLatency}
@@ -303,11 +316,11 @@ export function AIPanel({
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
             Summarize Doc
           </button>
-          <button type="button" className="quick-action-chip" onClick={onExplainTerm} title="Select text in the PDF first, then click to explain">
+          <button type="button" className={`quick-action-chip${hasSelection ? '' : ' quick-action-chip--disabled'}`} onClick={onExplainTerm} title={hasSelection ? 'Explain the selected term' : 'Select text in the PDF first, then click to explain'}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             Explain ✦
           </button>
-          <button type="button" className="quick-action-chip" onClick={onTranslateSelection} title="Select text in the PDF first, then click to translate to Chinese">
+          <button type="button" className={`quick-action-chip${hasSelection ? '' : ' quick-action-chip--disabled'}`} onClick={onTranslateSelection} title={hasSelection ? 'Translate the selected text to Chinese' : 'Select text in the PDF first, then click to translate to Chinese'}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>
             Translate ✦
           </button>
@@ -316,7 +329,7 @@ export function AIPanel({
             Export
           </button>
         </div>
-        <p className="mt-1.5 text-[9px] text-[#CBD5E1]">✦ = select text in PDF first</p>
+        <p className="mt-1.5 text-[9px] text-[#e7e5e4]">✦ = select text in PDF first</p>
       </div>
 
       <div
@@ -326,11 +339,11 @@ export function AIPanel({
       >
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center pt-16 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#F1F5F9] to-[#E2E8F0] flex items-center justify-center mb-3">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fafaf9] to-[#e7e5e4] flex items-center justify-center mb-3">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
-            <p className="text-[13px] text-[#94A3B8] font-medium">Ask about your document</p>
-            <p className="text-[11px] text-[#CBD5E1] mt-1">Or try the quick actions above</p>
+            <p className="text-[13px] text-[#a8a29e] font-medium">Ask about your document</p>
+            <p className="text-[11px] text-[#e7e5e4] mt-1">Or try the quick actions above</p>
           </div>
         ) : (
           messages.map((msg, idx) => (
@@ -341,10 +354,10 @@ export function AIPanel({
             >
               <div className={`ai-msg group max-w-[85%] p-3 text-sm rounded-2xl leading-relaxed shadow-sm ${
                 msg.role === 'user'
-                  ? 'bg-[#E42313] text-white rounded-br-md'
+                  ? 'bg-[#c2410c] text-white rounded-br-md'
                   : msg.status === 'error'
                     ? 'bg-rose-50 border border-rose-200 text-rose-700 rounded-bl-md'
-                    : 'bg-white border border-[#E5EAF3] text-[#111827] rounded-bl-md'
+                    : 'bg-white border border-[#e7e5e4] text-[#1c1917] rounded-bl-md'
               } ${focusedMessageId && msg.id === focusedMessageId ? 'ai-msg-focus-ring' : ''}`}>
                 {msg.status === 'thinking' ? (
                   <div className="inline-flex items-center gap-2 text-gray-500">
@@ -468,7 +481,7 @@ export function AIPanel({
       </div>
 
       {/* Input area */}
-      <div className="px-3 py-3 border-t border-[#E3E8F0]/60 bg-white/60 backdrop-blur-lg">
+      <div className="px-3 py-3 border-t border-[#e7e5e4]/60 bg-white/60 backdrop-blur-lg">
         {pendingRouteConfirmation && !isLoading && (
           <div className="mb-2.5 rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2.5 text-[11px] text-amber-800">
             <div className="flex items-start justify-between gap-2">
@@ -484,14 +497,14 @@ export function AIPanel({
           </div>
         )}
         {isLoading && (
-          <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-[#F1F5F9] px-3 py-1.5 text-[11px] text-[#475569]">
+          <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-[#fafaf9] px-3 py-1.5 text-[11px] text-[#78716c]">
             <span className="inline-flex items-center gap-1.5">
               <Loader2 size={11} className="animate-spin" />
               Generating…
             </span>
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-[#D9DEE8] bg-white px-2 py-0.5 text-[10px] font-medium text-[#475569] hover:bg-[#F8FAFC] transition-colors active:scale-95"
+              className="inline-flex items-center gap-1 rounded-lg border border-[#e7e5e4] bg-white px-2 py-0.5 text-[10px] font-medium text-[#78716c] hover:bg-[#fafaf9] transition-colors active:scale-95"
               onClick={onStopGeneration}
             >
               <Square size={9} />
@@ -501,15 +514,15 @@ export function AIPanel({
         )}
         <div className="flex items-center gap-1.5">
           {/* Mode selector */}
-          <div className="flex items-center rounded-lg border border-[#E3E8F0] bg-[#F8FAFC] p-0.5">
+          <div className="flex items-center rounded-lg border border-[#e7e5e4] bg-[#fafaf9] p-0.5">
             {(['auto', 'chat', 'doc'] as ChatInputMode[]).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 className={`rounded-md px-2 py-1 text-[10px] font-medium capitalize transition-all duration-100 ${
                   inputMode === mode
-                    ? 'bg-[#E42313] text-white shadow-sm'
-                    : 'text-[#64748B] hover:text-[#334155]'
+                    ? 'bg-[#c2410c] text-white shadow-sm'
+                    : 'text-[#78716c] hover:text-[#78716c]'
                 }`}
                 onClick={() => setInputMode(mode)}
                 disabled={isLoading}
@@ -530,7 +543,7 @@ export function AIPanel({
             type="button"
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#E42313] text-white shadow-sm transition-all duration-150 hover:bg-[#c71e10] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.93]"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#c2410c] text-white shadow-sm transition-all duration-150 hover:bg-[#9a3412] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.93]"
           >
             {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
           </button>

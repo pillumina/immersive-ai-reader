@@ -1,6 +1,6 @@
 # Immersive AI Reader Roadmap Progress
 
-Last updated: 2026-03-18
+Last updated: 2026-03-20
 Source of truth: `research/vibero-immersive-reader/沉浸式AI阅读器_PRD.md`
 
 ## Current Goal (PRD Effect First)
@@ -70,6 +70,7 @@ Current sprint target: AI 上下文感知增强 + 画布交互升级 + 导出分
 - [x] Canvas Tab 替换为 Notes Manager 快捷按钮（2026-03-19）
 - [x] 侧边栏重新设计：Library/Pages Tab、文档按时间分组、Pages Tab 页面导航（2026-03-19）
 - [x] Pages Tab 真实缩略图：2列网格、懒加载渲染、JPEG缓存、页面数字标签、当前页红点指示（2026-03-20）
+- [x] Library Management System：顶部 Tab 栏（固定 Library Tab + 动态文档 Tab）、3 栏管理视图（左侧库列表/Recent、中间文档列表/网格切换、右侧文档详情/Tags）、标签系统（文档私有 + 全局自动补全）、文档移动到库、右键菜单、Recent 文档追踪（2026-03-20）
 
 ### B2++. 拖拽内容到 AI Panel
 
@@ -206,6 +207,37 @@ Update cadence: 每次迭代结束必须更新一次（含现状值、是否达�
   - Cleaned up all canvas-related dead code from AIPanel (canvas state, drag handlers, canvas view JSX).
 - 2026-03-19: Redesigned sidebar with Library/Pages tabs: Library shows documents grouped by time with search, Pages shows page navigation with progress bars and active indicator; wired up totalPages/currentPage/onJumpToPage props.
 - 2026-03-20: Added real PDF page thumbnails to sidebar Pages tab: usePDFThumbnails hook renders pages as JPEG at 120px width with sequential lazy loading and in-memory cache; Pages tab now shows 2-column thumbnail grid with page number badges and active page indicator.
+- 2026-03-20: Implemented Library Management System: top tab bar with fixed Library tab + dynamic document tabs (double-click opens doc in new tab); 3-column layout (library list + recent docs, document list with list/grid toggle, document detail with tags); tag system (doc-private + global autocomplete); document move between libraries via right-click menu; recent documents tracking with clear button; conditional canvas rendering to prevent errors in Library tab.
+- 2026-03-20: Added library rename via right-click context menu with inline editing (Enter/Escape/blur handling).
+- 2026-03-20: Replaced ugly native `<select>` library picker with custom animated dropdown component (absolute-positioned, click-outside dismiss, check indicator).
+- 2026-03-20: Redesigned app logo: open book/document SVG with left page (white + text lines) and right page (light pink + AI spark dot + pulse ring), available in light/dark variants.
+- 2026-03-20: Fixed tab switching smoothness: LibraryView and DocumentReader now both stay mounted in DOM, visibility toggled via CSS `opacity` + `pointer-events` transitions (no re-render on tab switch).
+- 2026-03-20: Fixed Toast auto-dismiss bug: separated exit animation state from onClose callback into independent useEffect to prevent stuck pinned toasts.
+- 2026-03-20: Fixed RenderError on Library tab: added guard in useCanvasRendering to skip rendering when containerId is empty (library tab active).
+- 2026-03-20: UX/performance optimizations batch:
+  - Scroll event throttling: wrapped updateCurrentPage in requestAnimationFrame to avoid triggering setState on every pixel scroll.
+  - Keyboard shortcuts: added useKeyboardShortcuts hook with Cmd+G (page jump dialog), +/- (zoom), 0 (reset zoom), PageUp/Down (prev/next page), Cmd+W (close tab), Escape (close panels).
+  - PDF loading skeleton: show 2 shimmer skeleton pages while PDF parses, removed when rendering completes.
+  - Settings modal entrance animation: replaced generic animate-in with scale(0.96→1) + opacity + backdrop-blur overlay animation.
+  - Library dropdown/tag suggestions: added ctxMenuIn animation to .lib-picker__dropdown and .doc-detail__tag-suggestions.
+  - AI streaming throttle: SSE chunks now accumulate in refs, flush to React state at 60fps max via requestAnimationFrame (was updating state on every chunk).
+  - Quick action disabled state: Explain/Translate chips dim to 40% opacity when no text is selected in PDF; title updates to show prerequisite.
+- 2026-03-20: Design system overhaul — Warm Editorial direction (Notion-like warmth):
+  - Established design token system in tailwind.config.ts: warm amber accent (#c2410c), warm stone backgrounds (#fafaf9, #f5f5f4), teal for notes (#0d9488), desaturated violet for AI (#7c3aed).
+  - Font upgrade: Plus Jakarta Sans (body) + Newsreader (serif display) + JetBrains Mono (code).
+  - Systematic batch hex replacement across all component files: MainCanvas, AIPanel, Sidebar, App, LibraryView, Logo, useCanvasRendering, globals.css.
+  - Warm color palette applied: all cool slate grays (#E3E8F0, #F1F5F9, #CBD5E1, #64748B, #334155, #1E293B) → warm equivalents.
+  - Eliminated cool-toned UI elements: blue focus states → amber, cool gray borders → warm stone, citation blue links → amber, note card blue → teal.
+  - Deleted dead code: src/constants/colors.ts (unused color constants).
+- 2026-03-20: Bug fixes:
+  - Fixed `skeletonEls` ReferenceError: hoisted variable declaration from `try` block to `renderDocument` function scope so `finally` block can access it.
+  - Fixed `DialogContent` Radix accessibility warning: added `VisuallyHidden` `DialogTitle` to the dialog portal.
+- 2026-03-20: Theme selector feature:
+  - Added theme system with 3 options: Warm Light, Dark, Warm Dark.
+  - CSS dark mode variables for both `dark` and `warm-dark` themes applied via `[data-theme]` attribute on root div.
+  - Appearance section in Settings with visual theme preview cards.
+  - Theme persisted in settings via `uiSettings.theme` (Zod-validated).
+  - Warm Dark: warm charcoal surfaces (#1c1917), amber accent preserved, teal for notes.
 
 ## Update Rule
 
