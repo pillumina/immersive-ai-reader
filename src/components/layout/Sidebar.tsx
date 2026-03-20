@@ -15,6 +15,8 @@ interface SidebarProps {
   totalPages?: number;
   currentPage?: number;
   onJumpToPage?: (page: number) => void;
+  thumbnails?: Map<number, string>;
+  thumbnailsLoading?: boolean;
 }
 
 type TabId = 'library' | 'pages';
@@ -30,6 +32,8 @@ export function Sidebar({
   totalPages = 0,
   currentPage = 1,
   onJumpToPage,
+  thumbnails,
+  thumbnailsLoading,
 }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<TabId>('library');
   const [searchQuery, setSearchQuery] = useState('');
@@ -218,30 +222,66 @@ export function Sidebar({
                 <p className="text-[11px] text-[#B0B0B0] mt-1">Open a document to see pages</p>
               </div>
             ) : (
-              <div className="space-y-0.5">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                  const isActive = currentPage === page;
-                  return (
-                    <button
-                      key={page}
-                      type="button"
-                      onClick={() => onJumpToPage?.(page)}
-                      className={`w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors ${
-                        isActive
-                          ? 'bg-[#FEF2F2] text-[#E42313]'
-                          : 'text-[#7A7A7A] hover:bg-[#F8F8F8] hover:text-[#0D0D0D]'
-                      }`}
-                    >
-                      <span className="text-[10px] text-[#B0B0B0] w-3 text-right shrink-0 tabular-nums">
-                        {page}
-                      </span>
-                      <div className={`flex-1 h-4 rounded ${isActive ? 'bg-[#FECACA]/50' : 'bg-[#F0F0F0]'}`} />
-                      {isActive && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#E42313] shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
+              <div>
+                {/* Page count + loading hint */}
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <span className="text-[10px] text-[#B0B0B0]">
+                    {thumbnailsLoading ? 'Rendering…' : `${totalPages} pages`}
+                  </span>
+                  {thumbnailsLoading && (
+                    <div className="flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#E42313] animate-pulse" />
+                      <span className="text-[10px] text-[#E42313]">Loading</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Thumbnail grid — 2 columns */}
+                <div className="grid grid-cols-2 gap-2">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                    const isActive = currentPage === page;
+                    const thumb = thumbnails?.get(page);
+
+                    return (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => onJumpToPage?.(page)}
+                        className={`group flex flex-col items-center rounded-xl transition-all duration-100 p-1.5 pb-2 ${
+                          isActive
+                            ? 'bg-[#FEF2F2] ring-2 ring-[#E42313]/30'
+                            : 'hover:bg-[#F8F8F8]'
+                        }`}
+                      >
+                        {/* Thumbnail image */}
+                        <div className="relative w-full rounded-lg overflow-hidden bg-[#F0F0F0] shadow-sm transition-shadow">
+                          {thumb ? (
+                            <img
+                              src={thumb}
+                              alt={`Page ${page}`}
+                              className="w-full h-auto object-contain block"
+                              style={{ display: 'block' }}
+                            />
+                          ) : (
+                            /* Skeleton placeholder */
+                            <div
+                              className="w-full bg-[#F0F0F0] animate-pulse"
+                              style={{ paddingTop: `${(792 / 612) * 100}%` }} // letter aspect ratio
+                            />
+                          )}
+                          {/* Page number badge */}
+                          <div className="absolute bottom-1.5 right-1.5 bg-black/60 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded-md tabular-nums leading-none">
+                            {page}
+                          </div>
+                          {/* Active indicator */}
+                          {isActive && (
+                            <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 rounded-full bg-[#E42313]" />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

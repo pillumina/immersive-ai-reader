@@ -6,6 +6,7 @@ import { SettingsModal } from '@/components/features/SettingsModal';
 import { NotesManager } from '@/components/features/NotesManager';
 import { Toast } from '@/components/ui/Toast';
 import { usePDF } from '@/hooks/usePDF';
+import { usePDFThumbnails } from '@/hooks/usePDFThumbnails';
 import { useAI } from '@/hooks/useAI';
 import { useSettings } from '@/hooks/useSettings';
 import { useCanvasRendering } from '@/hooks/useCanvasRendering';
@@ -81,6 +82,11 @@ function App() {
     currentDocument,
     zoomLevel,
     (messageId: string) => setPinnedMessageIds((prev) => prev.filter((id) => id !== messageId))
+  );
+
+  const { thumbnails, isLoading: thumbnailsLoading } = usePDFThumbnails(
+    currentDocument?.fileBlob ?? null,
+    totalPages
   );
 
   const aiContext = useMemo(() => ({
@@ -450,6 +456,8 @@ function App() {
           totalPages={totalPages}
           currentPage={currentPage}
           onJumpToPage={jumpToPage}
+          thumbnails={thumbnails}
+          thumbnailsLoading={thumbnailsLoading}
         />
       )}
 
