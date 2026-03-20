@@ -109,6 +109,7 @@ function App() {
   const noteInputPositionRef = useRef<{ x: number; y: number } | undefined>(undefined);
   const noteInputPageRef = useRef<number | undefined>(undefined);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<Array<{ id: string; type: 'text' | 'note'; content: string; page?: number }>>([]);
   const [focusMode, setFocusMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [splitActive, setSplitActive] = useState(false);
@@ -279,6 +280,30 @@ function App() {
     };
     globalThis.document?.addEventListener('note-card-delete-app', handler);
     return () => globalThis.document?.removeEventListener('note-card-delete-app', handler);
+  }, []);
+
+  // Listen for text/note attachments from canvas
+  useEffect(() => {
+    const onText = (e: Event) => {
+      const { content, page } = (e as CustomEvent<{ content: string; page?: number }>).detail;
+      setAttachments((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), type: 'text', content, page },
+      ]);
+    };
+    const onNote = (e: Event) => {
+      const { content, page } = (e as CustomEvent<{ content: string; page?: number }>).detail;
+      setAttachments((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), type: 'note', content, page },
+      ]);
+    };
+    globalThis.document?.addEventListener('text-attachment-drop', onText);
+    globalThis.document?.addEventListener('note-attachment-drop', onNote);
+    return () => {
+      globalThis.document?.removeEventListener('text-attachment-drop', onText);
+      globalThis.document?.removeEventListener('note-attachment-drop', onNote);
+    };
   }, []);
 
   useEffect(() => {
@@ -757,6 +782,9 @@ function App() {
               onConfirmRouteAsDoc={() => { void confirmPendingRoute('doc'); }}
               onDismissRouteConfirm={dismissPendingRoute}
               pinnedMessageIds={pinnedMessageIds}
+              attachments={attachments}
+              onAddAttachment={(a) => setAttachments((prev) => [...prev, { ...a, id: crypto.randomUUID() }])}
+              onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
             />
           )}
         </main>

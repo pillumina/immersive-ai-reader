@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut, X } from 'lucide-react';
+import { ZoomIn, ZoomOut, X, Paperclip } from 'lucide-react';
 import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PdfOutlineItem } from '@/lib/pdf/renderer';
@@ -68,21 +68,37 @@ export function MainCanvas({
   const [compareHistory, setCompareHistory] = useState<number[]>([]);
   const [compareHistoryIndex, setCompareHistoryIndex] = useState(-1);
   const [splitReason, setSplitReason] = useState<'evidence' | 'reference' | 'compare'>('compare');
+  const [textHandle, setTextHandle] = useState<{ x: number; y: number; page?: number } | null>(null);
 
-  // Debug: global drag listener to verify events reach the document.
+  // Monitor text selection to show floating drag handle
   useEffect(() => {
-    const onGlobalDragOver = (e: Event) => {
-      console.log('[GLOBAL dragover] reached document, target:', (e.target as HTMLElement)?.tagName, (e.target as HTMLElement)?.className?.slice(0, 80));
+    const update = () => {
+      const sel = globalThis.getSelection?.();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) {
+        setTextHandle(null);
+        return;
+      }
+      try {
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) {
+          setTextHandle(null);
+          return;
+        }
+        // Find page element
+        const pageEl = range.commonAncestorContainer instanceof Node
+          ? (range.commonAncestorContainer as Node).ownerDocument
+              ?.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+              ?.closest('.pdf-page') as HTMLElement | null
+          : null;
+        const page = pageEl ? Number(pageEl.dataset.pageNumber || '0') || undefined : undefined;
+        setTextHandle({ x: rect.right + 6, y: rect.top + rect.height / 2 - 12, page });
+      } catch {
+        setTextHandle(null);
+      }
     };
-    const onGlobalDrop = (e: Event) => {
-      console.log('[GLOBAL drop] reached document, target:', (e.target as HTMLElement)?.tagName);
-    };
-    globalThis.document?.addEventListener('dragover', onGlobalDragOver);
-    globalThis.document?.addEventListener('drop', onGlobalDrop);
-    return () => {
-      globalThis.document?.removeEventListener('dragover', onGlobalDragOver);
-      globalThis.document?.removeEventListener('drop', onGlobalDrop);
-    };
+    globalThis.addEventListener('mouseup', update);
+    return () => globalThis.removeEventListener('mouseup', update);
   }, []);
 
   // Notify parent when split mode changes so it can adjust layout (e.g. hide AI panel).
@@ -329,8 +345,11 @@ export function MainCanvas({
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsAICardDragOver(false);
+    // Only accept AI cards (have messageId); note cards go to AIPanel instead
+    const rawPayload = aiCardDragState.payload;
+    const isAICard = rawPayload !== null && rawPayload.type === 'ai';
     let payload: { messageId: string; content: string; pageHint?: number } | null =
-      aiCardDragState.payload;
+      isAICard ? { messageId: rawPayload.messageId, content: rawPayload.content, pageHint: rawPayload.pageHint } : null;
     if (!payload) {
       let raw = event.dataTransfer.getData('application/x-ai-card');
       if (!raw) {
@@ -643,6 +662,68 @@ export function MainCanvas({
         </button>
       )}
 
+      {/* Floating drag handle for selected text */}
+      {textHandle && (
+        <div
+          className="fixed z-40 cursor-grab active:cursor-grabbing select-none"
+          style={{ left: textHandle.x, top: textHandle.y }}
+          title="Drag to AI Panel or right-click → Attach to AI Panel"
+          onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const sel = globalThis.getSelection?.();
+            const selectedText = sel?.toString().trim() ?? '';
+            if (!selectedText) return;
+
+            const page: number | undefined = (() => {
+              const el = (e.target as HTMLElement)?.ownerDocument
+                ?.elementFromPoint(e.clientX, e.clientY)
+                ?.closest('.pdf-page') as HTMLElement | null;
+              return el ? Number(el.dataset.pageNumber || '0') || undefined : undefined;
+            })();
+
+            const startX = e.clientX;
+            const startY = e.clientY;
+            let moved = false;
+
+            const onMove = (ev: PointerEvent) => {
+              if (Math.abs(ev.clientX - startX) > 5 || Math.abs(ev.clientY - startY) > 5) {
+                moved = true;
+              }
+              if (!moved) return;
+              const panel = globalThis.document?.querySelector<HTMLElement>('#ai-panel-scroll, aside[class*="flex-col"]');
+              if (panel && ev.clientX >= panel.getBoundingClientRect().left) {
+                globalThis.document?.dispatchEvent(new CustomEvent('text-attachment-drop', {
+                  detail: { content: selectedText, page },
+                  bubbles: true,
+                }));
+                setTextHandle(null);
+                globalThis.getSelection?.()?.removeAllRanges();
+                cleanup();
+              }
+            };
+            const onUp = () => {
+              if (!moved) {
+                // Single click: right-click to show menu options
+                globalThis.getSelection?.()?.removeAllRanges();
+              }
+              cleanup();
+            };
+            const cleanup = () => {
+              globalThis.removeEventListener('pointermove', onMove as unknown as EventListener);
+              globalThis.removeEventListener('pointerup', onUp as unknown as EventListener);
+            };
+            globalThis.addEventListener('pointermove', onMove as unknown as EventListener);
+            globalThis.addEventListener('pointerup', onUp as unknown as EventListener);
+          }}
+        >
+          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-white/95 shadow-lg border border-[#e7e5e4] text-[#c2410c] hover:bg-[#fff7ed] transition-colors backdrop-blur-sm">
+            <Paperclip size={13} />
+          </div>
+        </div>
+      )}
+
       {contextMenu && (
         <div
           className="ctx-menu fixed z-30"
@@ -662,6 +743,20 @@ export function MainCanvas({
           </button>
           <button className="ctx-menu-item" onClick={() => { onExplainSelection(); setContextMenu(null); }}>
             Explain with AI
+          </button>
+          <button className="ctx-menu-item" onClick={() => {
+            const sel = globalThis.getSelection?.();
+            const text = sel?.toString().trim() ?? '';
+            const page = contextMenu?.targetPageNumber;
+            if (text) {
+              globalThis.document?.dispatchEvent(new CustomEvent('text-attachment-drop', {
+                detail: { content: text, page },
+                bubbles: true,
+              }));
+            }
+            setContextMenu(null);
+          }}>
+            Attach to AI Panel
           </button>
         </div>
       )}

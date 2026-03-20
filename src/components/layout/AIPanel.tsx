@@ -5,7 +5,10 @@
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export const aiCardDragState = {
-  payload: null as { messageId: string; content: string; pageHint?: number } | null,
+  payload: null as
+    | { type: 'ai'; messageId: string; content: string; pageHint?: number }
+    | { type: 'note'; content: string; page?: number }
+    | null,
   isDragging: false,
 };
 import { useState, useRef, useEffect, useCallback, useMemo, DragEvent, PointerEvent } from 'react';
@@ -49,6 +52,10 @@ interface AIPanelProps {
   onConfirmRouteAsDoc: () => void;
   onDismissRouteConfirm: () => void;
   pinnedMessageIds: string[];
+  // Attachments
+  attachments: Array<{ id: string; type: 'text' | 'note'; content: string; page?: number }>;
+  onAddAttachment: (attachment: { type: 'text' | 'note'; content: string; page?: number }) => void;
+  onRemoveAttachment: (id: string) => void;
 }
 
 export function AIPanel({
@@ -77,11 +84,15 @@ export function AIPanel({
   onConfirmRouteAsDoc,
   onDismissRouteConfirm,
   pinnedMessageIds,
+  attachments,
+  onAddAttachment,
+  onRemoveAttachment,
 }: AIPanelProps) {
   const [notesView, setNotesView] = useState(false);
   const [input, setInput] = useState('');
   const [inputMode, setInputMode] = useState<ChatInputMode>(defaultInputMode);
   const [hasSelection, setHasSelection] = useState(false);
+  const [isDragOverPanel, setIsDragOverPanel] = useState(false);
 
   useEffect(() => {
     setInputMode(defaultInputMode);
@@ -131,6 +142,24 @@ export function AIPanel({
     return () => globalThis.removeEventListener('ai-open-message', handler as EventListener);
   }, []);
 
+  // Listen for text/note attachments dropped from canvas
+  useEffect(() => {
+    const onTextDrop = (e: Event) => {
+      const ce = e as CustomEvent<{ content: string; page?: number }>;
+      onAddAttachment({ type: 'text', content: ce.detail.content, page: ce.detail.page });
+    };
+    const onNoteDrop = (e: Event) => {
+      const ce = e as CustomEvent<{ content: string; page?: number }>;
+      onAddAttachment({ type: 'note', content: ce.detail.content, page: ce.detail.page });
+    };
+    globalThis.document?.addEventListener('text-attachment-drop', onTextDrop);
+    globalThis.document?.addEventListener('note-attachment-drop', onNoteDrop);
+    return () => {
+      globalThis.document?.removeEventListener('text-attachment-drop', onTextDrop);
+      globalThis.document?.removeEventListener('note-attachment-drop', onNoteDrop);
+    };
+  }, [onAddAttachment]);
+
   const handleMessagesScroll = () => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -138,10 +167,24 @@ export function AIPanel({
     shouldStickToBottomRef.current = distanceToBottom < 72;
   };
 
+  const buildAttachmentContext = (attachments: AIPanelProps['attachments']) => {
+    if (attachments.length === 0) return '';
+    const blocks = attachments.map((a) => {
+      const source = a.page ? `Page ${a.page}` : 'Unknown page';
+      const label = a.type === 'text' ? 'Selected Text' : 'Note';
+      const preview = a.content.length > 200 ? a.content.slice(0, 200) + '…' : a.content;
+      return `[${label} (${source})]\n"${preview}"`;
+    });
+    return `=== Attachments ===\n${blocks.join('\n\n')}\n=== End Attachments ===\n\n`;
+  };
+
   const handleSend = () => {
-    if (input.trim() && !isLoading) {
-      onSendMessage(input.trim(), inputMode);
+    if ((input.trim() || attachments.length > 0) && !isLoading) {
+      const contextPrefix = buildAttachmentContext(attachments);
+      onSendMessage(contextPrefix + input.trim(), inputMode);
       setInput('');
+      // Clear attachments after sending
+      attachments.forEach((a) => onRemoveAttachment(a.id));
     }
   };
 
@@ -277,7 +320,11 @@ export function AIPanel({
 
   // Store the message being dragged in a ref so the canvas can read it on drop.
   return (
-    <aside className="w-[380px] border-l border-[#e7e5e4]/60 bg-gradient-to-b from-[#fafaf9] to-[#fafaf9] flex flex-col select-none">
+    <aside
+      className={`w-[380px] border-l border-[#e7e5e4]/60 bg-gradient-to-b from-[#fafaf9] to-[#fafaf9] flex flex-col select-none ${isDragOverPanel ? 'ring-2 ring-[#c2410c] ring-inset bg-[#fff7ed]/30' : ''}`}
+      onPointerEnter={() => setIsDragOverPanel(true)}
+      onPointerLeave={() => setIsDragOverPanel(false)}
+    >
       {/* Tab Bar */}
       <div className="flex items-center border-b border-[#e7e5e4]/60 px-1">
         <button
@@ -429,6 +476,7 @@ export function AIPanel({
                             title="Drag to canvas"
                             onDragStart={(e: DragEvent<HTMLElement>) => {
                               const payload = {
+                                type: 'ai' as const,
                                 messageId: msg.id!,
                                 content: msg.content,
                                 pageHint: extractFirstCitationPage(msg.content),
@@ -443,6 +491,7 @@ export function AIPanel({
                             onPointerDown={(e: PointerEvent<HTMLElement>) => {
                               if (e.button !== 0) return;
                               aiCardDragState.payload = {
+                                type: 'ai' as const,
                                 messageId: msg.id!,
                                 content: msg.content,
                                 pageHint: extractFirstCitationPage(msg.content),
@@ -452,8 +501,8 @@ export function AIPanel({
                               // Use document-level listeners — these always fire in Tauri WebView
                               const onPointerMove = () => {};
                               const onPointerUp = (ev: PointerEvent) => {
-                                globalThis.document?.removeEventListener('pointermove', onPointerMove);
-                                globalThis.document?.removeEventListener('pointerup', onPointerUp);
+                                globalThis.document?.removeEventListener('pointermove', onPointerMove as unknown as EventListener);
+                                globalThis.document?.removeEventListener('pointerup', onPointerUp as unknown as EventListener);
                                 if (!aiCardDragState.payload) return;
                                 const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
                                 if (scrollEl) {
@@ -469,8 +518,8 @@ export function AIPanel({
                                 aiCardDragState.payload = null;
                                 aiCardDragState.isDragging = false;
                               };
-                              globalThis.document?.addEventListener('pointermove', onPointerMove);
-                              globalThis.document?.addEventListener('pointerup', onPointerUp);
+                              globalThis.document?.addEventListener('pointermove', onPointerMove as unknown as EventListener);
+                              globalThis.document?.addEventListener('pointerup', onPointerUp as unknown as EventListener);
                             }}
                           >
                             <GripVertical size={13} />
@@ -537,6 +586,30 @@ export function AIPanel({
 
       {/* Input area */}
       <div className="px-3 py-3 border-t border-[#e7e5e4]/60 bg-white/60 backdrop-blur-lg">
+        {/* Attachment chips */}
+        {attachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {attachments.map((a) => (
+              <div
+                key={a.id}
+                className="inline-flex items-center gap-1 rounded-full bg-[#fff7ed] border border-[#fed7aa] px-2 py-1 text-[11px] text-[#9a3412] max-w-[220px] group"
+              >
+                <span className="shrink-0 font-medium text-[10px]">
+                  {a.type === 'text' ? '📝' : '📌'}{a.page ? ` P.${a.page}` : ''}
+                </span>
+                <span className="truncate flex-1">{a.content.slice(0, 60)}{a.content.length > 60 ? '…' : ''}</span>
+                <button
+                  type="button"
+                  className="shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-[#c2410c] hover:bg-[#fed7aa] transition-colors opacity-0 group-hover:opacity-100"
+                  onClick={() => onRemoveAttachment(a.id)}
+                  title="Remove attachment"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {pendingRouteConfirmation && !isLoading && (
           <div className="mb-2.5 rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2.5 text-[11px] text-amber-800">
             <div className="flex items-start justify-between gap-2">

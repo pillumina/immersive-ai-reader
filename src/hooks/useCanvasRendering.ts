@@ -3,6 +3,7 @@ import { annotationCommands } from '@/lib/tauri';
 import { PdfOutlineItem, renderPagesToContainer } from '@/lib/pdf/renderer';
 import { PDFDocument } from '@/types/document';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
+import { aiCardDragState } from '@/components/layout/AIPanel';
 
 export function useCanvasRendering(
   scrollContainerId: string,
@@ -21,23 +22,6 @@ export function useCanvasRendering(
   const NOTE_PREFIX = '__NOTE__|';
   const AI_CARD_PREFIX = '__AICARD__|';
 
-  const deleteNoteCardFromDom = (annotationId: string) => {
-    const containerEl = globalThis.document?.getElementById(containerId);
-    if (!containerEl) return;
-    const card = containerEl.querySelector<HTMLElement>(`.pdf-note-card[data-note-annotation-id="${annotationId}"]`);
-    if (card) card.remove();
-  };
-
-  // Listen for note-card-delete events from canvas note delete buttons
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { annotationId } = (e as CustomEvent<{ annotationId: string }>).detail;
-      deleteNoteCardFromDom(annotationId);
-    };
-    globalThis.document?.addEventListener('note-card-delete', handler);
-    return () => globalThis.document?.removeEventListener('note-card-delete', handler);
-  }, []);
-
   const clearHighlights = () => {
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(containerEl instanceof HTMLElement)) return;
@@ -50,16 +34,6 @@ export function useCanvasRendering(
     });
     containerEl.querySelectorAll('.pdf-highlight').forEach((el) => el.remove());
   };
-
-  // Listen for note-card-delete events from canvas note delete buttons
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { annotationId } = (e as CustomEvent<{ annotationId: string }>).detail;
-      deleteNoteCardFromDom(annotationId);
-    };
-    globalThis.document?.addEventListener('note-card-delete', handler);
-    return () => globalThis.document?.removeEventListener('note-card-delete', handler);
-  }, []);
 
   const renderHighlight = (
     pageNumber: number,
@@ -238,12 +212,10 @@ export function useCanvasRendering(
       deleteBtn.addEventListener('click', (evt) => {
         evt.stopPropagation();
         const annotationId = options?.annotationId;
+        // Remove card from DOM immediately (synchronous)
+        card.remove();
+        // Notify App to delete from DB
         if (annotationId) {
-          globalThis.document?.dispatchEvent(new CustomEvent('note-card-delete', {
-            detail: { annotationId },
-            bubbles: true,
-          }));
-          // Dispatch to App level for DB deletion
           globalThis.document?.dispatchEvent(new CustomEvent('note-card-delete-app', {
             detail: { annotationId },
             bubbles: true,
@@ -271,25 +243,48 @@ export function useCanvasRendering(
         const origTop = parseFloat(card.style.top || '0');
         let moved = false;
 
+        // Set note drag state for AIPanel to detect
+        aiCardDragState.payload = { type: 'note', content, page: pageNumber };
+        aiCardDragState.isDragging = true;
+
         const onMove = (ev: PointerEvent) => {
-          moved = true;
+          if (!moved && (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3)) {
+            moved = true;
+          }
           card.style.cursor = 'grabbing';
           const dx = ev.clientX - startX;
           const dy = ev.clientY - startY;
           card.style.left = `${Math.max(origLeft + dx, 0)}px`;
           card.style.top = `${Math.max(origTop + dy, 0)}px`;
+
+          // Check if over AIPanel — dispatch note-attachment-drop
+          const panelEl = globalThis.document?.querySelector<HTMLElement>('#ai-panel-scroll, aside[class*="flex-col"]');
+          if (panelEl && ev.clientX >= panelEl.getBoundingClientRect().left) {
+            globalThis.document?.dispatchEvent(new CustomEvent('note-attachment-drop', {
+              detail: { content, page: pageNumber },
+              bubbles: true,
+            }));
+            aiCardDragState.payload = null;
+            aiCardDragState.isDragging = false;
+            cleanup();
+          }
         };
         const onUp = () => {
-          globalThis.document?.removeEventListener('pointermove', onMove);
-          globalThis.document?.removeEventListener('pointerup', onUp);
+          cleanup();
           card.style.cursor = 'default';
-          if (moved && options?.annotationId) {
+          if (!moved && options?.annotationId) {
             void annotationCommands.updatePosition(
               options.annotationId,
               parseFloat(card.style.left || '0'),
               parseFloat(card.style.top || '0')
             );
           }
+          aiCardDragState.payload = null;
+          aiCardDragState.isDragging = false;
+        };
+        const cleanup = () => {
+          globalThis.document?.removeEventListener('pointermove', onMove);
+          globalThis.document?.removeEventListener('pointerup', onUp);
         };
         globalThis.document?.addEventListener('pointermove', onMove);
         globalThis.document?.addEventListener('pointerup', onUp);
