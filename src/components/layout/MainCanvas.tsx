@@ -1,5 +1,5 @@
 import { ZoomIn, ZoomOut, X } from 'lucide-react';
-import { DragEvent, MouseEvent, WheelEvent, useEffect, useState } from 'react';
+import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PdfOutlineItem } from '@/lib/pdf/renderer';
 import { aiCardDragState } from '@/components/layout/AIPanel';
@@ -276,6 +276,16 @@ export function MainCanvas({
     targetContainer.appendChild(stage);
   }, [splitMode, comparePage, hasDocument, totalPages, currentPage, compareZoom]);
 
+  // Listen for custom ai-card-drop events dispatched by AIPanel pointer events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ payload: { messageId: string; content: string; pageHint?: number }; clientX: number; clientY: number }>;
+      onDropAICard(ce.detail.payload, ce.detail.clientX, ce.detail.clientY);
+    };
+    globalThis.document?.addEventListener('ai-card-drop', handler);
+    return () => globalThis.document?.removeEventListener('ai-card-drop', handler);
+  }, [onDropAICard]);
+
   const handleComparePageSubmit = () => {
     const parsed = Number(comparePageInput);
     if (!Number.isFinite(parsed)) return;
@@ -293,25 +303,28 @@ export function MainCanvas({
     setContextMenu({ x: event.clientX, y: event.clientY });
   };
 
+  // Pointer-based drag feedback — fires when mouse enters/leaves during AI card drag
+  const handlePointerEnter = (_e: PointerEvent<HTMLDivElement>) => {
+    if (aiCardDragState.payload) setIsAICardDragOver(true);
+  };
+  const handlePointerLeave = () => {
+    if (aiCardDragState.payload) setIsAICardDragOver(false);
+  };
+
+  // Fallback for browser dev (HTML5 DnD still works there)
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     setIsAICardDragOver(true);
   };
-
   const handleDragLeave = () => {
     setIsAICardDragOver(false);
   };
-
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsAICardDragOver(false);
-
-    // Try module-level state first (works in Tauri WebView),
-    // fall back to dataTransfer for browser development.
     let payload: { messageId: string; content: string; pageHint?: number } | null =
       aiCardDragState.payload;
-
     if (!payload) {
       let raw = event.dataTransfer.getData('application/x-ai-card');
       if (!raw) {
@@ -322,19 +335,17 @@ export function MainCanvas({
         try {
           const parsed = JSON.parse(raw);
           if (parsed.messageId && parsed.content) payload = parsed;
-        } catch {
-          // ignore malformed payload
-        }
+        } catch { /* ignore */ }
       }
     }
-
-    if (!payload) return;
-    onDropAICard(
-      { messageId: payload.messageId, content: payload.content, pageHint: payload.pageHint },
-      event.clientX,
-      event.clientY
-    );
-    aiCardDragState.payload = null;
+    if (payload) {
+      onDropAICard(
+        { messageId: payload.messageId, content: payload.content, pageHint: payload.pageHint },
+        event.clientX,
+        event.clientY
+      );
+      aiCardDragState.payload = null;
+    }
   };
 
   // Canvas card drag handlers
@@ -421,6 +432,8 @@ export function MainCanvas({
           className={`flex-1 min-w-0 overflow-auto p-4 ${isAICardDragOver ? 'ai-card-drop-active' : ''}`}
           onWheel={handleWheel}
           onContextMenu={handleContextMenu}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}

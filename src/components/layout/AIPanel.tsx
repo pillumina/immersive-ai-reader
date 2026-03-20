@@ -7,7 +7,7 @@
 export const aiCardDragState = {
   payload: null as { messageId: string; content: string; pageHint?: number } | null,
 };
-import { useState, useRef, useEffect, useCallback, useMemo, DragEvent } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Check, Copy, GripVertical, Loader2, Pin, RotateCcw, Square, Send, MessageSquare, StickyNote, Search, BadgeCheck } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -373,16 +373,37 @@ export function AIPanel({
             <div
               key={msg.id || idx}
               data-ai-message-id={msg.id || ''}
-              draggable={msg.role === 'assistant' && !!msg.id && !isLoading ? true : undefined}
-              onDragStart={msg.role === 'assistant' && !!msg.id && !isLoading ? (e: DragEvent<HTMLElement>) => {
-                const payload = { messageId: msg.id!, content: msg.content, pageHint: extractFirstCitationPage(msg.content) };
-                aiCardDragState.payload = payload;
-                // Also set dataTransfer for browser dev; canvas reads aiCardDragState in Tauri
-                try {
-                  e.dataTransfer.setData('application/x-ai-card', JSON.stringify(payload));
-                  e.dataTransfer.setData('text/plain', `__AICARD__${JSON.stringify(payload)}`);
-                  e.dataTransfer.effectAllowed = 'copy';
-                } catch { /* dataTransfer may be unavailable in some contexts */ }
+              onPointerDown={msg.role === 'assistant' && !!msg.id && !isLoading ? (e: React.PointerEvent<HTMLElement>) => {
+                if (e.button !== 0) return;
+                // Record payload; will be delivered to canvas on pointer-up
+                aiCardDragState.payload = {
+                  messageId: msg.id!,
+                  content: msg.content,
+                  pageHint: extractFirstCitationPage(msg.content),
+                };
+                // Capture pointer so we receive pointerup even if pointer leaves the element
+                (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+              } : undefined}
+              onPointerUp={msg.role === 'assistant' && !!msg.id && !isLoading ? (e: React.PointerEvent<HTMLElement>) => {
+                (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                // Check if the pointer was released over the canvas
+                const canvasEl = globalThis.document?.querySelector('[data-pdf-canvas]');
+                if (!canvasEl || !aiCardDragState.payload) return;
+                const rect = canvasEl.getBoundingClientRect();
+                const { clientX: cx, clientY: cy } = e;
+                if (cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) {
+                  // Pointer released over canvas — dispatch a custom event with coords
+                  const dropEvent = new CustomEvent('ai-card-drop', {
+                    detail: {
+                      payload: aiCardDragState.payload,
+                      clientX: cx,
+                      clientY: cy,
+                    },
+                    bubbles: true,
+                  });
+                  canvasEl.dispatchEvent(dropEvent);
+                }
+                aiCardDragState.payload = null;
               } : undefined}
               className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
