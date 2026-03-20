@@ -276,6 +276,15 @@ export function AIPanel({
     event.dataTransfer.setData('application/x-ai-card', json);
     event.dataTransfer.setData('text/plain', `__AICARD__${json}`);
     event.dataTransfer.effectAllowed = 'copy';
+    // Suppress the default drag ghost so we can use a custom preview.
+    if (event.dataTransfer.setDragImage) {
+      const ghost = document.createElement('div');
+      ghost.style.cssText = 'position:fixed;top:-999px;padding:8px 12px;background:#c2410c;color:#fff;font-size:12px;border-radius:8px;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis;';
+      ghost.textContent = msg.content.slice(0, 80) + (msg.content.length > 80 ? '…' : '');
+      document.body.appendChild(ghost);
+      event.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 16);
+      requestAnimationFrame(() => document.body.removeChild(ghost));
+    }
   };
 
   return (
@@ -376,7 +385,9 @@ export function AIPanel({
             <div
               key={msg.id || idx}
               data-ai-message-id={msg.id || ''}
-              className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              draggable={msg.role === 'assistant' && !!msg.id && !isLoading}
+              onDragStart={msg.role === 'assistant' && !!msg.id ? (e) => handleDragAICard(e, msg) : undefined}
+              className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${msg.role === 'assistant' && !!msg.id && !isLoading ? 'cursor-grab active:cursor-grabbing' : ''}`}
             >
               <div className={`ai-msg group max-w-[85%] p-3 text-sm rounded-2xl leading-relaxed shadow-sm ${
                 msg.role === 'user'
@@ -425,11 +436,6 @@ export function AIPanel({
                         </button>
                         {msg.id && (
                           <div
-                            role="button"
-                            tabIndex={0}
-                            draggable={!isLoading}
-                            onDragStart={(e) => handleDragAICard(e, msg)}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.preventDefault(); }}
                             className="ai-msg-action cursor-grab active:cursor-grabbing"
                             title="Drag to canvas"
                           >

@@ -3,6 +3,7 @@ import { Plus, Trash2, MoreHorizontal, Clock, FolderOpen, X, Pencil, ChevronDown
 import { PDFDocument } from '@/types/document';
 import type { Library as LibraryType } from '@/types/document';
 import { tagCommands } from '@/lib/tauri';
+import { Logo } from '@/components/ui/Logo';
 
 type ViewMode = 'list' | 'grid';
 
@@ -76,17 +77,27 @@ function LibraryList({
 
   return (
     <div className="library-list-panel">
-      {/* Panel header with settings */}
-      <div className="library-section-header flex items-center justify-between px-3 pt-3 pb-2 border-b border-[#f5f5f4]">
-        <span className="text-[10px] font-semibold text-[#a8a29e] uppercase tracking-wider">Library</span>
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          className="w-6 h-6 rounded-md flex items-center justify-center text-[#a8a29e] hover:bg-[#f5f5f4] hover:text-[#78716c] transition-colors"
-          title="Settings"
-        >
-          <Settings size={13} />
-        </button>
+      {/* Panel header with branding */}
+      <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-[#f5f5f4]">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-[#c2410c] flex items-center justify-center shrink-0">
+            <Logo size={16} variant="dark" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[13px] font-semibold text-[#1c1917] leading-tight truncate">Immersive Reader</h1>
+            <p className="text-[10px] text-[#78716c] leading-none">Document + AI</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#78716c] hover:bg-[#f5f5f4] hover:text-[#1c1917] transition-colors"
+            title="Settings"
+          >
+            <Settings size={15} />
+          </button>
+        </div>
       </div>
 
       {/* Recent section */}
