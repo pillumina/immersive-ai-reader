@@ -152,8 +152,26 @@ export function useCanvasRendering(
       displayEl.innerHTML = simpleMarkdownToHtml(content);
       card.appendChild(displayEl);
 
+      const statusEl = document.createElement('div');
+      statusEl.className = 'note-card-status';
+      statusEl.style.cssText = 'font-size:10px;opacity:0.55;margin-top:4px;color:#94a3b8;height:14px;';
+      card.appendChild(statusEl);
+
       let currentContent = content;
       let editing = false;
+      let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const doSave = async (text: string) => {
+        const annotationId = card.dataset.noteAnnotationId;
+        if (!annotationId) return;
+        const selectedPart = card.dataset.noteSelectedText || '';
+        const fullText = `${NOTE_PREFIX}${text}${selectedPart ? `\n\n${selectedPart}` : ''}`;
+        try {
+          await annotationCommands.updateText(annotationId, fullText);
+        } catch {
+          // silent – local display is already updated
+        }
+      };
 
       const enterEdit = () => {
         if (editing) return;
@@ -162,6 +180,7 @@ export function useCanvasRendering(
         textarea.className = 'note-card-editor';
         textarea.value = currentContent;
         displayEl.style.display = 'none';
+        statusEl.textContent = '';
         card.appendChild(textarea);
         textarea.focus();
         textarea.setSelectionRange(textarea.value.length, textarea.value.length);
@@ -169,31 +188,44 @@ export function useCanvasRendering(
         const saveAndExit = async () => {
           if (!editing) return;
           editing = false;
+          if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
           const newContent = textarea.value.trim();
           textarea.remove();
           displayEl.style.display = '';
           if (newContent && newContent !== currentContent) {
             currentContent = newContent;
             displayEl.innerHTML = simpleMarkdownToHtml(newContent);
-            const annotationId = card.dataset.noteAnnotationId;
-            if (annotationId) {
-              const selectedPart = card.dataset.noteSelectedText || '';
-              const fullText = `${NOTE_PREFIX}${newContent}${selectedPart ? `\n\n${selectedPart}` : ''}`;
-              try {
-                await annotationCommands.updateText(annotationId, fullText);
-              } catch {
-                // silent – local display is already updated
-              }
-            }
+            statusEl.textContent = 'saving...';
+            await doSave(newContent);
+            statusEl.textContent = '';
+          } else {
+            statusEl.textContent = '';
           }
         };
 
+        textarea.addEventListener('input', () => {
+          const val = textarea.value.trim();
+          if (saveTimer) clearTimeout(saveTimer);
+          if (val !== currentContent) {
+            statusEl.textContent = 'saving...';
+            saveTimer = setTimeout(async () => {
+              if (textarea.value.trim() !== currentContent) {
+                await doSave(textarea.value.trim());
+                currentContent = textarea.value.trim();
+                displayEl.innerHTML = simpleMarkdownToHtml(currentContent);
+              }
+              statusEl.textContent = '';
+            }, 500);
+          }
+        });
         textarea.addEventListener('blur', () => { void saveAndExit(); });
         textarea.addEventListener('keydown', (evt) => {
           if (evt.key === 'Escape') {
             editing = false;
+            if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
             textarea.remove();
             displayEl.style.display = '';
+            statusEl.textContent = '';
           }
           if (evt.key === 'Enter' && (evt.ctrlKey || evt.metaKey)) {
             void saveAndExit();
