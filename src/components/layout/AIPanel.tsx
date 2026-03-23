@@ -351,7 +351,6 @@ export function AIPanel({
           onJumpToPage={onJumpToPage}
           onDeleteNote={onDeleteNote}
           onUpdateNote={onUpdateNote}
-          onClose={() => setNotesView(false)}
         />
       ) : (
         <>
@@ -407,7 +406,7 @@ export function AIPanel({
             <p className="text-[11px] text-[#e7e5e4] mt-1">Or try the quick actions above</p>
           </div>
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-4">
             {messages.map((msg, idx) => {
               const prev = messages[idx - 1];
               const isLastInGroup = !prev || prev.role !== msg.role;

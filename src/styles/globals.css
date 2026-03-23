@@ -108,7 +108,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* GPU-accelerated scroll containers */
 #pdf-scroll-container,
-.flex-1.overflow-y-auto {
+.overflow-y-auto {
   will-change: scroll-position;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;

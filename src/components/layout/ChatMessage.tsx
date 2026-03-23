@@ -146,7 +146,7 @@ export function ChatMessage({
       style={!isLastInGroup ? { marginTop: '-4px' } : undefined}
     >
       <div
-        className={`ai-msg group relative max-w-[85%] p-4 rounded-2xl leading-loose shadow-sm transition-shadow duration-200 select-text ${bubbleClass} ${
+        className={`ai-msg group relative max-w-[85%] p-3 text-[13px] leading-relaxed shadow-sm transition-shadow duration-200 select-text ${bubbleClass} ${
           focusedMessageId && msg.id === focusedMessageId ? 'ai-msg-focus-ring' : ''
         }`}
       >
