@@ -122,7 +122,8 @@ export function AIPanel({
   const shouldStickToBottomRef = useRef(true);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [focusedMessageId, setFocusedMessageId] = useState<string | null>(null);
-  const pinnedIdSet = new Set(pinnedMessageIds);
+  const pinnedIdSet = useMemo(() => new Set(pinnedMessageIds), [pinnedMessageIds]);
+
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -202,6 +203,28 @@ export function AIPanel({
       // ignore
     }
   }, []);
+  const messageElements = useMemo(() => messages.map((msg, idx) => {
+    const prev = messages[idx - 1];
+    const isLastInGroup = !prev || prev.role !== msg.role;
+    return (
+      <ChatMessage
+        key={msg.id || idx}
+        msg={msg}
+        isLastInGroup={isLastInGroup}
+        isLoading={isLoading}
+        pinnedIdSet={pinnedIdSet}
+        focusedMessageId={focusedMessageId}
+        copiedMessageId={copiedMessageId}
+        onCopy={copyMessage}
+        onPin={onPinToCanvas}
+        onUnpin={onUnpinFromCanvas}
+        onLocate={onLocateCanvasCard}
+        onSendToRight={onSendToRightPane}
+        onRetry={onRetryMessage}
+        onJumpToCitation={onJumpToCitation}
+      />
+    );
+  }), [messages, isLoading, pinnedIdSet, focusedMessageId, copiedMessageId, copyMessage, onPinToCanvas, onUnpinFromCanvas, onLocateCanvasCard, onSendToRightPane, onRetryMessage, onJumpToCitation]);
 
   // Store the message being dragged in a ref so the canvas can read it on drop.
   return (
@@ -398,28 +421,7 @@ export function AIPanel({
           </div>
         ) : (
           <div className="space-y-4">
-            {messages.map((msg, idx) => {
-              const prev = messages[idx - 1];
-              const isLastInGroup = !prev || prev.role !== msg.role;
-              return (
-                <ChatMessage
-                  key={msg.id || idx}
-                  msg={msg}
-                  isLastInGroup={isLastInGroup}
-                  isLoading={isLoading}
-                  pinnedIdSet={pinnedIdSet}
-                  focusedMessageId={focusedMessageId}
-                  copiedMessageId={copiedMessageId}
-                  onCopy={copyMessage}
-                  onPin={onPinToCanvas}
-                  onUnpin={onUnpinFromCanvas}
-                  onLocate={onLocateCanvasCard}
-                  onSendToRight={onSendToRightPane}
-                  onRetry={onRetryMessage}
-                  onJumpToCitation={onJumpToCitation}
-                />
-              );
-            })}
+            {messageElements}
           </div>
         )}
         <div ref={messagesEndRef} />
