@@ -23,7 +23,7 @@ import { ChatMessage } from './ChatMessage';
 interface AIPanelProps {
   messages: Message[];
   isLoading: boolean;
-  onSendMessage: (content: string, mode?: ChatInputMode) => void;
+  onSendMessage: (content: string, mode?: ChatInputMode, attachments?: Array<{ id: string; type: 'text' | 'note'; content: string; page?: number }>) => void;
   onExplainTerm: () => void;
   onRetryMessage: (messageId: string, mode?: ChatInputMode) => void;
   onStopGeneration: () => void;
@@ -53,7 +53,6 @@ interface AIPanelProps {
   pinnedMessageIds: string[];
   // Attachments
   attachments: Array<{ id: string; type: 'text' | 'note'; content: string; page?: number }>;
-  onAddAttachment: (attachment: { type: 'text' | 'note'; content: string; page?: number }) => void;
   onRemoveAttachment: (id: string) => void;
   // Panel resize & collapse
   width?: number;
@@ -89,7 +88,6 @@ export function AIPanel({
   onDismissRouteConfirm,
   pinnedMessageIds,
   attachments,
-  onAddAttachment,
   onRemoveAttachment,
   width = 380,
   isCollapsed = false,
@@ -153,24 +151,6 @@ export function AIPanel({
     return () => globalThis.removeEventListener('ai-open-message', handler as EventListener);
   }, []);
 
-  // Listen for text/note attachments dropped from canvas
-  useEffect(() => {
-    const onTextDrop = (e: Event) => {
-      const ce = e as CustomEvent<{ content: string; page?: number }>;
-      onAddAttachment({ type: 'text', content: ce.detail.content, page: ce.detail.page });
-    };
-    const onNoteDrop = (e: Event) => {
-      const ce = e as CustomEvent<{ content: string; page?: number }>;
-      onAddAttachment({ type: 'note', content: ce.detail.content, page: ce.detail.page });
-    };
-    globalThis.document?.addEventListener('text-attachment-drop', onTextDrop);
-    globalThis.document?.addEventListener('note-attachment-drop', onNoteDrop);
-    return () => {
-      globalThis.document?.removeEventListener('text-attachment-drop', onTextDrop);
-      globalThis.document?.removeEventListener('note-attachment-drop', onNoteDrop);
-    };
-  }, [onAddAttachment]);
-
   const handleMessagesScroll = () => {
     const container = messagesContainerRef.current;
     if (!container) return;
@@ -178,21 +158,10 @@ export function AIPanel({
     shouldStickToBottomRef.current = distanceToBottom < 72;
   };
 
-  const buildAttachmentContext = (attachments: AIPanelProps['attachments']) => {
-    if (attachments.length === 0) return '';
-    const blocks = attachments.map((a) => {
-      const source = a.page ? `Page ${a.page}` : 'Unknown page';
-      const label = a.type === 'text' ? 'Selected Text' : 'Note';
-      const preview = a.content.length > 200 ? a.content.slice(0, 200) + '…' : a.content;
-      return `[${label} (${source})]\n"${preview}"`;
-    });
-    return `=== Attachments ===\n${blocks.join('\n\n')}\n=== End Attachments ===\n\n`;
-  };
-
   const handleSend = () => {
-    if ((input.trim() || attachments.length > 0) && !isLoading) {
-      const contextPrefix = buildAttachmentContext(attachments);
-      onSendMessage(contextPrefix + input.trim(), inputMode);
+    const cleanInput = input.trim();
+    if ((cleanInput || attachments.length > 0) && !isLoading) {
+      onSendMessage(cleanInput, inputMode, attachments);
       setInput('');
       // Clear attachments after sending
       attachments.forEach((a) => onRemoveAttachment(a.id));
@@ -464,12 +433,12 @@ export function AIPanel({
             {attachments.map((a) => (
               <div
                 key={a.id}
-                className="inline-flex items-center gap-1 rounded-full bg-[#fff7ed] border border-[#fed7aa] px-2 py-1 text-[11px] text-[#9a3412] max-w-[220px] group"
+                className="inline-flex items-center gap-1 rounded-full bg-[#fff7ed] border border-[#fed7aa] px-2 py-1 text-[11px] text-[#9a3412] max-w-[300px] group"
               >
                 <span className="shrink-0 font-medium text-[10px]">
                   {a.type === 'text' ? '📝' : '📌'}{a.page ? ` P.${a.page}` : ''}
                 </span>
-                <span className="truncate flex-1">{a.content.slice(0, 60)}{a.content.length > 60 ? '…' : ''}</span>
+                <span className="truncate flex-1" title={a.content}>{a.content.slice(0, 120)}{a.content.length > 120 ? '…' : ''}</span>
                 <button
                   type="button"
                   className="shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-[#c2410c] hover:bg-[#fed7aa] transition-colors opacity-0 group-hover:opacity-100"

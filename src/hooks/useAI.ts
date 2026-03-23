@@ -149,7 +149,14 @@ function buildPreferenceStats(history: PreferenceMode[]): RoutePreferenceStats {
   return { chat, doc, total: history.length };
 }
 
-function buildContextAwarePrompt(userInput: string, context: AIContext, plan: RequestPlan): string {
+export type Attachment = { id: string; type: 'text' | 'note'; content: string; page?: number };
+
+function buildContextAwarePrompt(
+  userInput: string,
+  context: AIContext,
+  plan: RequestPlan,
+  attachments: Attachment[] = []
+): string {
   const contextLines: string[] = [];
   if (context.documentTitle) contextLines.push(`Document: ${context.documentTitle}`);
   if (context.currentPage && Number.isFinite(context.currentPage)) {
@@ -160,26 +167,34 @@ function buildContextAwarePrompt(userInput: string, context: AIContext, plan: Re
     contextLines.push(`Selected text:\n${context.selectedText.trim().slice(0, plan.selectedTextLimit)}`);
   }
 
+  const attachmentLines = attachments.map((a) => {
+    const source = a.page ? `Page ${a.page}` : 'Unknown page';
+    const label = a.type === 'text' ? 'Selected Text' : 'Note';
+    return `[${label} (${source})]\n"${a.content}"`;
+  });
+
   const citationInstruction = 'Use citations [ref:pN] for factual statements.';
   const modeInstruction = plan.mode === 'term_light'
     ? 'Task mode: term explain. Keep answer concise and structured: definition, intuition, and one practical example.'
     : plan.mode === 'deep'
       ? 'Task mode: deep analysis. Provide detailed reasoning, assumptions, and limitations.'
       : 'Task mode: balanced answer.';
-  if (contextLines.length === 0) {
-    return `${modeInstruction}\n${userInput}\n\n${citationInstruction}`;
+
+  const parts: string[] = [modeInstruction];
+
+  if (contextLines.length > 0 || attachmentLines.length > 0) {
+    parts.push('[Reading Context]');
+    if (contextLines.length > 0) parts.push(...contextLines);
+    if (attachmentLines.length > 0) {
+      parts.push('[Attached References]');
+      parts.push(...attachmentLines);
+    }
+    parts.push('');
   }
 
-  return [
-    modeInstruction,
-    '[Reading Context]',
-    ...contextLines,
-    '',
-    '[User Question]',
-    userInput,
-    '',
-    citationInstruction,
-  ].join('\n');
+  parts.push('[User Question]', userInput, '', citationInstruction);
+
+  return parts.join('\n');
 }
 
 function ensureFallbackCitation(content: string, currentPage?: number): string {
@@ -581,7 +596,7 @@ export function useAI(
     []
   );
 
-  const sendMessage = useCallback(async (content: string, mode: RequestMode = 'auto') => {
+  const sendMessage = useCallback(async (content: string, mode: RequestMode = 'auto', attachments: Attachment[] = []) => {
     const cleanContent = content.trim();
     if (!cleanContent) return;
     if (!aiConfig.apiKey) {
@@ -671,8 +686,10 @@ export function useAI(
       });
 
       const prompt = isDocRoute
-        ? buildContextAwarePrompt(cleanContent, promptContext, plan)
-        : cleanContent;
+        ? buildContextAwarePrompt(cleanContent, promptContext, plan, attachments)
+        : (attachments.length > 0
+            ? buildContextAwarePrompt(cleanContent, { selectedText: attachments.map(a => a.content).join('\n\n') }, plan)
+            : cleanContent);
       const startedAt = Date.now();
       const historyForModel = buildHistoryForModel([...messages, userMessage], plan.historyWindow);
       const cacheKey = buildCacheKey(

@@ -828,7 +828,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
               isLoading={aiLoading}
               showPerfHints={uiSettings.showChatPerfHints}
               defaultInputMode={uiSettings.chatInputModeDefault}
-              onSendMessage={(content, mode) => { void sendMessage(content, mode || 'auto'); }}
+              onSendMessage={(content, mode, attachments) => { void sendMessage(content, mode || 'auto', attachments); }}
               onExplainTerm={() => { void handleExplainTerm(); }}
               onRetryMessage={(messageId, mode) => { void retryAssistantMessage(messageId, mode); }}
               onStopGeneration={stopGeneration}
@@ -859,7 +859,6 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
               onDismissRouteConfirm={dismissPendingRoute}
               pinnedMessageIds={pinnedMessageIds}
               attachments={attachments}
-              onAddAttachment={(a) => setAttachments((prev) => [...prev, { ...a, id: crypto.randomUUID() }])}
               onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
               width={panelWidth}
               isCollapsed={isPanelCollapsed}
