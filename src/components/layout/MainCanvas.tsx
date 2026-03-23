@@ -1,8 +1,9 @@
 import { ZoomIn, ZoomOut, X, Paperclip } from 'lucide-react';
-import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState } from 'react';
+import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PdfOutlineItem } from '@/lib/pdf/renderer';
 import { aiCardDragState } from '@/components/layout/AIPanel';
+import { pdfjsLib } from '@/lib/pdf/pdfjs';
 
 interface MainCanvasProps {
   zoomLevel: number;
@@ -30,6 +31,7 @@ interface MainCanvasProps {
     nonce: number;
   } | null;
   onSplitModeChange?: (active: boolean) => void;
+  pdfFileBlob?: Blob | null;
 }
 
 export function MainCanvas({
@@ -53,6 +55,7 @@ export function MainCanvas({
   comparePageSignal,
   comparePaneCommand,
   onSplitModeChange,
+  pdfFileBlob,
 }: MainCanvasProps) {
   const [tocOpen, setTocOpen] = useState(false);
   const [tocQuery, setTocQuery] = useState('');
@@ -69,6 +72,10 @@ export function MainCanvas({
   const [compareHistoryIndex, setCompareHistoryIndex] = useState(-1);
   const [splitReason, setSplitReason] = useState<'evidence' | 'reference' | 'compare'>('compare');
   const [textHandle, setTextHandle] = useState<{ x: number; y: number; page?: number } | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchResultPage, setSearchResultPage] = useState<number | null>(null);
 
   // Monitor text selection to show floating drag handle
   useEffect(() => {
@@ -100,6 +107,50 @@ export function MainCanvas({
     globalThis.addEventListener('mouseup', update);
     return () => globalThis.removeEventListener('mouseup', update);
   }, []);
+
+  // Cmd/Ctrl+F — toggle search bar.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const isTyping = (el: EventTarget | null): boolean => {
+        if (!(el instanceof HTMLElement)) return false;
+        const tag = el.tagName.toLowerCase();
+        return tag === 'input' || tag === 'textarea' || el.isContentEditable;
+      };
+      if (isTyping(e.target)) return;
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+        if (!searchOpen) setSearchQuery('');
+      }
+    };
+    globalThis.addEventListener('keydown', handler);
+    return () => globalThis.removeEventListener('keydown', handler);
+  }, [searchOpen]);
+
+  // Search PDF text across all pages.
+  const searchInPDF = useCallback(async (query: string, fileBlob: Blob, total: number) => {
+    if (!query.trim()) { setSearchResultPage(null); return; }
+    setSearchLoading(true);
+    try {
+      const file = fileBlob instanceof File ? fileBlob : new File([fileBlob], 'doc.pdf', { type: 'application/pdf' });
+      const arrayBuffer = await file.arrayBuffer();
+      const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const q = query.toLowerCase();
+      for (let i = 1; i <= Math.min(total, pdfDoc.numPages); i++) {
+        const page = await pdfDoc.getPage(i);
+        const content = await page.getTextContent();
+        const pageText = content.items.map((item: any) => item.str).join(' ');
+        if (pageText.toLowerCase().includes(q)) {
+          setSearchResultPage(i);
+          onJumpToPage(i);
+          setSearchLoading(false);
+          return;
+        }
+      }
+      setSearchResultPage(0); // no match
+    } catch { /* silent */ }
+    setSearchLoading(false);
+  }, [onJumpToPage]);
 
   // Notify parent when split mode changes so it can adjust layout (e.g. hide AI panel).
   useEffect(() => {
@@ -446,6 +497,52 @@ export function MainCanvas({
               title="Open Table of Contents"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+          )}
+          {searchOpen && (
+            <div className="flex items-center gap-1 border border-[#e7e5e4] rounded-lg px-2 py-1 bg-white shadow-sm">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input
+                autoFocus
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  // Trigger search with the current PDF blob — we need it from props
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); }
+                  if (e.key === 'Enter') {
+                    if (pdfFileBlob) void searchInPDF(searchQuery, pdfFileBlob, totalPages);
+                  }
+                }}
+                placeholder="Search…"
+                className="border-none outline-none text-[12px] text-[#444] bg-transparent w-36 placeholder:text-[#c4bdb9]"
+              />
+              {searchLoading ? (
+                <span className="text-[10px] text-[#a8a29e]">…</span>
+              ) : searchResultPage ? (
+                <span className="text-[10px] text-[#0d9488] font-medium">p.{searchResultPage}</span>
+              ) : searchQuery && !searchLoading ? (
+                <span className="text-[10px] text-[#a8a29e]">no match</span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
+                className="text-[#a8a29e] hover:text-[#78716c] transition-colors leading-none"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          {!searchOpen && hasDocument && (
+            <button
+              type="button"
+              className="toolbar-icon-btn"
+              onClick={() => setSearchOpen(true)}
+              title="Search (Ctrl+F)"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </button>
           )}
         </div>

@@ -817,6 +817,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             comparePageSignal={comparePageSignal}
             comparePaneCommand={comparePaneCommand}
             onSplitModeChange={setSplitActive}
+            pdfFileBlob={currentDocument?.fileBlob ?? null}
           />
 
           {!focusMode && !splitActive && (
