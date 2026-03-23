@@ -98,8 +98,18 @@ export function MainCanvas({
               ?.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
               ?.closest('.pdf-page') as HTMLElement | null
           : null;
-        const page = pageEl ? Number(pageEl.dataset.pageNumber || '0') || undefined : undefined;
+        // Guard: only show toolbar when selection is inside a PDF page
+        if (!pageEl) {
+          setTextHandle(null);
+          return;
+        }
+        const page = Number(pageEl.dataset.pageNumber || '0') || undefined;
         const selectedText = sel.toString().trim();
+        // Guard: require meaningful selection text
+        if (!selectedText || selectedText.length < 2) {
+          setTextHandle(null);
+          return;
+        }
         // Position toolbar centered above the selection, offset upward
         const toolbarX = Math.max(8, rect.left + rect.width / 2);
         const toolbarY = Math.max(8, rect.top - 44); // above selection
@@ -564,6 +574,30 @@ export function MainCanvas({
         </div>
       </div>
 
+      {/* Reading progress stats — outside scroll container so it stays visible while scrolling */}
+      {hasDocument && totalPages > 0 && (
+        <div className="flex items-center justify-between mb-1 px-1 flex-shrink-0">
+          <span className="text-[10px] text-[#a8a29e] tabular-nums">
+            第 {currentPage} / {totalPages} 页
+          </span>
+          <span
+            className="text-[10px] text-[#a8a29e] cursor-pointer hover:text-[#78716c] transition-colors"
+            onClick={(e) => {
+              const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
+              if (!scrollEl) return;
+              const scrollRect = scrollEl.getBoundingClientRect();
+              const barWidth = scrollRect.width - 32;
+              const offsetX = e.clientX - scrollRect.left - 16;
+              const ratio = Math.max(0, Math.min(1, offsetX / barWidth));
+              onJumpToPage(Math.max(1, Math.round(ratio * totalPages)));
+            }}
+            title="点击进度条跳转页面"
+          >
+            {Math.round((currentPage / totalPages) * 100)}%
+          </span>
+        </div>
+      )}
+
       <div className="flex-1 min-w-0 flex overflow-hidden">
         <div
           id="pdf-scroll-container"
@@ -578,42 +612,26 @@ export function MainCanvas({
         >
           {hasDocument ? (
             <div className="relative">
-              {/* Reading progress + stats */}
+              {/* Visual progress bar — thin indicator */}
               {totalPages > 0 && (
-                <>
-                  <div className="flex items-center justify-between mb-1.5 px-0.5">
-                    <span className="text-[10px] text-[#a8a29e] tabular-nums">
-                      第 {currentPage} / {totalPages} 页
-                    </span>
-                    <span
-                      className="text-[10px] text-[#a8a29e] cursor-pointer hover:text-[#78716c] transition-colors"
-                      onClick={(e) => {
-                        const bar = (e.currentTarget.parentElement?.nextElementSibling as HTMLElement | null);
-                        if (!bar) return;
-                        const rect = bar.getBoundingClientRect();
-                        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                        onJumpToPage(Math.max(1, Math.round(ratio * totalPages)));
-                      }}
-                      title="点击进度条跳转页面"
-                    >
-                      {Math.round((currentPage / totalPages) * 100)}%
-                    </span>
-                  </div>
+                <div
+                  className="mx-1 mb-2 h-[3px] bg-[#e7e5e4] rounded-full overflow-hidden cursor-pointer"
+                  onClick={(e) => {
+                    const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
+                    if (!scrollEl) return;
+                    const scrollRect = scrollEl.getBoundingClientRect();
+                    const barWidth = scrollRect.width - 32;
+                    const offsetX = e.clientX - scrollRect.left - 16;
+                    const ratio = Math.max(0, Math.min(1, offsetX / barWidth));
+                    onJumpToPage(Math.max(1, Math.round(ratio * totalPages)));
+                  }}
+                  title={`第 ${currentPage} / ${totalPages} 页 — 点击跳转`}
+                >
                   <div
-                    title={`第 ${currentPage} / ${totalPages} 页 — 点击跳转`}
-                    className="sticky top-0 z-10 h-[3px] bg-[#e7e5e4] rounded-full overflow-hidden cursor-pointer"
-                    onClick={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                      onJumpToPage(Math.max(1, Math.round(ratio * totalPages)));
-                    }}
-                  >
-                    <div
-                      className="h-full bg-[#0d9488] rounded-full transition-all duration-200"
-                      style={{ width: `${(currentPage / totalPages) * 100}%` }}
-                    />
-                  </div>
-                </>
+                    className="h-full bg-[#0d9488] rounded-full transition-all duration-200"
+                    style={{ width: `${(currentPage / totalPages) * 100}%` }}
+                  />
+                </div>
               )}
               <div id="pdf-pages-container" className="pdf-pages-container" />
               {isLoading && (
@@ -813,7 +831,7 @@ export function MainCanvas({
       )}
 
       {/* Context toolbar for selected text — iOS/Mac-style inline action bar */}
-      {textHandle && (
+      {textHandle && textHandle.text?.trim() && (
         <>
           {/* Invisible backdrop to catch outside clicks */}
           <div
