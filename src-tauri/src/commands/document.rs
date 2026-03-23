@@ -22,6 +22,7 @@ pub async fn create_document(
             page_count: request.page_count,
             text_content: Some(request.text_content),
             library_id: existing.library_id, // preserve library assignment
+            last_page: existing.last_page,   // preserve reading progress
             created_at: existing.created_at,
             updated_at: chrono::Utc::now().to_rfc3339(),
         };
