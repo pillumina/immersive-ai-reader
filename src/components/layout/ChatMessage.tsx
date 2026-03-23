@@ -34,10 +34,25 @@ function formatTime(msg: Message): string | null {
 }
 
 function extractFirstCitationPage(content: string): number | undefined {
-  const match = content.match(/\[ref:p(\d+)\]|\[p(\d+)\]/i);
-  if (!match) return undefined;
-  const page = Number(match[1] || match[2] || '0');
-  return Number.isFinite(page) && page > 0 ? page : undefined;
+  // Priority order: explicit brackets first, then natural language
+  const patterns = [
+    // [ref:pN] or [pN] — explicit format (highest priority)
+    /\[ref:p(\d+)\]/i,
+    /\[p(\d+)\]/i,
+    // page N / pages N (with optional comma/colon/space)
+    /(?:page|pages|p\.?|pp\.?)\s*:?\s*(\d+)/i,
+    // 第N页 / 第N页 / 见第N页
+    /(?:第|见第|在第)\s*(\d+)\s*页/,
+  ];
+
+  for (const regex of patterns) {
+    const match = content.match(regex);
+    if (match) {
+      const page = Number(match[1] || '0');
+      if (Number.isFinite(page) && page > 0) return page;
+    }
+  }
+  return undefined;
 }
 
 function renderAssistantContent(content: string, isStreaming: boolean, onJumpToCitation: (page: number) => void) {

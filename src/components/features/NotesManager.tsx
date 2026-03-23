@@ -136,8 +136,8 @@ ${note.content}
     setDeletingId(id);
     try {
       await onDeleteNote(id);
-    } catch (err) {
-      console.error('Failed to delete note:', err);
+    } catch {
+      // Error is surfaced via toast in App.tsx; nothing extra needed here
     } finally {
       setDeletingId(null);
     }

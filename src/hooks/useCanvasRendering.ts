@@ -336,9 +336,11 @@ export function useCanvasRendering(
         const onPointerUp = async () => {
           if (!dragging) return;
           cleanup();
-          // Card uses +8 visual offset from annotation anchor.
-          const nextX = Math.max(lastLeft - 8, 0);
-          const nextY = Math.max(lastTop - 8, 0);
+          // Save the current visual position directly — the +8 offset is
+          // already baked into card.style.left at render time, so on reload
+          // the card will render at the exact same spot.
+          const nextX = Math.max(lastLeft, 0);
+          const nextY = Math.max(lastTop, 0);
           try {
             if (annotationId) await annotationCommands.updatePosition(annotationId, nextX, nextY);
           } catch {

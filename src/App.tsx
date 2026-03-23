@@ -522,6 +522,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
 
   const handleDeleteNote = async (annotationId: string) => {
     try {
+      // Delete from DB first — only update UI on success
       await annotationCommands.delete(annotationId);
       setNotesAnnotations((prev) => prev.filter((a) => a.id !== annotationId));
       setToast({ message: 'Note deleted', type: 'success' });
