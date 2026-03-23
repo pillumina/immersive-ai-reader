@@ -1,6 +1,6 @@
 # Immersive AI Reader Roadmap Progress
 
-Last updated: 2026-03-20
+Last updated: 2026-03-23
 Source of truth: `research/vibero-immersive-reader/沉浸式AI阅读器_PRD.md`
 
 ## Current Goal (PRD Effect First)
@@ -112,6 +112,20 @@ Current sprint target: AI 上下文感知增强 + 画布交互升级 + 导出分
 - [x] 预测性预加载 + Focused Queue：初始 5 页完成后立即开始渲染 6–10 页，队列只保留 maxLoadedPage+2 范围（2026-03-20）
 - [x] 页面缩略图缓存：基于文件指纹的内存缓存，回访页面时先显示缓存 JPEG 再渲染新 Canvas（2026-03-20）
 - [x] 大跳转使用 instant scroll：>300px 跳转用 'auto'（立即），近距离用 'smooth'（2026-03-20）
+
+## Stability & UX Improvements (2026-03-23)
+
+- [x] 阅读进度持久化：last_page 存入数据库，重新打开时恢复上次阅读位置（2026-03-23）
+- [x] 笔记卡片自动保存：编辑时 500ms 防抖保存到数据库，blur 立即保存，显示 "saving…" 状态（2026-03-23）
+- [x] 键盘快捷键扩展：H=高亮选中文本，N=新建笔记（2026-03-23）
+- [x] 空状态引导：Chat 空状态显示 3 个可点击的示例问题芯片（2026-03-23）
+- [x] 笔记卡片编辑可发现性：hover 显示编辑/删除按钮，指针光标（2026-03-23）
+- [x] 阅读进度条：PDF 画布顶部显示可点击的进度条，显示当前阅读位置（2026-03-23）
+- [x] PDF 全文搜索：Cmd/Ctrl+F 打开搜索栏，Enter 搜索所有页面并跳转到第一个匹配结果（2026-03-23）
+- [x] 聊天消息时间戳显示（2026-03-20）
+- [x] 连续消息合并（2026-03-20）
+- [x] Markdown 流式渐进渲染（2026-03-20）
+- [x] Citation 正则增强（支持 [ref:pN]、[pN]、page N、第N页等格式，2026-03-20）
 
 ---
 
