@@ -398,12 +398,34 @@ export function AIPanel({
         onScroll={handleMessagesScroll}
       >
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center pt-16 text-center">
+          <div className="flex flex-col items-center justify-center pt-10 text-center px-6">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fafaf9] to-[#e7e5e4] flex items-center justify-center mb-3">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
-            <p className="text-[13px] text-[#a8a29e] font-medium">Ask about your document</p>
-            <p className="text-[11px] text-[#e7e5e4] mt-1">Or try the quick actions above</p>
+            <p className="text-[13px] text-[#a8a29e] font-medium mb-4">Ask about your document</p>
+            <div className="flex flex-col gap-2 w-full">
+              {[
+                'What is this document about?',
+                'Summarize the main points',
+                'Explain the key concepts',
+              ].map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => {
+                    const inputEl = globalThis.document?.querySelector<HTMLTextAreaElement>('#ai-chat-input');
+                    if (inputEl) {
+                      inputEl.value = q;
+                      inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                      inputEl.focus();
+                    }
+                  }}
+                  className="text-left text-[12px] px-3 py-2 rounded-xl border border-[#e7e5e4] bg-[#fafaf9] text-[#78716c] hover:border-[#c2410c]/40 hover:text-[#9a3412] hover:bg-[#fff7ed] transition-colors duration-150"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
