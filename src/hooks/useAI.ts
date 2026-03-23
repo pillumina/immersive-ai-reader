@@ -766,7 +766,6 @@ export function useAI(
     const target = messages.find((m) => (
       m.id === assistantMessageId &&
       m.role === 'assistant' &&
-      m.status === 'error' &&
       !!m.requestContent?.trim()
     ));
     if (!target || !target.requestContent) return;

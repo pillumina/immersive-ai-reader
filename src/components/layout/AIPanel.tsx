@@ -56,6 +56,11 @@ interface AIPanelProps {
   attachments: Array<{ id: string; type: 'text' | 'note'; content: string; page?: number }>;
   onAddAttachment: (attachment: { type: 'text' | 'note'; content: string; page?: number }) => void;
   onRemoveAttachment: (id: string) => void;
+  // Panel resize & collapse
+  width?: number;
+  isCollapsed?: boolean;
+  onWidthChange?: (width: number) => void;
+  onCollapse?: (collapsed: boolean) => void;
 }
 
 export function AIPanel({
@@ -87,12 +92,19 @@ export function AIPanel({
   attachments,
   onAddAttachment,
   onRemoveAttachment,
+  width = 380,
+  isCollapsed = false,
+  onCollapse,
+  onWidthChange,
 }: AIPanelProps) {
   const [notesView, setNotesView] = useState(false);
   const [input, setInput] = useState('');
   const [inputMode, setInputMode] = useState<ChatInputMode>(defaultInputMode);
   const [hasSelection, setHasSelection] = useState(false);
   const [isDragOverPanel, setIsDragOverPanel] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStartXRef = useRef(0);
+  const resizeStartWidthRef = useRef(width);
 
   useEffect(() => {
     setInputMode(defaultInputMode);
@@ -320,11 +332,85 @@ export function AIPanel({
 
   // Store the message being dragged in a ref so the canvas can read it on drop.
   return (
-    <aside
-      className={`w-[380px] border-l border-[#e7e5e4]/60 bg-gradient-to-b from-[#fafaf9] to-[#fafaf9] flex flex-col select-none ${isDragOverPanel ? 'ring-2 ring-[#c2410c] ring-inset bg-[#fff7ed]/30' : ''}`}
-      onPointerEnter={() => setIsDragOverPanel(true)}
-      onPointerLeave={() => setIsDragOverPanel(false)}
-    >
+    <>
+      {/* Collapsed Strip */}
+      {isCollapsed ? (
+        <div className="w-[48px] border-l border-[#e7e5e4]/60 bg-gradient-to-b from-[#fafaf9] to-[#fafaf9] flex flex-col items-center py-4 gap-3">
+          <button
+            type="button"
+            onClick={() => onCollapse?.(false)}
+            className="w-9 h-9 rounded-xl bg-[#c2410c] text-white flex items-center justify-center shadow-sm hover:bg-[#9a3412] transition-colors"
+            title="Expand AI Panel"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </button>
+          <div className="flex-1" />
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={onSummarize}
+              className="w-9 h-9 rounded-lg bg-white border border-[#e7e5e4] flex items-center justify-center text-[#78716c] hover:bg-[#fff7ed] hover:border-[#fed7aa] hover:text-[#c2410c] transition-colors"
+              title="Summarize"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+            </button>
+            <button
+              type="button"
+              onClick={onExportNotes}
+              className="w-9 h-9 rounded-lg bg-white border border-[#e7e5e4] flex items-center justify-center text-[#78716c] hover:bg-[#fff7ed] hover:border-[#fed7aa] hover:text-[#c2410c] transition-colors"
+              title="Export Notes"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+          </div>
+        </div>
+      ) : (
+      <aside
+        className={`relative border-l border-[#e7e5e4]/60 bg-gradient-to-b from-[#fafaf9] to-[#fafaf9] flex flex-col select-none ${isDragOverPanel ? 'ring-2 ring-[#c2410c] ring-inset bg-[#fff7ed]/30' : ''}`}
+        style={{ width }}
+        onPointerEnter={() => setIsDragOverPanel(true)}
+        onPointerLeave={() => setIsDragOverPanel(false)}
+      >
+        {/* Collapse Button */}
+        <button
+          type="button"
+          onClick={() => onCollapse?.(true)}
+          className="absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-6 h-6 rounded-full bg-white border border-[#e7e5e4] shadow-sm flex items-center justify-center text-[#78716c] hover:text-[#c2410c] hover:border-[#fed7aa] transition-colors"
+          title="Collapse AI Panel"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+
+      {/* Resize Handle */}
+      <div
+        className={`absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-20 group-hover:bg-[#c2410c]/30 transition-colors ${isResizing ? 'bg-[#c2410c]/50' : ''}`}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          setIsResizing(true);
+          resizeStartXRef.current = e.clientX;
+          resizeStartWidthRef.current = width;
+
+          const onPointerMove = (moveEvent: PointerEvent) => {
+            const delta = moveEvent.clientX - resizeStartXRef.current;
+            const newWidth = Math.min(Math.max(resizeStartWidthRef.current + delta, 280), 600);
+            onWidthChange?.(newWidth);
+          };
+
+          const onPointerUp = () => {
+            setIsResizing(false);
+            globalThis.document?.removeEventListener('pointermove', onPointerMove as unknown as EventListener);
+            globalThis.document?.removeEventListener('pointerup', onPointerUp);
+          };
+
+          globalThis.document?.addEventListener('pointermove', onPointerMove as unknown as EventListener);
+          globalThis.document?.addEventListener('pointerup', onPointerUp);
+        }}
+      />
+
       {/* Tab Bar */}
       <div className="flex items-center border-b border-[#e7e5e4]/60 px-1">
         <button
@@ -679,6 +765,8 @@ export function AIPanel({
       </div>
         </>
       )}
-    </aside>
+      </aside>
+      )}
+    </>
   );
 }

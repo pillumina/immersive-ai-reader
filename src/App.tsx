@@ -15,6 +15,8 @@ import { useCanvasRendering } from '@/hooks/useCanvasRendering';
 import { AIConfig } from '@/types/settings';
 import { aiCommands, annotationCommands, tagCommands } from '@/lib/tauri';
 import { PDFDocument } from '@/types/document';
+import { extractTextFromPageRanges, findChapterForPage, buildChapterList, ChapterInfo } from '@/lib/pdf/parser';
+import { ChapterSelector } from '@/components/features/ChapterSelector';
 
 interface ToastState {
   message: string;
@@ -120,6 +122,9 @@ function App() {
     reason?: 'evidence' | 'reference' | 'compare';
     nonce: number;
   } | null>(null);
+  const [chapterSelectorOpen, setChapterSelectorOpen] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(380);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
 
   // ─── Canvas rendering ────────────────────────────────────────
   const {
@@ -153,6 +158,18 @@ function App() {
     currentPage,
     documentTitle: currentDocument?.fileName || '',
   }), [currentPage, currentDocument?.fileName]);
+
+  // Build chapter list from outline for the ChapterSelector
+  const chapterList = useMemo(() => {
+    if (!outline || outline.length === 0 || !totalPages) return [] as ChapterInfo[];
+    return buildChapterList(outline, totalPages);
+  }, [outline, totalPages]);
+
+  // Find the current chapter based on scroll position
+  const currentChapter = useMemo(() => {
+    if (!currentPage || chapterList.length === 0) return null;
+    return findChapterForPage(currentPage, outline) || null;
+  }, [currentPage, chapterList, outline]);
 
   const getAIContext = useMemo(() => {
     return () => ({
@@ -391,7 +408,60 @@ function App() {
       setToast({ message: 'No document loaded', type: 'info' });
       return;
     }
-    void sendMessage('Please summarize the current document in: 1) key contributions, 2) methodology, 3) limitations, 4) practical takeaways.');
+    if (!currentDocument.fileBlob) {
+      setToast({ message: 'Document file not available', type: 'error' });
+      return;
+    }
+    setChapterSelectorOpen(true);
+  };
+
+  const handleSummarizeChapters = async (selectedChapters: ChapterInfo[]) => {
+    setChapterSelectorOpen(false);
+    if (!currentDocument?.fileBlob || selectedChapters.length === 0) {
+      return;
+    }
+
+    setToast({ message: 'Extracting chapter text…', type: 'info' });
+    try {
+      const pageRanges = selectedChapters.map((c) => ({
+        startPage: c.startPage,
+        endPage: c.endPage,
+      }));
+      const text = await extractTextFromPageRanges(currentDocument.fileBlob, pageRanges);
+      if (!text || text.length < 50) {
+        setToast({ message: 'Could not extract text from selected chapters', type: 'error' });
+        return;
+      }
+
+      // Limit text per chapter (roughly 4000 chars per chapter to stay within token limits)
+      const maxCharsPerChapter = 4000;
+      const truncatedText = text.length > maxCharsPerChapter * selectedChapters.length
+        ? text.slice(0, maxCharsPerChapter * selectedChapters.length) + '…'
+        : text;
+
+      // Build chapter-aware prompt
+      const chapterTitles = selectedChapters.map((c) => c.title).join(', ');
+      const pageRangeStr = selectedChapters.length === 1
+        ? `pages ${selectedChapters[0].startPage}–${selectedChapters[0].endPage}`
+        : `${selectedChapters.length} chapters`;
+
+      const prompt = `You are summarizing "${chapterTitles}" (${pageRangeStr}) from the document "${currentDocument.fileName}".
+
+Content:
+${truncatedText}
+
+Provide a summary covering:
+1. Key findings and contributions
+2. Methodology (if applicable)
+3. Limitations
+4. Practical takeaways
+
+Use citations [ref:pN] where N is the page number. Focus only on the provided content.`;
+      void sendMessage(prompt);
+    } catch (err) {
+      console.error('Failed to extract text for summarize:', err);
+      setToast({ message: 'Failed to extract chapter text', type: 'error' });
+    }
   };
   const handleTranslateSelection = () => {
     const text = globalThis.getSelection?.()?.toString().trim();
@@ -785,6 +855,10 @@ function App() {
               attachments={attachments}
               onAddAttachment={(a) => setAttachments((prev) => [...prev, { ...a, id: crypto.randomUUID() }])}
               onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
+              width={panelWidth}
+              isCollapsed={isPanelCollapsed}
+              onWidthChange={setPanelWidth}
+              onCollapse={(collapsed) => setIsPanelCollapsed(collapsed)}
             />
           )}
         </main>
@@ -839,6 +913,16 @@ function App() {
           message={toast.message}
           type={toast.type}
           onClose={() => setToast(null)}
+        />
+      )}
+
+      {chapterSelectorOpen && (
+        <ChapterSelector
+          chapters={chapterList}
+          currentChapter={currentChapter}
+          totalPages={totalPages}
+          onConfirm={handleSummarizeChapters}
+          onCancel={() => setChapterSelectorOpen(false)}
         />
       )}
 
