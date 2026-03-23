@@ -33,7 +33,7 @@ export async function checkPageLimit(file: File): Promise<number> {
 /**
  * 从 PDF 提取文本（支持大文档分批处理）
  */
-export async function extractTextFromPDF(file: File): Promise<string> {
+export async function extractTextFromPDF(file: Blob): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const totalPages = pdfDoc.numPages;
@@ -64,7 +64,7 @@ export async function extractTextFromPDF(file: File): Promise<string> {
  * 从 PDF 提取指定页面范围的文本
  */
 export async function extractTextFromPageRange(
-  file: File,
+  file: Blob,
   startPage: number,
   endPage: number
 ): Promise<string> {
@@ -106,7 +106,7 @@ export async function extractTextFromPageRange(
  * 从 PDF 提取多个页面范围的文本（支持多选章节）
  */
 export async function extractTextFromPageRanges(
-  file: File,
+  file: Blob,
   pageRanges: Array<{ startPage: number; endPage: number }>
 ): Promise<string> {
   // Sort by start page to maintain document order

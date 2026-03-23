@@ -361,6 +361,22 @@ function App() {
     // Handled by individual components via their own keydown/close handlers.
   };
 
+  const handleHighlightSelection = async () => {
+    try {
+      const count = await highlightSelection();
+      setToast({ message: `Added ${count} highlight${count > 1 ? 's' : ''}`, type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to highlight selection';
+      setToast({ message, type: 'info' });
+    }
+  };
+
+  const handleAddNoteSelection = (position?: { x: number; y: number }, targetPageNumber?: number) => {
+    setNoteInputOpen(true);
+    noteInputPositionRef.current = position;
+    noteInputPageRef.current = targetPageNumber;
+  };
+
   useKeyboardShortcuts({
     onZoomIn: handleZoomIn,
     onZoomOut: handleZoomOut,
@@ -374,20 +390,6 @@ function App() {
     currentPage,
     totalPages,
   });
-  const handleHighlightSelection = async () => {
-    try {
-      const count = await highlightSelection();
-      setToast({ message: `Added ${count} highlight${count > 1 ? 's' : ''}`, type: 'success' });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to highlight selection';
-      setToast({ message, type: 'info' });
-    }
-  };
-  const handleAddNoteSelection = (position?: { x: number; y: number }, targetPageNumber?: number) => {
-    setNoteInputOpen(true);
-    noteInputPositionRef.current = position;
-    noteInputPageRef.current = targetPageNumber;
-  };
 
   const handleNoteInputSubmit = async (note: string) => {
     setNoteInputOpen(false);
