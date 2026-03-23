@@ -7,6 +7,8 @@ interface KeyboardShortcutHandlers {
   onJumpToPage?: (page: number) => void;
   onCloseTab?: (tabId: string) => void;
   onEscape?: () => void;
+  onHighlight?: () => void;
+  onNewNote?: () => void;
   activeTabId?: string;
   currentPage?: number;
   totalPages?: number;
@@ -23,6 +25,8 @@ export function useKeyboardShortcuts({
   onJumpToPage,
   onCloseTab,
   onEscape,
+  onHighlight,
+  onNewNote,
   activeTabId,
   currentPage = 1,
   totalPages = 0,
@@ -108,9 +112,23 @@ export function useKeyboardShortcuts({
         }
         return;
       }
+
+      // H — highlight selection.
+      if (e.key === 'h' || e.key === 'H') {
+        e.preventDefault();
+        onHighlight?.();
+        return;
+      }
+
+      // N — new note at current position.
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        onNewNote?.();
+        return;
+      }
     };
 
     globalThis.addEventListener('keydown', handler);
     return () => globalThis.removeEventListener('keydown', handler);
-  }, [onZoomIn, onZoomOut, onResetZoom, onJumpToPage, onCloseTab, onEscape, activeTabId, currentPage, totalPages]);
+  }, [onZoomIn, onZoomOut, onResetZoom, onJumpToPage, onCloseTab, onEscape, onHighlight, onNewNote, activeTabId, currentPage, totalPages]);
 }

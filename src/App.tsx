@@ -368,6 +368,8 @@ function App() {
     onJumpToPage: jumpToPage,
     onCloseTab: handleCloseTab,
     onEscape: handleEscape,
+    onHighlight: handleHighlightSelection,
+    onNewNote: () => handleAddNoteSelection(),
     activeTabId,
     currentPage,
     totalPages,
