@@ -244,20 +244,30 @@ export function useCanvasRendering(
         evt.stopPropagation();
         enterEdit();
       });
-      card.style.cursor = 'default';
+      card.style.cursor = 'pointer';
       card.title = 'Double-click to edit. Drag to reposition.';
       card.dataset.notePageNumber = String(pageNumber);
 
-      // Action bar: delete + drag handle
+      // Action bar: edit + delete + drag handle
       const actionBar = document.createElement('div');
       actionBar.className = 'note-card-actions';
       actionBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:4px;border-top:1px solid rgba(13,148,136,0.12)';
 
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'note-card-edit-btn';
+      editBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#94a3b8;font-size:13px;line-height:1;padding:0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:color 0.1s,background 0.1s;opacity:0;transition:opacity 0.15s;color:#94a3b8';
+      editBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+      editBtn.title = 'Edit note';
+      editBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        enterEdit();
+      });
+
       const deleteBtn = document.createElement('button');
       deleteBtn.type = 'button';
       deleteBtn.className = 'note-card-del-btn';
-      deleteBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#94a3b8;font-size:13px;line-height:1;padding:0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:3px';
-      deleteBtn.style.cssText += ';transition:color 0.1s,background 0.1s';
+      deleteBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#94a3b8;font-size:13px;line-height:1;padding:0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:color 0.1s,background 0.1s;opacity:0;transition:opacity 0.15s';
       deleteBtn.textContent = '×';
       deleteBtn.title = 'Delete note';
       deleteBtn.addEventListener('click', (evt) => {
@@ -341,6 +351,16 @@ export function useCanvasRendering(
         globalThis.document?.addEventListener('pointerup', onUp);
       });
 
+      card.addEventListener('mouseenter', () => {
+        (editBtn as HTMLElement).style.opacity = '1';
+        (deleteBtn as HTMLElement).style.opacity = '1';
+      });
+      card.addEventListener('mouseleave', () => {
+        (editBtn as HTMLElement).style.opacity = '0';
+        (deleteBtn as HTMLElement).style.opacity = '0';
+      });
+
+      actionBar.appendChild(editBtn);
       actionBar.appendChild(deleteBtn);
       card.appendChild(actionBar);
     }
