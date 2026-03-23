@@ -341,7 +341,7 @@ export function useAI(
   const streamTimerRef = useRef<number | null>(null);
   const responseCacheRef = useRef<Map<string, CachedAnswer>>(new Map());
   const lastDocumentIdRef = useRef<string>(documentId);
-
+  const messagesRef = useRef<Message[]>([]);
   // RAF-based streaming throttle: accumulate content in refs, flush to state at 60fps max.
   const streamingContentRef = useRef<string>('');
   const streamingAssistantIdRef = useRef<string | null>(null);
@@ -359,6 +359,9 @@ export function useAI(
       // ignore persistence failures
     }
   }, [rememberPreference, documentId]);
+
+  // Keep messagesRef in sync so sendMessage can read the latest without it as a dep.
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   useEffect(() => {
     if (documentId !== lastDocumentIdRef.current) {
@@ -664,7 +667,7 @@ export function useAI(
             ? buildContextAwarePrompt(cleanContent, { selectedText: attachments.map(a => a.content).join('\n\n') }, plan)
             : cleanContent);
       const startedAt = Date.now();
-      const historyForModel = buildHistoryForModel([...messages, userMessage], plan.historyWindow);
+      const historyForModel = buildHistoryForModel([...messagesRef.current, userMessage], plan.historyWindow);
       const cacheKey = buildCacheKey(
         documentId,
         aiConfig.model,
@@ -787,7 +790,7 @@ export function useAI(
       }
       setIsLoading(false);
     }
-  }, [documentId, aiConfig, messages, conversationId, contextProvider, streamAssistantText, streamFromBackend]);
+  }, [documentId, aiConfig, conversationId, contextProvider, streamAssistantText, streamFromBackend]);
 
   const retryAssistantMessage = useCallback(async (assistantMessageId: string, forcedMode?: ChatInputMode) => {
     const target = messages.find((m) => (

@@ -5,6 +5,7 @@ import { Message } from '@/types/conversation';
 import { aiCardDragState } from './AIPanel';
 import { splitCompleteMarkdownBlocks } from '@/utils/markdownStream';
 import type { DragEvent, PointerEvent } from 'react';
+import { memo } from 'react';
 
 interface ChatMessageProps {
   msg: Message;
@@ -131,7 +132,7 @@ function formatRouteHint(msg: Message): string | null {
   return `route ${label}${conf}`;
 }
 
-export function ChatMessage({
+export const ChatMessage = memo(function ChatMessageWip({
   msg,
   isLastInGroup,
   isLoading,
@@ -325,4 +326,4 @@ export function ChatMessage({
       </div>
     </div>
   );
-}
+});
