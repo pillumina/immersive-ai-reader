@@ -465,6 +465,23 @@ export function MainCanvas({
         >
           {hasDocument ? (
             <div className="relative">
+              {/* Reading progress bar */}
+              {totalPages > 0 && (
+                <div
+                  title={`Page ${currentPage} of ${totalPages}`}
+                  className="sticky top-0 z-10 h-[3px] bg-[#e7e5e4] rounded-full overflow-hidden mb-2 cursor-pointer"
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    onJumpToPage(Math.max(1, Math.round(ratio * totalPages)));
+                  }}
+                >
+                  <div
+                    className="h-full bg-[#0d9488] rounded-full transition-all duration-200"
+                    style={{ width: `${totalPages > 0 ? (currentPage / totalPages) * 100 : 0}%` }}
+                  />
+                </div>
+              )}
               <div id="pdf-pages-container" className="pdf-pages-container" />
               {isLoading && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/90 shadow-md border border-[#e7e5e4] backdrop-blur-sm animate-in fade-in slide-in-from-top-2">
