@@ -14,7 +14,7 @@ export interface AIProfile {
 }
 
 export type ChatInputMode = 'auto' | 'chat' | 'doc';
-export type ThemeOption = 'light' | 'dark' | 'warm-dark';
+export type ThemeOption = 'light' | 'dark' | 'warm-dark' | 'sepia';
 
 export interface UISettings {
   showChatPerfHints: boolean;

@@ -578,22 +578,42 @@ export function MainCanvas({
         >
           {hasDocument ? (
             <div className="relative">
-              {/* Reading progress bar */}
+              {/* Reading progress + stats */}
               {totalPages > 0 && (
-                <div
-                  title={`Page ${currentPage} of ${totalPages}`}
-                  className="sticky top-0 z-10 h-[3px] bg-[#e7e5e4] rounded-full overflow-hidden mb-2 cursor-pointer"
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                    onJumpToPage(Math.max(1, Math.round(ratio * totalPages)));
-                  }}
-                >
+                <>
+                  <div className="flex items-center justify-between mb-1.5 px-0.5">
+                    <span className="text-[10px] text-[#a8a29e] tabular-nums">
+                      第 {currentPage} / {totalPages} 页
+                    </span>
+                    <span
+                      className="text-[10px] text-[#a8a29e] cursor-pointer hover:text-[#78716c] transition-colors"
+                      onClick={(e) => {
+                        const bar = (e.currentTarget.parentElement?.nextElementSibling as HTMLElement | null);
+                        if (!bar) return;
+                        const rect = bar.getBoundingClientRect();
+                        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                        onJumpToPage(Math.max(1, Math.round(ratio * totalPages)));
+                      }}
+                      title="点击进度条跳转页面"
+                    >
+                      {Math.round((currentPage / totalPages) * 100)}%
+                    </span>
+                  </div>
                   <div
-                    className="h-full bg-[#0d9488] rounded-full transition-all duration-200"
-                    style={{ width: `${totalPages > 0 ? (currentPage / totalPages) * 100 : 0}%` }}
-                  />
-                </div>
+                    title={`第 ${currentPage} / ${totalPages} 页 — 点击跳转`}
+                    className="sticky top-0 z-10 h-[3px] bg-[#e7e5e4] rounded-full overflow-hidden cursor-pointer"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                      onJumpToPage(Math.max(1, Math.round(ratio * totalPages)));
+                    }}
+                  >
+                    <div
+                      className="h-full bg-[#0d9488] rounded-full transition-all duration-200"
+                      style={{ width: `${(currentPage / totalPages) * 100}%` }}
+                    />
+                  </div>
+                </>
               )}
               <div id="pdf-pages-container" className="pdf-pages-container" />
               {isLoading && (

@@ -40,8 +40,7 @@ interface AIPanelProps {
   onDeleteNote: (annotationId: string) => Promise<void>;
   onUpdateNote: (annotationId: string, newContent: string) => Promise<void>;
   onJumpToPage: (page: number) => void;
-  showPerfHints: boolean;
-  defaultInputMode: ChatInputMode;
+defaultInputMode: ChatInputMode;
   pendingRouteConfirmation: {
     content: string;
     confidence: number;
@@ -80,7 +79,6 @@ export function AIPanel({
   onDeleteNote,
   onUpdateNote,
   onJumpToPage,
-  showPerfHints,
   defaultInputMode,
   pendingRouteConfirmation,
   onConfirmRouteAsChat,
@@ -169,30 +167,6 @@ export function AIPanel({
     }
   };
 
-  const sessionStats = useMemo(
-    () =>
-      messages.reduce(
-        (acc, m) => {
-          if (m.role !== 'assistant' || !m.usage) return acc;
-          if (typeof m.usage.promptTokens === 'number') acc.prompt += m.usage.promptTokens;
-          if (typeof m.usage.completionTokens === 'number') acc.completion += m.usage.completionTokens;
-          if (typeof m.usage.totalTokens === 'number') acc.total += m.usage.totalTokens;
-          else if (typeof m.usage.promptTokens === 'number' || typeof m.usage.completionTokens === 'number') {
-            acc.total += (m.usage.promptTokens || 0) + (m.usage.completionTokens || 0);
-          }
-          if (typeof m.usage.latencyMs === 'number') {
-            acc.latencySum += m.usage.latencyMs;
-            acc.latencyCount += 1;
-          }
-          return acc;
-        },
-        { prompt: 0, completion: 0, total: 0, latencySum: 0, latencyCount: 0 }
-      ),
-    [messages]
-  );
-  const avgLatency = sessionStats.latencyCount > 0
-    ? `${(sessionStats.latencySum / sessionStats.latencyCount / 1000).toFixed(2)}s`
-    : '--';
 
   const copyMessage = useCallback(async (msg: Message) => {
     try {
@@ -354,14 +328,6 @@ export function AIPanel({
             </div>
             <div className="flex-1 min-w-0 flex items-center gap-2">
               <h2 className="text-[13px] font-semibold text-[#1c1917] leading-tight">AI Assistant</h2>
-              {showPerfHints && sessionStats.total > 0 && (
-                <span
-                  className="inline-flex rounded-full border border-[#e7e5e4] bg-white/80 px-2 py-0.5 text-[10px] tabular-nums text-[#78716c]"
-                  title={`Prompt: ${sessionStats.prompt} | Completion: ${sessionStats.completion} | Avg latency: ${avgLatency}`}
-                >
-                  {sessionStats.total} tokens · avg {avgLatency}
-                </span>
-              )}
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5">

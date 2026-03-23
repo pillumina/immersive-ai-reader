@@ -826,7 +826,6 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             <AIPanel
               messages={messages}
               isLoading={aiLoading}
-              showPerfHints={uiSettings.showChatPerfHints}
               defaultInputMode={uiSettings.chatInputModeDefault}
               onSendMessage={(content, mode, attachments) => { void sendMessage(content, mode || 'auto', attachments); }}
               onExplainTerm={() => { void handleExplainTerm(); }}

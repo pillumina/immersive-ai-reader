@@ -477,49 +477,102 @@ export function SettingsModal({
                 <div className="settings-group">
                   <p className="settings-group__label">Color Theme</p>
                   <div className="theme-grid">
+
+                    {/* Warm Light */}
                     <button
                       type="button"
                       onClick={() => onChangeTheme('light')}
                       className={`theme-card ${(currentTheme ?? 'light') === 'light' ? 'theme-card--active' : ''}`}
                     >
                       <div className="theme-card__preview theme-card__preview--light">
-                        <div className="theme-card__swatch" style={{ background: '#fafaf9', borderColor: '#e7e5e4' }} />
-                        <div className="theme-card__swatch" style={{ background: '#ffffff', borderColor: '#e7e5e4' }} />
-                        <div className="theme-card__accent" style={{ background: '#c2410c' }} />
+                        <div className="theme-card__bar" style={{ background: '#ffffff', border: '1px solid #e7e5e4' }}>
+                          <div className="theme-card__dot" style={{ background: '#c2410c' }} />
+                          <div className="theme-card__line" style={{ background: '#e7e5e4', width: '60%' }} />
+                        </div>
+                        <div className="theme-card__bar" style={{ background: '#fafaf9', border: '1px solid #e7e5e4' }}>
+                          <div className="theme-card__dot" style={{ background: '#0d9488' }} />
+                          <div className="theme-card__line" style={{ background: '#e7e5e4', width: '45%' }} />
+                        </div>
                       </div>
-                      <span className="theme-card__label">Warm Light</span>
+                      <div className="theme-card__text">
+                        <span className="theme-card__label">Warm Light</span>
+                        <span className="theme-card__desc">Default · All-day reading</span>
+                      </div>
                       {(currentTheme ?? 'light') === 'light' && (
                         <Check size={12} className="theme-card__check" />
                       )}
                     </button>
 
+                    {/* Sepia */}
+                    <button
+                      type="button"
+                      onClick={() => onChangeTheme('sepia')}
+                      className={`theme-card ${currentTheme === 'sepia' ? 'theme-card--active' : ''}`}
+                    >
+                      <div className="theme-card__preview theme-card__preview--sepia">
+                        <div className="theme-card__bar" style={{ background: '#fdfaf4', border: '1px solid #d4c5b2' }}>
+                          <div className="theme-card__dot" style={{ background: '#b45309' }} />
+                          <div className="theme-card__line" style={{ background: '#d4c5b2', width: '60%' }} />
+                        </div>
+                        <div className="theme-card__bar" style={{ background: '#f0ebe0', border: '1px solid #d4c5b2' }}>
+                          <div className="theme-card__dot" style={{ background: '#0f766e' }} />
+                          <div className="theme-card__line" style={{ background: '#d4c5b2', width: '45%' }} />
+                        </div>
+                      </div>
+                      <div className="theme-card__text">
+                        <span className="theme-card__label">Sepia</span>
+                        <span className="theme-card__desc">Paper feel · Long reading</span>
+                      </div>
+                      {currentTheme === 'sepia' && (
+                        <Check size={12} className="theme-card__check" />
+                      )}
+                    </button>
+
+                    {/* Dark */}
                     <button
                       type="button"
                       onClick={() => onChangeTheme('dark')}
                       className={`theme-card ${currentTheme === 'dark' ? 'theme-card--active' : ''}`}
                     >
                       <div className="theme-card__preview theme-card__preview--dark">
-                        <div className="theme-card__swatch" style={{ background: '#18181b', borderColor: '#3f3f46' }} />
-                        <div className="theme-card__swatch" style={{ background: '#232326', borderColor: '#3f3f46' }} />
-                        <div className="theme-card__accent" style={{ background: '#ea580c' }} />
+                        <div className="theme-card__bar" style={{ background: '#232326', border: '1px solid #3f3f46' }}>
+                          <div className="theme-card__dot" style={{ background: '#ea580c' }} />
+                          <div className="theme-card__line" style={{ background: '#3f3f46', width: '60%' }} />
+                        </div>
+                        <div className="theme-card__bar" style={{ background: '#18181b', border: '1px solid #3f3f46' }}>
+                          <div className="theme-card__dot" style={{ background: '#2dd4bf' }} />
+                          <div className="theme-card__line" style={{ background: '#3f3f46', width: '45%' }} />
+                        </div>
                       </div>
-                      <span className="theme-card__label">Dark</span>
+                      <div className="theme-card__text">
+                        <span className="theme-card__label">Midnight</span>
+                        <span className="theme-card__desc">Night mode · Low light</span>
+                      </div>
                       {currentTheme === 'dark' && (
                         <Check size={12} className="theme-card__check" />
                       )}
                     </button>
 
+                    {/* Warm Dark */}
                     <button
                       type="button"
                       onClick={() => onChangeTheme('warm-dark')}
                       className={`theme-card ${currentTheme === 'warm-dark' ? 'theme-card--active' : ''}`}
                     >
                       <div className="theme-card__preview theme-card__preview--warm-dark">
-                        <div className="theme-card__swatch" style={{ background: '#1c1917', borderColor: '#3d3835' }} />
-                        <div className="theme-card__swatch" style={{ background: '#272220', borderColor: '#3d3835' }} />
-                        <div className="theme-card__accent" style={{ background: '#ea580c' }} />
+                        <div className="theme-card__bar" style={{ background: '#272220', border: '1px solid #3d3835' }}>
+                          <div className="theme-card__dot" style={{ background: '#ea580c' }} />
+                          <div className="theme-card__line" style={{ background: '#3d3835', width: '60%' }} />
+                        </div>
+                        <div className="theme-card__bar" style={{ background: '#1c1917', border: '1px solid #3d3835' }}>
+                          <div className="theme-card__dot" style={{ background: '#2dd4bf' }} />
+                          <div className="theme-card__line" style={{ background: '#3d3835', width: '45%' }} />
+                        </div>
                       </div>
-                      <span className="theme-card__label">Warm Dark</span>
+                      <div className="theme-card__text">
+                        <span className="theme-card__label">Warm Night</span>
+                        <span className="theme-card__desc">Evening · Easy on eyes</span>
+                      </div>
                       {currentTheme === 'warm-dark' && (
                         <Check size={12} className="theme-card__check" />
                       )}
