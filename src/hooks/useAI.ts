@@ -331,6 +331,9 @@ export function useAI(
   const streamingFlushRafRef = useRef<number | null>(null);
   const streamingContentRef = useRef<string>('');
   const streamingAssistantIdRef = useRef<string | null>(null);
+  // Micro-batch interval: flush accumulated content at ~33fps (30ms) for a
+  // per-word feel even when RAF fires less frequently.
+  const streamingFlushIntervalRef = useRef<number | null>(null);
 
   const rememberPreference = options.rememberRoutePreferenceAcrossSessions ?? true;
 
@@ -385,6 +388,14 @@ export function useAI(
       window.clearInterval(streamTimerRef.current);
       streamTimerRef.current = null;
     }
+    if (streamingFlushIntervalRef.current !== null) {
+      window.clearInterval(streamingFlushIntervalRef.current);
+      streamingFlushIntervalRef.current = null;
+    }
+    if (streamingFlushRafRef.current !== null) {
+      cancelAnimationFrame(streamingFlushRafRef.current);
+      streamingFlushRafRef.current = null;
+    }
     const assistantId = activeAssistantIdRef.current;
     if (assistantId) {
       setMessages((prev) => prev.map((m) => {
@@ -412,6 +423,10 @@ export function useAI(
       cancelAnimationFrame(streamingFlushRafRef.current);
       streamingFlushRafRef.current = null;
     }
+    if (streamingFlushIntervalRef.current !== null) {
+      window.clearInterval(streamingFlushIntervalRef.current);
+      streamingFlushIntervalRef.current = null;
+    }
 
     let expectedStreamId: string | null = null;
     const streamStartedAt = Date.now();
@@ -430,7 +445,21 @@ export function useAI(
       streamingContentRef.current += delta;
       streamingAssistantIdRef.current = assistantId;
 
-      // Throttle: flush at most once per animation frame.
+      // Throttle: flush accumulated content via micro-batch interval (30ms).
+      // This gives ~33 updates/s for a smooth per-word feel even on slower screens.
+      if (streamingFlushIntervalRef.current === null) {
+        streamingFlushIntervalRef.current = window.setInterval(() => {
+          const content = streamingContentRef.current;
+          const aid = streamingAssistantIdRef.current;
+          if (aid) {
+            setMessages((prev) => prev.map((m) =>
+              m.id === aid ? { ...m, status: 'streaming', content } : m
+            ));
+          }
+        }, 30);
+      }
+
+      // Also schedule a RAF flush for immediate response when the browser is ready.
       if (streamingFlushRafRef.current === null) {
         streamingFlushRafRef.current = requestAnimationFrame(() => {
           streamingFlushRafRef.current = null;
@@ -450,6 +479,14 @@ export function useAI(
         unlistenChunk();
         if (unlistenDone) unlistenDone();
         if (unlistenError) unlistenError();
+        if (streamingFlushRafRef.current !== null) {
+          cancelAnimationFrame(streamingFlushRafRef.current);
+          streamingFlushRafRef.current = null;
+        }
+        if (streamingFlushIntervalRef.current !== null) {
+          window.clearInterval(streamingFlushIntervalRef.current);
+          streamingFlushIntervalRef.current = null;
+        }
       };
 
       unlistenDone = await listen<StreamDonePayload>('ai_stream_done', async (event) => {

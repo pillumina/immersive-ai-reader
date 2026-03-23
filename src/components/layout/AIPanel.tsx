@@ -11,15 +11,14 @@ export const aiCardDragState = {
     | null,
   isDragging: false,
 };
-import { useState, useRef, useEffect, useCallback, useMemo, DragEvent, PointerEvent } from 'react';
-import { Check, Copy, GripVertical, Loader2, Pin, RotateCcw, Square, Send, MessageSquare, StickyNote, Search, BadgeCheck } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Loader2, Square, Send, MessageSquare, StickyNote } from 'lucide-react';
 import { Message } from '@/types/conversation';
 import { Logo } from '@/components/ui/Logo';
 import { ChatInputMode } from '@/types/settings';
 import { Input } from '@/components/ui/Input';
 import { NotesManager } from '@/components/features/NotesManager';
+import { ChatMessage } from './ChatMessage';
 
 interface AIPanelProps {
   messages: Message[];
@@ -200,49 +199,6 @@ export function AIPanel({
     }
   };
 
-  const formatRouteHint = (message: Message) => {
-    if (!message.routeIntent) return null;
-    const label = message.routeIntent === 'doc_qa'
-      ? 'doc'
-      : message.routeIntent === 'term'
-        ? 'term'
-        : 'chat';
-    const conf = typeof message.routeConfidence === 'number'
-      ? ` ${(message.routeConfidence * 100).toFixed(0)}%`
-      : '';
-    return `route ${label}${conf}`;
-  };
-
-  const formatUsageHint = (message: Message) => {
-    if (!showPerfHints) return null;
-    const usage = message.usage;
-    if (!usage) return null;
-    const parts: string[] = [];
-    if (typeof usage.totalTokens === 'number') {
-      parts.push(`tokens ${usage.totalTokens}`);
-    } else if (typeof usage.promptTokens === 'number' || typeof usage.completionTokens === 'number') {
-      parts.push(`tokens ${(usage.promptTokens || 0) + (usage.completionTokens || 0)}`);
-    } else {
-      parts.push('tokens n/a');
-    }
-    if (typeof usage.promptTokens === 'number' || typeof usage.completionTokens === 'number') {
-      parts.push(`in ${usage.promptTokens ?? '-'} / out ${usage.completionTokens ?? '-'}`);
-    }
-    if (typeof usage.latencyMs === 'number') {
-      parts.push(`${(usage.latencyMs / 1000).toFixed(2)}s`);
-    }
-    if (typeof usage.ttftMs === 'number') {
-      parts.push(`ttft ${(usage.ttftMs / 1000).toFixed(2)}s`);
-    }
-    if (usage.model) {
-      parts.push(usage.model);
-    }
-    if (usage.cached) {
-      parts.push('cache');
-    }
-    return parts.join(' · ');
-  };
-
   const sessionStats = useMemo(
     () =>
       messages.reduce(
@@ -268,51 +224,6 @@ export function AIPanel({
     ? `${(sessionStats.latencySum / sessionStats.latencyCount / 1000).toFixed(2)}s`
     : '--';
 
-  const renderAssistantContent = (content: string) => {
-    const markdownWithCitationLinks = content.replace(
-      /(\[ref:p(\d+)\]|\[p(\d+)\])/gi,
-      (_raw, label: string, p1: string, p2: string) => {
-        const page = Number(p1 || p2 || '0');
-        if (!page || !Number.isFinite(page)) return label;
-        return `[${label}](cite://page/${page})`;
-      }
-    );
-
-    return (
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: ({ href, children }) => {
-            if (href?.startsWith('cite://page/')) {
-              const page = Number(href.split('/').pop() || '0');
-              return (
-                <button
-                  className="mx-0.5 inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-700 hover:bg-sky-100"
-                  onClick={() => page > 0 && onJumpToCitation(page)}
-                  title={page > 0 ? `Jump to page ${page}` : 'Citation'}
-                >
-                  {children}
-                </button>
-              );
-            }
-            return (
-              <a href={href} target="_blank" rel="noreferrer" className="text-sky-700 underline">
-                {children}
-              </a>
-            );
-          },
-          pre: ({ children }) => <pre className="ai-md-pre">{children}</pre>,
-          code: ({ children, className }) => (
-            <code className={`ai-md-code ${className || ''}`.trim()}>{children}</code>
-          ),
-          table: ({ children }) => <table className="ai-md-table">{children}</table>,
-        }}
-      >
-        {markdownWithCitationLinks}
-      </ReactMarkdown>
-    );
-  };
-
   const copyMessage = useCallback(async (msg: Message) => {
     try {
       await navigator.clipboard.writeText(msg.content || '');
@@ -322,13 +233,6 @@ export function AIPanel({
       // ignore
     }
   }, []);
-
-  const extractFirstCitationPage = (content: string): number | undefined => {
-    const match = content.match(/\[ref:p(\d+)\]|\[p(\d+)\]/i);
-    if (!match) return undefined;
-    const page = Number(match[1] || match[2] || '0');
-    return Number.isFinite(page) && page > 0 ? page : undefined;
-  };
 
   // Store the message being dragged in a ref so the canvas can read it on drop.
   return (
@@ -503,169 +407,30 @@ export function AIPanel({
             <p className="text-[11px] text-[#e7e5e4] mt-1">Or try the quick actions above</p>
           </div>
         ) : (
-          messages.map((msg, idx) => (
-            <div
-              key={msg.id || idx}
-              data-ai-message-id={msg.id || ''}
-              className={`ai-msg-enter flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div className={`ai-msg group max-w-[85%] p-3 text-sm rounded-2xl leading-relaxed shadow-sm ${
-                msg.role === 'user'
-                  ? 'bg-[#c2410c] text-white rounded-br-md'
-                  : msg.status === 'error'
-                    ? 'bg-rose-50 border border-rose-200 text-rose-700 rounded-bl-md'
-                    : 'bg-white border border-[#e7e5e4] text-[#1c1917] rounded-bl-md'
-              } ${focusedMessageId && msg.id === focusedMessageId ? 'ai-msg-focus-ring' : ''}`}>
-                {msg.status === 'thinking' ? (
-                  <div className="inline-flex items-center gap-2 text-gray-500">
-                    <Loader2 size={14} className="animate-spin" />
-                    <span className="inline-flex items-center gap-1">
-                      Thinking
-                      <span className="ai-dot" />
-                      <span className="ai-dot ai-dot-delay-1" />
-                      <span className="ai-dot ai-dot-delay-2" />
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    {msg.role === 'assistant' ? (
-                      <div>
-                        {renderAssistantContent(msg.content)}
-                        {msg.status === 'streaming' && <span className="ai-stream-caret">|</span>}
-                      </div>
-                    ) : msg.content}
-                    {msg.role === 'assistant' && (
-                      <div className="mt-2 text-[11px] text-gray-500">
-                        {[
-                          formatRouteHint(msg),
-                          pinnedIdSet.has(msg.id || '') ? 'pinned' : null,
-                          formatUsageHint(msg),
-                        ].filter(Boolean).join(' · ')}
-                      </div>
-                    )}
-                    {msg.role === 'assistant' && (
-                      <div className="ai-msg-toolbar mt-2 flex max-w-full flex-wrap items-center gap-0.5">
-                        <button
-                          type="button"
-                          className="ai-msg-action"
-                          onClick={() => void copyMessage(msg)}
-                          disabled={isLoading}
-                          title={copiedMessageId === msg.id ? 'Copied' : 'Copy'}
-                        >
-                          {copiedMessageId === msg.id ? <Check size={13} /> : <Copy size={13} />}
-                        </button>
-                        {msg.id && (
-                          <div
-                            draggable
-                            className="ai-msg-action"
-                            style={{ cursor: 'grab' }}
-                            title="Drag to canvas"
-                            onDragStart={(e: DragEvent<HTMLElement>) => {
-                              const payload = {
-                                type: 'ai' as const,
-                                messageId: msg.id!,
-                                content: msg.content,
-                                pageHint: extractFirstCitationPage(msg.content),
-                              };
-                              aiCardDragState.payload = payload;
-                              aiCardDragState.isDragging = true;
-                              try {
-                                e.dataTransfer.setData('application/x-ai-card', JSON.stringify(payload));
-                                e.dataTransfer.effectAllowed = 'copy';
-                              } catch { /* Tauri WebView: dataTransfer unavailable */ }
-                            }}
-                            onPointerDown={(e: PointerEvent<HTMLElement>) => {
-                              if (e.button !== 0) return;
-                              aiCardDragState.payload = {
-                                type: 'ai' as const,
-                                messageId: msg.id!,
-                                content: msg.content,
-                                pageHint: extractFirstCitationPage(msg.content),
-                              };
-                              aiCardDragState.isDragging = true;
-
-                              // Use document-level listeners — these always fire in Tauri WebView
-                              const onPointerMove = () => {};
-                              const onPointerUp = (ev: PointerEvent) => {
-                                globalThis.document?.removeEventListener('pointermove', onPointerMove as unknown as EventListener);
-                                globalThis.document?.removeEventListener('pointerup', onPointerUp as unknown as EventListener);
-                                if (!aiCardDragState.payload) return;
-                                const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
-                                if (scrollEl) {
-                                  const rect = scrollEl.getBoundingClientRect();
-                                  const { clientX: cx, clientY: cy } = ev;
-                                  if (cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) {
-                                    scrollEl.dispatchEvent(new CustomEvent('ai-card-drop', {
-                                      detail: { payload: aiCardDragState.payload, clientX: cx, clientY: cy },
-                                      bubbles: true,
-                                    }));
-                                  }
-                                }
-                                aiCardDragState.payload = null;
-                                aiCardDragState.isDragging = false;
-                              };
-                              globalThis.document?.addEventListener('pointermove', onPointerMove as unknown as EventListener);
-                              globalThis.document?.addEventListener('pointerup', onPointerUp as unknown as EventListener);
-                            }}
-                          >
-                            <GripVertical size={13} />
-                          </div>
-                        )}
-                        {msg.id && (
-                          <button
-                            type="button"
-                            className="ai-msg-action"
-                            onClick={() =>
-                              pinnedIdSet.has(msg.id || '')
-                                ? onUnpinFromCanvas(msg.id!)
-                                : onPinToCanvas(msg.id!, extractFirstCitationPage(msg.content))
-                            }
-                            disabled={isLoading}
-                            title={pinnedIdSet.has(msg.id || '') ? 'Unpin from canvas' : 'Pin to canvas'}
-                          >
-                            <Pin size={13} />
-                          </button>
-                        )}
-                        {msg.id && (
-                          <button
-                            type="button"
-                            className="ai-msg-action"
-                            onClick={() => onLocateCanvasCard(msg.id!)}
-                            disabled={isLoading}
-                            title="Find in canvas"
-                          >
-                            <Search size={13} />
-                          </button>
-                        )}
-                        {msg.id && (
-                          <button
-                            type="button"
-                            className="ai-msg-action"
-                            onClick={() => onSendToRightPane(msg.id!, extractFirstCitationPage(msg.content))}
-                            disabled={isLoading}
-                            title="Verify cited page"
-                          >
-                            <BadgeCheck size={13} />
-                          </button>
-                        )}
-                        {msg.status === 'error' && msg.id && (
-                          <button
-                            type="button"
-                            className="ai-msg-action ai-msg-action--danger"
-                            onClick={() => onRetryMessage(msg.id!)}
-                            disabled={isLoading}
-                            title="Retry"
-                          >
-                            <RotateCcw size={13} />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          ))
+          <div className="space-y-5">
+            {messages.map((msg, idx) => {
+              const prev = messages[idx - 1];
+              const isLastInGroup = !prev || prev.role !== msg.role;
+              return (
+                <ChatMessage
+                  key={msg.id || idx}
+                  msg={msg}
+                  isLastInGroup={isLastInGroup}
+                  isLoading={isLoading}
+                  pinnedIdSet={pinnedIdSet}
+                  focusedMessageId={focusedMessageId}
+                  copiedMessageId={copiedMessageId}
+                  onCopy={copyMessage}
+                  onPin={onPinToCanvas}
+                  onUnpin={onUnpinFromCanvas}
+                  onLocate={onLocateCanvasCard}
+                  onSendToRight={onSendToRightPane}
+                  onRetry={onRetryMessage}
+                  onJumpToCitation={onJumpToCitation}
+                />
+              );
+            })}
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>
