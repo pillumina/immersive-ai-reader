@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut, X, Paperclip } from 'lucide-react';
+import { ZoomIn, ZoomOut, X, StickyNote, MessageCircleQuestion, Highlighter, Copy } from 'lucide-react';
 import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PdfOutlineItem } from '@/lib/pdf/renderer';
@@ -71,7 +71,7 @@ export function MainCanvas({
   const [compareHistory, setCompareHistory] = useState<number[]>([]);
   const [compareHistoryIndex, setCompareHistoryIndex] = useState(-1);
   const [splitReason, setSplitReason] = useState<'evidence' | 'reference' | 'compare'>('compare');
-  const [textHandle, setTextHandle] = useState<{ x: number; y: number; page?: number } | null>(null);
+  const [textHandle, setTextHandle] = useState<{ x: number; y: number; page?: number; text: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
@@ -99,7 +99,11 @@ export function MainCanvas({
               ?.closest('.pdf-page') as HTMLElement | null
           : null;
         const page = pageEl ? Number(pageEl.dataset.pageNumber || '0') || undefined : undefined;
-        setTextHandle({ x: rect.right + 6, y: rect.top + rect.height / 2 - 12, page });
+        const selectedText = sel.toString().trim();
+        // Position toolbar centered above the selection, offset upward
+        const toolbarX = Math.max(8, rect.left + rect.width / 2);
+        const toolbarY = Math.max(8, rect.top - 44); // above selection
+        setTextHandle({ x: toolbarX, y: toolbarY, page, text: selectedText });
       } catch {
         setTextHandle(null);
       }
@@ -126,6 +130,18 @@ export function MainCanvas({
     globalThis.addEventListener('keydown', handler);
     return () => globalThis.removeEventListener('keydown', handler);
   }, [searchOpen]);
+
+  // Escape dismisses the text selection toolbar
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && textHandle) {
+        globalThis.getSelection?.()?.removeAllRanges();
+        setTextHandle(null);
+      }
+    };
+    globalThis.addEventListener('keydown', handler);
+    return () => globalThis.removeEventListener('keydown', handler);
+  }, [textHandle]);
 
   // Search PDF text across all pages.
   const searchInPDF = useCallback(async (query: string, fileBlob: Blob, total: number) => {
@@ -776,66 +792,92 @@ export function MainCanvas({
         </button>
       )}
 
-      {/* Floating drag handle for selected text */}
+      {/* Context toolbar for selected text — iOS/Mac-style inline action bar */}
       {textHandle && (
-        <div
-          className="fixed z-40 cursor-grab active:cursor-grabbing select-none"
-          style={{ left: textHandle.x, top: textHandle.y }}
-          title="Drag to AI Panel or right-click → Attach to AI Panel"
-          onPointerDown={(e) => {
-            if (e.button !== 0) return;
-            e.preventDefault();
-            e.stopPropagation();
-            const sel = globalThis.getSelection?.();
-            const selectedText = sel?.toString().trim() ?? '';
-            if (!selectedText) return;
-
-            const page: number | undefined = (() => {
-              const el = (e.target as HTMLElement)?.ownerDocument
-                ?.elementFromPoint(e.clientX, e.clientY)
-                ?.closest('.pdf-page') as HTMLElement | null;
-              return el ? Number(el.dataset.pageNumber || '0') || undefined : undefined;
-            })();
-
-            const startX = e.clientX;
-            const startY = e.clientY;
-            let moved = false;
-
-            const onMove = (ev: PointerEvent) => {
-              if (Math.abs(ev.clientX - startX) > 5 || Math.abs(ev.clientY - startY) > 5) {
-                moved = true;
-              }
-              if (!moved) return;
-              const panel = globalThis.document?.querySelector<HTMLElement>('#ai-panel-scroll, aside[class*="flex-col"]');
-              if (panel && ev.clientX >= panel.getBoundingClientRect().left) {
-                globalThis.document?.dispatchEvent(new CustomEvent('text-attachment-drop', {
-                  detail: { content: selectedText, page },
-                  bubbles: true,
-                }));
+        <>
+          {/* Invisible backdrop to catch outside clicks */}
+          <div
+            className="fixed inset-0 z-30"
+            onClick={() => { setTextHandle(null); globalThis.getSelection?.()?.removeAllRanges(); }}
+            onMouseDown={(e) => {
+              // Don't dismiss if clicking inside the toolbar itself
+              if ((e.target as HTMLElement).closest('[data-text-toolbar]')) return;
+              setTextHandle(null);
+              globalThis.getSelection?.()?.removeAllRanges();
+            }}
+          />
+          {/* Toolbar */}
+          <div
+            data-text-toolbar
+            className="text-action-toolbar fixed z-40 flex items-center gap-0.5 rounded-xl border border-[#e7e5e4]/80 bg-white/95 shadow-[0_4px_20px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.08)] px-1 py-1 backdrop-blur-md"
+            style={{ left: textHandle.x, top: textHandle.y, transform: 'translateX(-50%)' }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="text-action-btn"
+              title="Highlight"
+              onClick={() => {
+                globalThis.getSelection?.()?.removeAllRanges();
                 setTextHandle(null);
+                onHighlightSelection();
+              }}
+            >
+              <span className="text-action-icon"><Highlighter size={14} /></span>
+              <span className="text-action-label">Highlight</span>
+            </button>
+
+            <div className="text-action-divider" />
+
+            <button
+              type="button"
+              className="text-action-btn"
+              title="Add Note"
+              onClick={() => {
                 globalThis.getSelection?.()?.removeAllRanges();
-                cleanup();
-              }
-            };
-            const onUp = () => {
-              if (!moved) {
-                // Single click: right-click to show menu options
+                setTextHandle(null);
+                onAddNoteSelection();
+              }}
+            >
+              <span className="text-action-icon"><StickyNote size={14} /></span>
+              <span className="text-action-label">Note</span>
+            </button>
+
+            <div className="text-action-divider" />
+
+            <button
+              type="button"
+              className="text-action-btn text-action-btn--ai"
+              title="Ask AI about selected text"
+              onClick={() => {
                 globalThis.getSelection?.()?.removeAllRanges();
-              }
-              cleanup();
-            };
-            const cleanup = () => {
-              globalThis.removeEventListener('pointermove', onMove as unknown as EventListener);
-              globalThis.removeEventListener('pointerup', onUp as unknown as EventListener);
-            };
-            globalThis.addEventListener('pointermove', onMove as unknown as EventListener);
-            globalThis.addEventListener('pointerup', onUp as unknown as EventListener);
-          }}
-        >
-          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-white/95 shadow-lg border border-[#e7e5e4] text-[#c2410c] hover:bg-[#fff7ed] transition-colors backdrop-blur-sm">
-            <Paperclip size={13} />
+                setTextHandle(null);
+                onExplainSelection();
+              }}
+            >
+              <span className="text-action-icon"><MessageCircleQuestion size={14} /></span>
+              <span className="text-action-label">Ask AI</span>
+            </button>
+
+            <div className="text-action-divider" />
+
+            <button
+              type="button"
+              className="text-action-btn"
+              title="Copy selected text"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(textHandle.text);
+                } catch { /* ignore */ }
+                globalThis.getSelection?.()?.removeAllRanges();
+                setTextHandle(null);
+              }}
+            >
+              <span className="text-action-icon"><Copy size={14} /></span>
+              <span className="text-action-label">Copy</span>
+            </button>
           </div>
-        </div>
+        </>
       )}
 
       {contextMenu && (

@@ -2940,3 +2940,66 @@ h1, h2, h3, h4, h5, h6 {
   right: 6px;
   color: var(--color-accent, #c2410c);
 }
+
+/* ─── Text Selection Context Toolbar (iOS/Mac-style) ───────────── */
+.text-action-toolbar {
+  /* Centered above selection via transform */
+  pointer-events: auto;
+  user-select: none;
+  white-space: nowrap;
+  /* Ensure toolbar never overflows viewport edges */
+  max-width: calc(100vw - 16px);
+}
+
+.text-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #44403c;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.text-action-btn:hover {
+  background: #f5f5f4;
+  color: #1c1917;
+}
+
+.text-action-btn:active {
+  background: #e7e5e4;
+  transform: scale(0.96);
+}
+
+.text-action-btn--ai {
+  color: #7c3aed;
+}
+
+.text-action-btn--ai:hover {
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+
+.text-action-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.text-action-label {
+  font-size: 12px;
+}
+
+.text-action-divider {
+  width: 1px;
+  height: 18px;
+  background: #e7e5e4;
+  flex-shrink: 0;
+}
