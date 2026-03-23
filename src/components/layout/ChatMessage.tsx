@@ -164,6 +164,7 @@ export function ChatMessage({
         className={`ai-msg group relative max-w-[85%] p-3 text-[13px] leading-relaxed shadow-sm transition-shadow duration-200 select-text ${bubbleClass} ${
           focusedMessageId && msg.id === focusedMessageId ? 'ai-msg-focus-ring' : ''
         }`}
+        style={{ contain: 'layout' }}
       >
         {/* Timestamp — appears on hover */}
         {timeStr && <span className="ai-msg-time">{timeStr}</span>}
