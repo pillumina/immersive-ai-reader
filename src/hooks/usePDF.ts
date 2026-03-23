@@ -21,6 +21,7 @@ export function usePDF() {
     textContent: doc.text_content || '',
     fileBlob,
     libraryId: doc.library_id ?? null,
+    lastPage: doc.last_page ?? 1,
     createdAt: new Date(doc.created_at),
     updatedAt: new Date(doc.updated_at),
   }), []);

@@ -14,8 +14,8 @@ impl DocumentRepository {
     pub async fn save(&self, doc: &Document) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO documents (id, file_name, file_path, file_size, page_count, text_content, library_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO documents (id, file_name, file_path, file_size, page_count, text_content, library_id, last_page, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 file_name = excluded.file_name,
                 file_path = excluded.file_path,
@@ -23,6 +23,7 @@ impl DocumentRepository {
                 page_count = excluded.page_count,
                 text_content = excluded.text_content,
                 library_id = excluded.library_id,
+                last_page = excluded.last_page,
                 updated_at = excluded.updated_at
             "#,
         )
@@ -33,6 +34,7 @@ impl DocumentRepository {
         .bind(doc.page_count)
         .bind(&doc.text_content)
         .bind(&doc.library_id)
+        .bind(doc.last_page)
         .bind(&doc.created_at)
         .bind(&doc.updated_at)
         .execute(&self.pool)
@@ -42,7 +44,7 @@ impl DocumentRepository {
 
     pub async fn get_by_id(&self, id: &str) -> Result<Option<Document>> {
         let doc = sqlx::query_as(
-            r#"SELECT id, file_name, file_path, file_size, page_count, text_content, library_id, created_at, updated_at FROM documents WHERE id = ?"#,
+            r#"SELECT id, file_name, file_path, file_size, page_count, text_content, library_id, last_page, created_at, updated_at FROM documents WHERE id = ?"#,
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -52,7 +54,7 @@ impl DocumentRepository {
 
     pub async fn get_all(&self) -> Result<Vec<Document>> {
         let docs = sqlx::query_as(
-            r#"SELECT id, file_name, file_path, file_size, page_count, text_content, library_id, created_at, updated_at FROM documents ORDER BY created_at DESC"#,
+            r#"SELECT id, file_name, file_path, file_size, page_count, text_content, library_id, last_page, created_at, updated_at FROM documents ORDER BY created_at DESC"#,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -61,7 +63,7 @@ impl DocumentRepository {
 
     pub async fn get_by_library(&self, library_id: &str) -> Result<Vec<Document>> {
         let docs = sqlx::query_as(
-            r#"SELECT id, file_name, file_path, file_size, page_count, text_content, library_id, created_at, updated_at FROM documents WHERE library_id = ? ORDER BY updated_at DESC"#,
+            r#"SELECT id, file_name, file_path, file_size, page_count, text_content, library_id, last_page, created_at, updated_at FROM documents WHERE library_id = ? ORDER BY updated_at DESC"#,
         )
         .bind(library_id)
         .fetch_all(&self.pool)
@@ -71,7 +73,7 @@ impl DocumentRepository {
 
     pub async fn find_by_file_path(&self, file_path: &str) -> Result<Option<Document>> {
         let doc = sqlx::query_as(
-            r#"SELECT id, file_name, file_path, file_size, page_count, text_content, library_id, created_at, updated_at FROM documents WHERE file_path = ?"#,
+            r#"SELECT id, file_name, file_path, file_size, page_count, text_content, library_id, last_page, created_at, updated_at FROM documents WHERE file_path = ?"#,
         )
         .bind(file_path)
         .fetch_optional(&self.pool)
@@ -113,6 +115,17 @@ impl DocumentRepository {
             r#"UPDATE documents SET library_id = ?, updated_at = datetime('now') WHERE id = ?"#,
         )
         .bind(library_id)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn update_last_page(&self, id: &str, last_page: i32) -> Result<()> {
+        sqlx::query(
+            r#"UPDATE documents SET last_page = ?, updated_at = datetime('now') WHERE id = ?"#,
+        )
+        .bind(last_page)
         .bind(id)
         .execute(&self.pool)
         .await?;

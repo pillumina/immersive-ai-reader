@@ -114,3 +114,14 @@ pub async fn update_document_library(
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn update_document_last_page(
+    id: String,
+    last_page: i32,
+    repo: State<'_, DocumentRepository>,
+) -> Result<(), String> {
+    repo.update_last_page(&id, last_page)
+        .await
+        .map_err(|e| e.to_string())
+}

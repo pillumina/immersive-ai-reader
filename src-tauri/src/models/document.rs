@@ -11,6 +11,7 @@ pub struct Document {
     pub page_count: i32,
     pub text_content: Option<String>,
     pub library_id: Option<String>,
+    pub last_page: i32,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -36,6 +37,7 @@ impl Document {
             page_count: req.page_count,
             text_content: Some(req.text_content),
             library_id: req.library_id,
+            last_page: 1,
             created_at: now.clone(),
             updated_at: now,
         }

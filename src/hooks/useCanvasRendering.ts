@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { annotationCommands } from '@/lib/tauri';
+import { annotationCommands, documentCommands } from '@/lib/tauri';
 import { PdfOutlineItem, renderPagesToContainer } from '@/lib/pdf/renderer';
 import { PDFDocument } from '@/types/document';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
@@ -14,13 +14,32 @@ export function useCanvasRendering(
 ) {
   const renderJobIdRef = useRef(0);
   const latestZoomRef = useRef(zoomLevel);
+  const lastSavedPageRef = useRef<number | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(pdfDocument?.lastPage ?? 1);
   const [outline, setOutline] = useState<PdfOutlineItem[]>([]);
   const NOTE_PREFIX = '__NOTE__|';
   const AI_CARD_PREFIX = '__AICARD__|';
+
+  // Debounced save of reading progress to database.
+  useEffect(() => {
+    if (!pdfDocument?.id || currentPage === lastSavedPageRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await documentCommands.updateLastPage(pdfDocument.id, currentPage);
+        lastSavedPageRef.current = currentPage;
+      } catch (e) {
+        console.warn('[reading-progress] save failed:', e);
+      }
+    }, 1000);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [pdfDocument?.id, currentPage]);
 
   const clearHighlights = () => {
     const containerEl = globalThis.document?.getElementById(containerId);
@@ -535,7 +554,7 @@ export function useCanvasRendering(
         if (jobId !== renderJobIdRef.current) return;
 
         setTotalPages(result.totalPages);
-        setCurrentPage(1);
+        setCurrentPage(pdfDocument.lastPage ?? 1);
         setOutline(result.outline);
         console.log('Rendered pages count:', result.totalPages);
 

@@ -7,6 +7,7 @@ export interface PDFDocument {
   textContent: string;
   fileBlob: Blob | null;
   libraryId: string | null;
+  lastPage: number;
   createdAt: Date;
   updatedAt: Date;
 }

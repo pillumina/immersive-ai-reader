@@ -24,6 +24,7 @@ export interface BackendDocument {
   page_count: number;
   text_content: string | null;
   library_id: string | null;
+  last_page: number;
   created_at: string;
   updated_at: string;
 }
@@ -116,6 +117,10 @@ export const documentCommands = {
 
   updateLibrary: async (id: string, libraryId: string | null): Promise<void> => {
     await invoke('update_document_library', { id, libraryId });
+  },
+
+  updateLastPage: async (id: string, lastPage: number): Promise<void> => {
+    await invoke('update_document_last_page', { id, lastPage });
   },
 };
 

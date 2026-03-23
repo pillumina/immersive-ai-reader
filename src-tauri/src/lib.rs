@@ -50,6 +50,7 @@ pub fn run() {
             commands::document::read_pdf_file,
             commands::document::update_document_file_path,
             commands::document::update_document_library,
+            commands::document::update_document_last_page,
 
             // Annotation commands
             commands::annotation::create_annotation,
