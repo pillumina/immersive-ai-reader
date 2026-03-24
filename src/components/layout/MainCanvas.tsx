@@ -75,7 +75,8 @@ export function MainCanvas({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchResultPage, setSearchResultPage] = useState<number | null>(null);
+  const [searchResultPages, setSearchResultPages] = useState<number[]>([]);
+  const [searchCurrentIndex, setSearchCurrentIndex] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   // Monitor text selection to show floating drag handle
@@ -154,30 +155,47 @@ export function MainCanvas({
     return () => globalThis.removeEventListener('keydown', handler);
   }, [textHandle]);
 
-  // Search PDF text across all pages.
+  // Search PDF text across all pages, collect all matches.
   const searchInPDF = useCallback(async (query: string, fileBlob: Blob, total: number) => {
-    if (!query.trim()) { setSearchResultPage(null); return; }
+    if (!query.trim()) { setSearchResultPages([]); return; }
     setSearchLoading(true);
+    setSearchError(null);
     try {
       const file = fileBlob instanceof File ? fileBlob : new File([fileBlob], 'doc.pdf', { type: 'application/pdf' });
       const arrayBuffer = await file.arrayBuffer();
       const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const q = query.toLowerCase();
+      const matches: number[] = [];
       for (let i = 1; i <= Math.min(total, pdfDoc.numPages); i++) {
         const page = await pdfDoc.getPage(i);
         const content = await page.getTextContent();
         const pageText = content.items.map((item: any) => item.str).join(' ');
         if (pageText.toLowerCase().includes(q)) {
-          setSearchResultPage(i);
-          onJumpToPage(i);
-          setSearchLoading(false);
-          return;
+          matches.push(i);
         }
       }
-      setSearchResultPage(0); // no match
+      setSearchResultPages(matches);
+      setSearchCurrentIndex(0);
+      if (matches.length > 0) {
+        onJumpToPage(matches[0]);
+      }
     } catch { /* silent */ }
     setSearchLoading(false);
   }, [onJumpToPage]);
+
+  const goToPrevSearchResult = () => {
+    if (searchResultPages.length === 0) return;
+    const newIndex = searchCurrentIndex > 0 ? searchCurrentIndex - 1 : searchResultPages.length - 1;
+    setSearchCurrentIndex(newIndex);
+    onJumpToPage(searchResultPages[newIndex]);
+  };
+
+  const goToNextSearchResult = () => {
+    if (searchResultPages.length === 0) return;
+    const newIndex = searchCurrentIndex < searchResultPages.length - 1 ? searchCurrentIndex + 1 : 0;
+    setSearchCurrentIndex(newIndex);
+    onJumpToPage(searchResultPages[newIndex]);
+  };
 
   // Notify parent when split mode changes so it can adjust layout (e.g. hide AI panel).
   useEffect(() => {
@@ -527,7 +545,7 @@ export function MainCanvas({
             </button>
           )}
           {searchOpen && (
-            <div className="flex items-center gap-1 border border-[#e7e5e4] rounded-lg px-2 py-1 bg-white shadow-sm">
+            <div className="flex items-center gap-1 border border-[#e7e5e4] rounded-lg px-2 py-1 bg-white shadow-sm min-w-[220px]">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input
                 autoFocus
@@ -535,7 +553,6 @@ export function MainCanvas({
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
-                  // Trigger search with the current PDF blob — we need it from props
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); }
@@ -545,23 +562,53 @@ export function MainCanvas({
                     setSearchError(null);
                     void searchInPDF(searchQuery, pdfFileBlob, totalPages);
                   }
+                  if (e.key === 'F3' || (e.key === 'ArrowDown' && searchResultPages.length > 0)) {
+                    e.preventDefault();
+                    void goToNextSearchResult();
+                  }
+                  if (e.key === 'ArrowUp' && searchResultPages.length > 0) {
+                    e.preventDefault();
+                    void goToPrevSearchResult();
+                  }
                 }}
                 placeholder="Search…"
-                className="border-none outline-none text-[12px] text-[#444] bg-transparent w-36 placeholder:text-[#c4bdb9]"
+                className="border-none outline-none text-[12px] text-[#444] bg-transparent w-24 placeholder:text-[#c4bdb9]"
               />
               {searchLoading ? (
                 <span className="text-[10px] text-[#a8a29e]">…</span>
               ) : searchError ? (
                 <span className="text-[10px] text-[#ef4444]">error</span>
-              ) : searchResultPage ? (
-                <span className="text-[10px] text-[#0d9488] font-medium">p.{searchResultPage}</span>
+              ) : searchResultPages.length > 0 ? (
+                <span className="text-[10px] text-[#0d9488] font-medium whitespace-nowrap">
+                  {searchCurrentIndex + 1}/{searchResultPages.length}
+                </span>
               ) : searchQuery && !searchLoading ? (
                 <span className="text-[10px] text-[#a8a29e]">no match</span>
               ) : null}
+              {searchResultPages.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void goToPrevSearchResult()}
+                    title="Previous (↑)"
+                    className="text-[#a8a29e] hover:text-[#0d9488] transition-colors leading-none px-0.5"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="18 15 12 9 6 15"/></svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void goToNextSearchResult()}
+                    title="Next (↓)"
+                    className="text-[#a8a29e] hover:text-[#0d9488] transition-colors leading-none px-0.5"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                </>
+              )}
               <button
                 type="button"
-                onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
-                className="text-[#a8a29e] hover:text-[#78716c] transition-colors leading-none"
+                onClick={() => { setSearchOpen(false); setSearchQuery(''); setSearchResultPages([]); }}
+                className="text-[#a8a29e] hover:text-[#78716c] transition-colors leading-none ml-auto"
               >
                 ×
               </button>

@@ -96,8 +96,11 @@ export function useCanvasRendering(
     const card = document.createElement('div');
     const kind = options?.kind || 'note';
     card.className = `pdf-note-card ${kind === 'ai-card' ? 'pdf-ai-card' : ''}`;
+
+    // Absolute position within scroll container (card floats above pages, not clipped by page)
+    const pageOffsetTop = pageEl.offsetTop;
     card.style.left = `${Math.max(x + 8, 8)}px`;
-    card.style.top = `${Math.max(y + 8, 8)}px`;
+    card.style.top = `${pageOffsetTop + Math.max(y + 8, 8)}px`;
 
     // Tag area — shown when annotationId is present
     const tagArea = document.createElement('div');
@@ -384,6 +387,7 @@ export function useCanvasRendering(
           card.style.cursor = 'grabbing';
           const dx = ev.clientX - startX;
           const dy = ev.clientY - startY;
+          // Unconstrained drag within container
           card.style.left = `${Math.max(origLeft + dx, 0)}px`;
           card.style.top = `${Math.max(origTop + dy, 0)}px`;
 
@@ -452,14 +456,15 @@ export function useCanvasRendering(
 
         const onPointerMove = (evt: PointerEvent) => {
           if (!dragging) return;
-          const pageRect = pageEl.getBoundingClientRect();
+          const containerRect = containerEl.getBoundingClientRect();
           const dx = evt.clientX - startClientX;
           const dy = evt.clientY - startClientY;
           if (Math.abs(dx) + Math.abs(dy) > 3) {
             didDrag = true;
           }
-          const maxLeft = Math.max(pageRect.width - card.offsetWidth - 8, 8);
-          const maxTop = Math.max(pageRect.height - card.offsetHeight - 8, 8);
+          // Unconstrained drag within container
+          const maxLeft = Math.max(containerRect.width - card.offsetWidth - 8, 8);
+          const maxTop = Math.max(containerRect.height - card.offsetHeight - 8, 8);
           lastLeft = Math.min(Math.max(startLeft + dx, 8), maxLeft);
           lastTop = Math.min(Math.max(startTop + dy, 8), maxTop);
           card.style.left = `${lastLeft}px`;
@@ -524,7 +529,7 @@ export function useCanvasRendering(
       };
       attachDrag();
     }
-    pageEl.appendChild(card);
+    containerEl.appendChild(card);
   };
 
   const loadStoredHighlights = async (documentId: string) => {
