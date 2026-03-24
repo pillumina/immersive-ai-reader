@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { annotationCommands, documentCommands } from '@/lib/tauri';
+import { annotationCommands, documentCommands, tagCommands } from '@/lib/tauri';
 import { PdfOutlineItem, renderPagesToContainer } from '@/lib/pdf/renderer';
 import { PDFDocument } from '@/types/document';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
 import { aiCardDragState } from '@/components/layout/AIPanel';
+import type { Tag } from '@/types/annotation';
 
 export function useCanvasRendering(
   scrollContainerId: string,
@@ -16,6 +17,8 @@ export function useCanvasRendering(
   const latestZoomRef = useRef(zoomLevel);
   const lastSavedPageRef = useRef<number | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tagCacheRef = useRef<Map<string, Tag[]>>(new Map());
+  const tagChipRenderersRef = useRef<Map<string, (tags: Tag[]) => void>>(new Map());
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(0);
@@ -83,7 +86,7 @@ export function useCanvasRendering(
     x: number,
     y: number,
     content: string,
-    options?: { messageId?: string; annotationId?: string; kind?: 'note' | 'ai-card'; selectedText?: string }
+    options?: { messageId?: string; annotationId?: string; kind?: 'note' | 'ai-card'; selectedText?: string; tags?: Tag[] }
   ) => {
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(containerEl instanceof HTMLElement)) return;
@@ -95,6 +98,71 @@ export function useCanvasRendering(
     card.className = `pdf-note-card ${kind === 'ai-card' ? 'pdf-ai-card' : ''}`;
     card.style.left = `${Math.max(x + 8, 8)}px`;
     card.style.top = `${Math.max(y + 8, 8)}px`;
+
+    // Tag area — shown when annotationId is present
+    const tagArea = document.createElement('div');
+    tagArea.className = 'note-card-tag-area';
+    tagArea.style.cssText = 'display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px;align-items:center;';
+
+    const renderTagChips = (tags: Tag[]) => {
+      tagArea.innerHTML = '';
+      tags.forEach((tag) => {
+        const chip = document.createElement('span');
+        chip.className = 'note-card-tag-chip';
+        chip.style.cssText = `display:inline-flex;align-items:center;gap:2px;height:16px;padding:0 4px;border-radius:4px;background:${tag.color}22;border:1px solid ${tag.color}55;color:${tag.color};font-size:9px;font-weight:500;cursor:pointer;user-select:none;white-space:nowrap;`;
+        chip.textContent = tag.name;
+        chip.title = `${tag.name} — click to manage`;
+        chip.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (options?.annotationId) {
+            globalThis.dispatchEvent(new CustomEvent('open-card-tag-popup', {
+              detail: { annotationId: options.annotationId },
+              bubbles: true,
+            }));
+          }
+        });
+        tagArea.appendChild(chip);
+      });
+      // Add "+" button to add a tag
+      if (options?.annotationId) {
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'note-card-tag-add';
+        addBtn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;background:#f1f5f9;border:1px solid #e2e8f0;color:#94a3b8;font-size:10px;cursor:pointer;padding:0;line-height:1;transition:background 0.1s,color 0.1s;';
+        addBtn.textContent = '+';
+        addBtn.title = 'Add tag';
+        addBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (options?.annotationId) {
+            globalThis.dispatchEvent(new CustomEvent('open-card-tag-popup', {
+              detail: { annotationId: options.annotationId },
+              bubbles: true,
+            }));
+          }
+        });
+        addBtn.addEventListener('mouseenter', () => {
+          addBtn.style.background = '#e2e8f0';
+          addBtn.style.color = '#64748b';
+        });
+        addBtn.addEventListener('mouseleave', () => {
+          addBtn.style.background = '#f1f5f9';
+          addBtn.style.color = '#94a3b8';
+        });
+        tagArea.appendChild(addBtn);
+      }
+    };
+
+    // Initialize with cached tags or empty
+    if (options?.annotationId) {
+      // Register renderer so App can call it to refresh chips after tag changes
+      tagChipRenderersRef.current.set(options.annotationId, renderTagChips);
+      const initialTags = options.tags || tagCacheRef.current.get(options.annotationId) || [];
+      if (initialTags.length > 0) {
+        tagCacheRef.current.set(options.annotationId, initialTags);
+        renderTagChips(initialTags);
+      }
+    }
+
     if (kind === 'ai-card') {
       const header = document.createElement('div');
       header.className = 'pdf-ai-card-header';
@@ -127,6 +195,7 @@ export function useCanvasRendering(
         actions.appendChild(unpinBtn);
       }
       card.appendChild(header);
+      card.appendChild(tagArea);
       card.appendChild(body);
       card.appendChild(actions);
 
@@ -150,6 +219,7 @@ export function useCanvasRendering(
       const displayEl = document.createElement('div');
       displayEl.className = 'note-card-display';
       displayEl.innerHTML = simpleMarkdownToHtml(content);
+      card.appendChild(tagArea);
       card.appendChild(displayEl);
 
       const statusEl = document.createElement('div');
@@ -461,6 +531,30 @@ export function useCanvasRendering(
   const loadStoredHighlights = async (documentId: string) => {
     clearHighlights();
     const annotations = await annotationCommands.getByDocument(documentId);
+
+    // Pre-load tags for all annotations that need them
+    const annotationIds = annotations
+      .filter((a) => {
+        const text = typeof a.text === 'string' ? a.text : '';
+        return text.startsWith(NOTE_PREFIX) || text.startsWith(AI_CARD_PREFIX);
+      })
+      .map((a) => a.id);
+
+    // Batch load tags
+    const tagResults = await Promise.all(
+      annotationIds.map(async (id) => {
+        try {
+          const tags = await tagCommands.getByAnnotation(id);
+          return { id, tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color })) };
+        } catch {
+          return { id, tags: [] };
+        }
+      })
+    );
+    tagResults.forEach(({ id, tags }) => {
+      if (tags.length > 0) tagCacheRef.current.set(id, tags);
+    });
+
     annotations
       .filter((a) => a.annotation_type === 'highlight')
       .forEach((a) => {
@@ -473,6 +567,7 @@ export function useCanvasRendering(
         const aiParts = isAiCard ? aiRaw.split('\n\n') : [];
         const aiMessageId = isAiCard ? (aiParts[0] || '').trim() : '';
         const aiContent = isAiCard ? aiParts.slice(1).join('\n\n').trim() : '';
+        const cachedTags = tagCacheRef.current.get(a.id) || [];
 
         renderHighlight(
           Number(a.page_number),
@@ -496,7 +591,7 @@ export function useCanvasRendering(
             Number(a.position_x),
             Number(a.position_y),
             noteContent,
-            { annotationId: a.id, selectedText: noteSelectedText }
+            { annotationId: a.id, selectedText: noteSelectedText, tags: cachedTags }
           );
         }
         if (isAiCard && aiContent) {
@@ -505,7 +600,7 @@ export function useCanvasRendering(
             Number(a.position_x),
             Number(a.position_y),
             aiContent,
-            { messageId: aiMessageId, annotationId: a.id, kind: 'ai-card' }
+            { messageId: aiMessageId, annotationId: a.id, kind: 'ai-card', tags: cachedTags }
           );
         }
       });
@@ -1009,6 +1104,13 @@ export function useCanvasRendering(
     return true;
   };
 
+  // Update tag chip display for a specific annotation (called by App after tag changes)
+  const refreshCardTags = (annotationId: string, tags: Tag[]) => {
+    tagCacheRef.current.set(annotationId, tags);
+    const renderFn = tagChipRenderersRef.current.get(annotationId);
+    if (renderFn) renderFn(tags);
+  };
+
   return {
     isRendering,
     renderError,
@@ -1024,5 +1126,6 @@ export function useCanvasRendering(
     unpinAiCardByMessageId,
     handleCanvasUnpin,
     locateAiCardByMessageId,
+    refreshCardTags,
   };
 }

@@ -6,6 +6,7 @@ import { TopBar, AppTab } from '@/components/layout/TopBar';
 import { LibraryView } from '@/components/features/LibraryView';
 import { SettingsModal } from '@/components/features/SettingsModal';
 import { Toast } from '@/components/ui/Toast';
+import { TagManagePopup } from '@/components/ui/TagManagePopup';
 import { usePDF } from '@/hooks/usePDF';
 import { usePDFThumbnails } from '@/hooks/usePDFThumbnails';
 import { useAI } from '@/hooks/useAI';
@@ -67,6 +68,9 @@ function App() {
   const [allTags, setAllTags] = useState<string[]>([]);
   const [recentDocuments, setRecentDocuments] = useState<PDFDocument[]>([]);
   const recentDocIdsRef = useRef<Set<string>>(new Set());
+
+  // ─── Tag popup state ───────────────────────────────────────
+  const [tagPopupAnnotationId, setTagPopupAnnotationId] = useState<string | null>(null);
 
   const openDocTab = useCallback((doc: PDFDocument) => {
     const tabId = `doc-${doc.id}`;
@@ -141,6 +145,7 @@ function App() {
     dropAICardAtPoint,
     unpinAiCardByMessageId,
     locateAiCardByMessageId,
+    refreshCardTags,
   } = useCanvasRendering(
     activeTabId === 'library' ? '' : 'pdf-scroll-container',
     activeTabId === 'library' ? '' : 'pdf-pages-container',
@@ -297,6 +302,16 @@ function App() {
     };
     globalThis.document?.addEventListener('note-card-delete-app', handler);
     return () => globalThis.document?.removeEventListener('note-card-delete-app', handler);
+  }, []);
+
+  // Listen for tag popup open from canvas cards
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { annotationId } = (e as CustomEvent<{ annotationId: string }>).detail;
+      setTagPopupAnnotationId(annotationId);
+    };
+    globalThis.document?.addEventListener('open-card-tag-popup', handler);
+    return () => globalThis.document?.removeEventListener('open-card-tag-popup', handler);
   }, []);
 
   // Listen for text/note attachments from canvas
@@ -911,6 +926,18 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
           );
         }}
       />
+
+      {tagPopupAnnotationId && (
+        <TagManagePopup
+          annotationId={tagPopupAnnotationId}
+          onClose={() => setTagPopupAnnotationId(null)}
+          onTagsChanged={(tags) => {
+            if (refreshCardTags) {
+              refreshCardTags(tagPopupAnnotationId, tags);
+            }
+          }}
+        />
+      )}
 
       {toast && (
         <Toast
