@@ -104,6 +104,7 @@ export function useCanvasRendering(
     tagArea.className = 'note-card-tag-area';
     tagArea.style.cssText = 'display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px;align-items:center;';
 
+    // Always show "+" button when annotationId is present (even if no tags yet)
     const renderTagChips = (tags: Tag[]) => {
       tagArea.innerHTML = '';
       tags.forEach((tag) => {
@@ -123,7 +124,7 @@ export function useCanvasRendering(
         });
         tagArea.appendChild(chip);
       });
-      // Add "+" button to add a tag
+      // Always render "+" button when annotationId is present
       if (options?.annotationId) {
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
@@ -152,15 +153,11 @@ export function useCanvasRendering(
       }
     };
 
-    // Initialize with cached tags or empty
+    // Register renderer and initialize — always call to show "+" button
     if (options?.annotationId) {
-      // Register renderer so App can call it to refresh chips after tag changes
       tagChipRenderersRef.current.set(options.annotationId, renderTagChips);
       const initialTags = options.tags || tagCacheRef.current.get(options.annotationId) || [];
-      if (initialTags.length > 0) {
-        tagCacheRef.current.set(options.annotationId, initialTags);
-        renderTagChips(initialTags);
-      }
+      renderTagChips(initialTags);
     }
 
     if (kind === 'ai-card') {
