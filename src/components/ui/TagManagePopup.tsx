@@ -303,7 +303,7 @@ export function TagManagePopup({ annotationId, onClose, onTagsChanged }: TagMana
                 cursor: newTagName.trim() ? 'pointer' : 'not-allowed',
               }}
             >
-              Add "{newTagName.trim() || search.trim() || '...'}"
+              Add &ldquo;{newTagName.trim() || search.trim() || '...'}&rdquo;
             </button>
           </div>
 
