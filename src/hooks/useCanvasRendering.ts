@@ -102,7 +102,7 @@ export function useCanvasRendering(
     // Tag area — shown when annotationId is present
     const tagArea = document.createElement('div');
     tagArea.className = 'note-card-tag-area';
-    tagArea.style.cssText = 'display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px;align-items:center;';
+    tagArea.style.cssText = 'display:flex;flex-wrap:wrap;gap:3px;align-items:center;min-height:22px;margin-bottom:5px;padding-bottom:5px;border-bottom:1px solid rgba(0,0,0,0.05);';
 
     // Always show "+" button when annotationId is present (even if no tags yet)
     const renderTagChips = (tags: Tag[]) => {
@@ -129,8 +129,8 @@ export function useCanvasRendering(
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'note-card-tag-add';
-        addBtn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;background:#f1f5f9;border:1px solid #e2e8f0;color:#94a3b8;font-size:10px;cursor:pointer;padding:0;line-height:1;transition:background 0.1s,color 0.1s;';
-        addBtn.textContent = '+';
+        addBtn.style.cssText = 'display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 5px;border-radius:4px;background:#f1f5f9;border:1px solid #e2e8f0;color:#94a3b8;font-size:10px;cursor:pointer;line-height:1;transition:background 0.1s,color 0.1s;white-space:nowrap;';
+        addBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg> Add tag`;
         addBtn.title = 'Add tag';
         addBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -143,11 +143,13 @@ export function useCanvasRendering(
         });
         addBtn.addEventListener('mouseenter', () => {
           addBtn.style.background = '#e2e8f0';
-          addBtn.style.color = '#64748b';
+          addBtn.style.color = '#0d9488';
+          addBtn.style.borderColor = '#0d9488';
         });
         addBtn.addEventListener('mouseleave', () => {
           addBtn.style.background = '#f1f5f9';
           addBtn.style.color = '#94a3b8';
+          addBtn.style.borderColor = '#e2e8f0';
         });
         tagArea.appendChild(addBtn);
       }

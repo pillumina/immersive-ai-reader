@@ -76,6 +76,7 @@ export function MainCanvas({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResultPage, setSearchResultPage] = useState<number | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   // Monitor text selection to show floating drag handle
   useEffect(() => {
@@ -539,7 +540,10 @@ export function MainCanvas({
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); }
                   if (e.key === 'Enter') {
-                    if (pdfFileBlob) void searchInPDF(searchQuery, pdfFileBlob, totalPages);
+                    if (!pdfFileBlob) { setSearchError('请重新打开文档（从文件）以启用搜索'); return; }
+                    if (!searchQuery.trim()) { setSearchError(null); return; }
+                    setSearchError(null);
+                    void searchInPDF(searchQuery, pdfFileBlob, totalPages);
                   }
                 }}
                 placeholder="Search…"
@@ -547,6 +551,8 @@ export function MainCanvas({
               />
               {searchLoading ? (
                 <span className="text-[10px] text-[#a8a29e]">…</span>
+              ) : searchError ? (
+                <span className="text-[10px] text-[#ef4444]">error</span>
               ) : searchResultPage ? (
                 <span className="text-[10px] text-[#0d9488] font-medium">p.{searchResultPage}</span>
               ) : searchQuery && !searchLoading ? (
