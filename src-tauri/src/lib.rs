@@ -78,6 +78,10 @@ pub fn run() {
             commands::tag::add_tag_to_document,
             commands::tag::remove_tag_from_document,
             commands::tag::delete_tag,
+            commands::tag::get_annotation_tags,
+            commands::tag::set_annotation_tags,
+            commands::tag::add_tag_to_annotation,
+            commands::tag::remove_tag_from_annotation,
 
             // AI commands
             commands::ai::send_chat_message,

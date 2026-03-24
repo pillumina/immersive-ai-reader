@@ -40,5 +40,31 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     );
     let _ = add_idx.execute(pool).await;
 
+    // Migration: add color to tags table (for card-level tag coloring)
+    let add_color_to_tags = sqlx::query("ALTER TABLE tags ADD COLUMN color TEXT NOT NULL DEFAULT '#6B7280'");
+    let _ = add_color_to_tags.execute(pool).await;
+
+    // Migration: create annotation_tags junction table
+    let create_annotation_tags = sqlx::query(
+        "CREATE TABLE IF NOT EXISTS annotation_tags (
+            annotation_id TEXT NOT NULL,
+            tag_id TEXT NOT NULL,
+            PRIMARY KEY (annotation_id, tag_id),
+            FOREIGN KEY (annotation_id) REFERENCES annotations(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        )",
+    );
+    let _ = create_annotation_tags.execute(pool).await;
+
+    let create_annotation_tags_idx = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_annotation_tags_annotation_id ON annotation_tags(annotation_id)",
+    );
+    let _ = create_annotation_tags_idx.execute(pool).await;
+
+    let create_annotation_tags_idx2 = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_annotation_tags_tag_id ON annotation_tags(tag_id)",
+    );
+    let _ = create_annotation_tags_idx2.execute(pool).await;
+
     Ok(())
 }

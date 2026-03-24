@@ -40,6 +40,7 @@ export interface BackendLibrary {
 export interface BackendTag {
   id: string;
   name: string;
+  color: string;
   created_at: string;
 }
 
@@ -163,8 +164,8 @@ export const tagCommands = {
     return await invoke<BackendTag[]>('get_document_tags', { documentId });
   },
 
-  addToDocument: async (documentId: string, tagName: string): Promise<void> => {
-    await invoke('add_tag_to_document', { documentId, tagName });
+  addToDocument: async (documentId: string, tagName: string, color?: string): Promise<void> => {
+    await invoke('add_tag_to_document', { documentId, tagName, color });
   },
 
   removeFromDocument: async (documentId: string, tagName: string): Promise<void> => {
@@ -173,6 +174,23 @@ export const tagCommands = {
 
   delete: async (id: string): Promise<void> => {
     await invoke('delete_tag', { id });
+  },
+
+  // Annotation-level tag commands
+  getByAnnotation: async (annotationId: string): Promise<BackendTag[]> => {
+    return await invoke<BackendTag[]>('get_annotation_tags', { annotationId });
+  },
+
+  setAnnotationTags: async (annotationId: string, tagNames: string[], colors: string[]): Promise<void> => {
+    await invoke('set_annotation_tags', { annotationId, tagNames, colors });
+  },
+
+  addToAnnotation: async (annotationId: string, tagName: string, color?: string): Promise<void> => {
+    await invoke('add_tag_to_annotation', { annotationId, tagName, color });
+  },
+
+  removeFromAnnotation: async (annotationId: string, tagName: string): Promise<void> => {
+    await invoke('remove_tag_from_annotation', { annotationId, tagName });
   },
 };
 

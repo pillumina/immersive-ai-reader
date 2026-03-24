@@ -1,6 +1,6 @@
 # Immersive AI Reader Roadmap Progress
 
-Last updated: 2026-03-23
+Last updated: 2026-03-24
 Source of truth: `research/vibero-immersive-reader/沉浸式AI阅读器_PRD.md`
 
 ## Current Goal (PRD Effect First)
@@ -85,7 +85,7 @@ Current sprint target: AI 上下文感知增强 + 画布交互升级 + 导出分
 
 - [x] 笔记管理面板（全局列表、搜索、编辑、删除）
 - [x] AI Panel Header 快捷入口（Notes 按钮打开笔记管理）（2026-03-19）
-- [ ] 笔记标签系统
+- [x] 笔记标签系统：annotation_tags 表 + Tag.color 字段，Preset Tags（重要/疑问/引用/待整理），预设色板（8色），Rust 增删改查，TypeScript 类型定义（2026-03-24）
 - [ ] 笔记导出增强（带格式）
 
 ### B3. 导出与分享完善（PRD 4.2.4 对齐）
