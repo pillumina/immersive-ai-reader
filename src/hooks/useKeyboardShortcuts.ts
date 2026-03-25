@@ -38,6 +38,9 @@ export function useKeyboardShortcuts({
       return tag === 'input' || tag === 'textarea' || el.isContentEditable;
     };
 
+    // Cache platform check once — platform never changes at runtime.
+    const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
+
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       // Always handle Escape (close panels) unless inside contenteditable.
@@ -49,7 +52,6 @@ export function useKeyboardShortcuts({
 
       if (isTyping(e.target)) return;
 
-      const isMac = navigator.platform.toUpperCase().includes('MAC');
       const mod = isMac ? e.metaKey : e.ctrlKey;
 
       // Cmd/Ctrl + W — close current tab.

@@ -480,31 +480,8 @@ export function useAI(
         }
       };
 
-      unlistenDone = await listen<StreamDonePayload>('ai_stream_done', async (event) => {
-        if (!expectedStreamId || event.payload.stream_id !== expectedStreamId) return;
-        await cleanup();
-        activeStreamIdRef.current = null;
-        resolve({
-          content: event.payload.content || streamingContentRef.current,
-          usage: {
-            latencyMs: normalizeTokenNumber(event.payload.latency_ms),
-            ttftMs: firstTokenAt ? firstTokenAt - streamStartedAt : undefined,
-            promptTokens: normalizeTokenNumber(event.payload.prompt_tokens),
-            completionTokens: normalizeTokenNumber(event.payload.completion_tokens),
-            totalTokens: normalizeTokenNumber(event.payload.total_tokens),
-            model: aiConfig.model,
-          },
-          stopped: !!event.payload.stopped,
-        });
-      });
-
-      unlistenError = await listen<StreamErrorPayload>('ai_stream_error', async (event) => {
-        if (!expectedStreamId || event.payload.stream_id !== expectedStreamId) return;
-        await cleanup();
-        activeStreamIdRef.current = null;
-        reject(new Error(event.payload.message || 'Stream request failed'));
-      });
-
+      // Register done/error listeners AFTER stream starts, so they're always
+      // registered before any event can fire, and cleanup always knows about them.
       try {
         const started = await aiCommands.startStreamMessage(
           aiConfig.provider,
@@ -517,6 +494,32 @@ export function useAI(
         );
         expectedStreamId = started.stream_id;
         activeStreamIdRef.current = expectedStreamId;
+
+        // Now safe to register done/error — stream has started, no early events possible
+        unlistenDone = await listen<StreamDonePayload>('ai_stream_done', async (event) => {
+          if (!expectedStreamId || event.payload.stream_id !== expectedStreamId) return;
+          await cleanup();
+          activeStreamIdRef.current = null;
+          resolve({
+            content: event.payload.content || streamingContentRef.current,
+            usage: {
+              latencyMs: normalizeTokenNumber(event.payload.latency_ms),
+              ttftMs: firstTokenAt ? firstTokenAt - streamStartedAt : undefined,
+              promptTokens: normalizeTokenNumber(event.payload.prompt_tokens),
+              completionTokens: normalizeTokenNumber(event.payload.completion_tokens),
+              totalTokens: normalizeTokenNumber(event.payload.total_tokens),
+              model: aiConfig.model,
+            },
+            stopped: !!event.payload.stopped,
+          });
+        });
+
+        unlistenError = await listen<StreamErrorPayload>('ai_stream_error', async (event) => {
+          if (!expectedStreamId || event.payload.stream_id !== expectedStreamId) return;
+          await cleanup();
+          activeStreamIdRef.current = null;
+          reject(new Error(event.payload.message || 'Stream request failed'));
+        });
       } catch (error) {
         await cleanup();
         activeStreamIdRef.current = null;
@@ -769,6 +772,7 @@ export function useAI(
       if (stopRequestedRef.current) {
         return;
       }
+      stopGeneration(); // Clear any pending streaming intervals
       console.error('sendMessage failed (raw):', err);
       const message = unwrapUnknownError(err);
       setMessages(prev => prev.map((m) => {
@@ -790,10 +794,11 @@ export function useAI(
       }
       setIsLoading(false);
     }
-  }, [documentId, aiConfig, conversationId, contextProvider, streamAssistantText, streamFromBackend]);
+  }, [documentId, aiConfig, conversationId, contextProvider, streamAssistantText, streamFromBackend, stopGeneration]);
 
   const retryAssistantMessage = useCallback(async (assistantMessageId: string, forcedMode?: ChatInputMode) => {
-    const target = messages.find((m) => (
+    const currentMessages = messagesRef.current;
+    const target = currentMessages.find((m) => (
       m.id === assistantMessageId &&
       m.role === 'assistant' &&
       !!m.requestContent?.trim()
@@ -845,7 +850,7 @@ export function useAI(
         ? buildContextAwarePrompt(target.requestContent, promptContext, plan)
         : target.requestContent.trim();
       const startedAt = Date.now();
-      const historyForModel = buildHistoryForModel(messages, plan.historyWindow);
+      const historyForModel = buildHistoryForModel(currentMessages, plan.historyWindow);
       const streamResult = await streamFromBackend(
         assistantMessageId,
         requestId,
@@ -928,6 +933,7 @@ export function useAI(
       setMessages(frontendMessages);
     } catch (err) {
       console.error('Failed to load history:', err);
+      setError('Failed to load chat history. Please refresh the page.');
     }
   }, [documentId]);
 

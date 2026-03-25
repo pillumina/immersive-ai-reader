@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 use futures_util::StreamExt;
 use tauri::{AppHandle, Emitter, Manager, State};
 use crate::ai::client::{AIClient, ChatMessage};
@@ -9,6 +9,7 @@ use crate::security::keychain;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
+use tokio::time::timeout as tokio_timeout;
 use uuid::Uuid;
 
 const MAX_RETRIES: u32 = 3;
@@ -30,16 +31,53 @@ pub struct HistoryMessage {
     pub content: String,
 }
 
+/// Tracks active AI streams so they can be cancelled on stop or client disconnect.
+/// Uses a RwLock for concurrent access and evicts stale entries older than MAX_STREAM_AGE.
 #[derive(Default)]
 pub struct StreamRegistry {
     flags: RwLock<HashMap<String, Arc<AtomicBool>>>,
+    /// Tracks when each stream was created for TTL-based eviction.
+    timestamps: RwLock<HashMap<String, Instant>>,
 }
 
+const MAX_STREAM_AGE: Duration = Duration::from_secs(3600); // 1 hour TTL
+
 impl StreamRegistry {
+    /// Evict entries older than MAX_STREAM_AGE to prevent unbounded memory growth.
+    async fn prune(&self) {
+        let cutoff = Instant::now() - MAX_STREAM_AGE;
+        // Collect expired IDs under a single timestamps lock
+        let ids_to_remove: Vec<String> = {
+            let timestamps = self.timestamps.read().await;
+            timestamps
+                .iter()
+                .filter(|(_, created)| **created < cutoff)
+                .map(|(id, _)| id.clone())
+                .collect()
+        };
+        if ids_to_remove.is_empty() {
+            return;
+        }
+        // Now remove from both maps (timestamps first, then flags)
+        {
+            let mut timestamps = self.timestamps.write().await;
+            let mut flags = self.flags.write().await;
+            for id in &ids_to_remove {
+                timestamps.remove(id);
+                flags.remove(id);
+            }
+        }
+    }
+
     pub async fn create(&self, stream_id: &str) -> Arc<AtomicBool> {
+        // Prune on every creation to keep memory bounded
+        self.prune().await;
         let cancel_flag = Arc::new(AtomicBool::new(false));
         let mut map = self.flags.write().await;
         map.insert(stream_id.to_string(), cancel_flag.clone());
+        drop(map);
+        let mut ts = self.timestamps.write().await;
+        ts.insert(stream_id.to_string(), Instant::now());
         cancel_flag
     }
 
@@ -112,9 +150,15 @@ pub async fn send_chat_message(
     }
 
     // Backward compatibility: if frontend didn't pass key, fallback to keychain.
+    // Run in spawn_blocking to avoid blocking the async executor thread.
     let resolved_api_key = if api_key.trim().is_empty() {
-        keychain::get_api_key(&provider)
-            .map_err(|e| format!("Failed to get API key: {}", e))?
+        let prov = provider.clone();
+        tokio::task::spawn_blocking(move || {
+            keychain::get_api_key(&prov)
+        })
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+        .map_err(|e| format!("Failed to get API key: {}", e))?
     } else {
         api_key
     };
@@ -157,8 +201,13 @@ pub async fn start_stream_chat(
     }
 
     let resolved_api_key = if api_key.trim().is_empty() {
-        keychain::get_api_key(&provider)
-            .map_err(|e| format!("Failed to get API key: {}", e))?
+        let prov = provider.clone();
+        tokio::task::spawn_blocking(move || {
+            keychain::get_api_key(&prov)
+        })
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+        .map_err(|e| format!("Failed to get API key: {}", e))?
     } else {
         api_key
     };
@@ -222,15 +271,14 @@ fn calculate_backoff_delay(attempt: u32) -> u64 {
     (capped_delay + jitter).max(100) // Minimum 100ms delay
 }
 
-/// Simple pseudo-random for jitter (avoids external deps)
+/// Thread-safe pseudo-random for jitter using atomic operations (no unsafe).
 fn rand_simple() -> f64 {
-    use std::time::Instant;
-    static mut LAST: u64 = 0;
-    let now = Instant::now().elapsed().as_nanos() as u64;
-    unsafe {
-        LAST = LAST.wrapping_mul(1103515245).wrapping_add(12345);
-        ((now ^ LAST) & 0x7fffffff) as f64 / 0x7fffffff as f64
-    }
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let now = std::time::Instant::now().elapsed().as_nanos() as u64;
+    let last = LAST.load(Ordering::Relaxed);
+    let next = last.wrapping_mul(1103515245).wrapping_add(12345);
+    LAST.store(next, Ordering::Relaxed);
+    ((now ^ next) & 0x7fffffff) as f64 / 0x7fffffff as f64
 }
 
 fn is_retryable_error(err: &str) -> bool {
@@ -325,6 +373,9 @@ async fn stream_chat_and_emit(
     let mut total_tokens: Option<u32> = None;
     let mut last_error = String::new();
 
+    // Clone messages once before retry loop to avoid repeated deep clones on retries.
+    let messages_to_send = messages.clone();
+
     // Retry loop with exponential backoff
     for attempt in 1..=MAX_RETRIES {
         // Check cancellation before each attempt
@@ -337,7 +388,7 @@ async fn stream_chat_and_emit(
         }
 
         let result = ai_client
-            .call_chat_stream(provider, endpoint, model, api_key, messages.clone())
+            .call_chat_stream(provider, endpoint, model, api_key, messages_to_send.clone())
             .await;
 
         match result {
@@ -346,63 +397,81 @@ async fn stream_chat_and_emit(
                 let mut raw_buffer = String::new();
                 let mut stream_err: Option<String> = None;
 
-                while let Some(next_chunk) = stream.next().await {
-                    // Check cancellation during streaming
-                    if cancel_flag.load(Ordering::Relaxed) {
-                        emit_done_event(
-                            app, stream_id, full_content.clone(), started.elapsed().as_millis(),
-                            prompt_tokens, completion_tokens, total_tokens, true,
-                        );
-                        return Ok(());
-                    }
+                // Per-chunk timeout: abort if no data received for 120s (prevents hung streams).
+                loop {
+                    match tokio_timeout(Duration::from_secs(120), stream.next()).await {
+                        Ok(Some(next_chunk)) => {
+                            // Check cancellation during streaming
+                            if cancel_flag.load(Ordering::Relaxed) {
+                                emit_done_event(
+                                    app, stream_id, full_content.clone(), started.elapsed().as_millis(),
+                                    prompt_tokens, completion_tokens, total_tokens, true,
+                                );
+                                return Ok(());
+                            }
 
-                    let bytes = match next_chunk {
-                        Ok(b) => b,
-                        Err(e) => {
-                            // Stream interrupted - will trigger retry
-                            stream_err = Some(format!("Stream interrupted: {}", e));
-                            break;
-                        }
-                    };
-                    let text = String::from_utf8_lossy(&bytes);
-                    raw_buffer.push_str(&text);
+                            let bytes = match next_chunk {
+                                Ok(b) => b,
+                                Err(e) => {
+                                    stream_err = Some(format!("Stream interrupted: {}", e));
+                                    break;
+                                }
+                            };
+                            let text = String::from_utf8_lossy(&bytes);
+                            raw_buffer.push_str(&text);
 
-                    while let Some(line_end) = raw_buffer.find('\n') {
-                        let line = raw_buffer[..line_end].trim().to_string();
-                        raw_buffer = raw_buffer[line_end + 1..].to_string();
+                            // Process complete lines without repeated allocations.
+                            let mut line_start = 0;
+                            for (i, ch) in raw_buffer.char_indices() {
+                                if ch == '\n' {
+                                    let line = raw_buffer[line_start..i].trim();
+                                    line_start = i + 1;
+                                    if line.is_empty() || !line.starts_with("data:") {
+                                        continue;
+                                    }
 
-                        if line.is_empty() || !line.starts_with("data:") {
-                            continue;
-                        }
+                                    let payload = line.trim_start_matches("data:").trim();
+                                    if payload == "[DONE]" {
+                                        emit_done_event(
+                                            app, stream_id, full_content.clone(), started.elapsed().as_millis(),
+                                            prompt_tokens, completion_tokens, total_tokens, false,
+                                        );
+                                        return Ok(());
+                                    }
 
-                        let payload = line.trim_start_matches("data:").trim();
-                        if payload == "[DONE]" {
-                            emit_done_event(
-                                app, stream_id, full_content.clone(), started.elapsed().as_millis(),
-                                prompt_tokens, completion_tokens, total_tokens, false,
-                            );
-                            return Ok(());
-                        }
+                                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(payload) {
+                                        if let Some(delta) = json
+                                            .get("choices")
+                                            .and_then(|c| c.get(0))
+                                            .and_then(|c| c.get("delta"))
+                                            .and_then(|d| d.get("content"))
+                                            .and_then(|v| v.as_str())
+                                        {
+                                            if !delta.is_empty() {
+                                                full_content.push_str(delta);
+                                                emit_chunk_event(app, stream_id, delta.to_string());
+                                            }
+                                        }
 
-                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(payload) {
-                            if let Some(delta) = json
-                                .get("choices")
-                                .and_then(|c| c.get(0))
-                                .and_then(|c| c.get("delta"))
-                                .and_then(|d| d.get("content"))
-                                .and_then(|v| v.as_str())
-                            {
-                                if !delta.is_empty() {
-                                    full_content.push_str(delta);
-                                    emit_chunk_event(app, stream_id, delta.to_string());
+                                        if let Some(usage) = json.get("usage") {
+                                            prompt_tokens = usage.get("prompt_tokens").and_then(|v| v.as_u64()).map(|v| v as u32);
+                                            completion_tokens = usage.get("completion_tokens").and_then(|v| v.as_u64()).map(|v| v as u32);
+                                            total_tokens = usage.get("total_tokens").and_then(|v| v.as_u64()).map(|v| v as u32);
+                                        }
+                                    }
                                 }
                             }
-
-                            if let Some(usage) = json.get("usage") {
-                                prompt_tokens = usage.get("prompt_tokens").and_then(|v| v.as_u64()).map(|v| v as u32);
-                                completion_tokens = usage.get("completion_tokens").and_then(|v| v.as_u64()).map(|v| v as u32);
-                                total_tokens = usage.get("total_tokens").and_then(|v| v.as_u64()).map(|v| v as u32);
-                            }
+                            // Keep the incomplete tail in the buffer
+                            raw_buffer = raw_buffer[line_start..].to_string();
+                        }
+                        Ok(None) => {
+                            // Stream ended normally
+                            break;
+                        }
+                        Err(_) => {
+                            // Chunk read timed out — treat as retryable error
+                            stream_err = Some("Stream chunk timeout: no data received for 120s".to_string());
+                            break;
                         }
                     }
                 }
@@ -471,8 +540,11 @@ async fn stream_chat_and_emit(
                     _ = delay_fut => {
                         // Continue to next retry
                     }
-                    _ = tokio::time::sleep(tokio::time::Duration::from_secs(60)) => {
-                        // Safety timeout
+                    _ = tokio::time::sleep(tokio::time::Duration::from_millis(
+                        MAX_BACKOFF_MS * 2 + 2000,
+                    )) => {
+                        // Safety timeout — fires if backoff sleep hangs (should never happen
+                        // since MAX_BACKOFF_MS is only 8s, but guards against scheduler bugs).
                         emit_error_event(app, stream_id, "Retry timeout exceeded");
                         return Ok(());
                     }

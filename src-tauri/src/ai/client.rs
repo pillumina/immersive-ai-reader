@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -127,7 +127,10 @@ impl AIClient {
                 .header("anthropic-version", "2023-06-01");
         }
 
-        let response = request.send().await?;
+        let response = request
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await?;
         let status = response.status();
         let status_code = status.as_u16();
         let body = response.text().await.unwrap_or_default();
@@ -171,7 +174,10 @@ impl AIClient {
                 .header("anthropic-version", "2023-06-01");
         }
 
-        let response = request.send().await?;
+        let response = request
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await?;
         let status = response.status();
         if !status.is_success() {
             let status_code = status.as_u16();
@@ -215,7 +221,10 @@ impl AIClient {
                 .header("anthropic-version", "2023-06-01");
         }
 
-        let response = request.send().await?;
+        let response = request
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await?;
         let status = response.status();
         let status_code = status.as_u16();
         let latency_ms = started.elapsed().as_millis();

@@ -5,7 +5,7 @@ import { Message } from '@/types/conversation';
 import { aiCardDragState } from './AIPanel';
 import { splitCompleteMarkdownBlocks } from '@/utils/markdownStream';
 import type { DragEvent, PointerEvent } from 'react';
-import { memo } from 'react';
+import { memo, useRef, useEffect } from 'react';
 
 interface ChatMessageProps {
   msg: Message;
@@ -149,6 +149,23 @@ export const ChatMessage = memo(function ChatMessageWip({
 }: ChatMessageProps) {
   const timeStr = formatTime(msg);
 
+  // Clean up drag pointer listeners if component unmounts mid-drag.
+  const dragListenersRef = useRef<{
+    move: ((e: PointerEvent) => void) | null;
+    up: ((e: PointerEvent) => void) | null;
+  }>({ move: null, up: null });
+
+  useEffect(() => {
+    return () => {
+      if (dragListenersRef.current.move) {
+        globalThis.document?.removeEventListener('pointermove', dragListenersRef.current.move as unknown as EventListener);
+      }
+      if (dragListenersRef.current.up) {
+        globalThis.document?.removeEventListener('pointerup', dragListenersRef.current.up as unknown as EventListener);
+      }
+    };
+  }, []);
+
   const bubbleClass = msg.role === 'user'
     ? 'bg-[#c2410c] text-white rounded-br-md'
     : msg.status === 'error'
@@ -243,8 +260,14 @@ export const ChatMessage = memo(function ChatMessageWip({
 
                       const onPointerMove = () => {};
                       const onPointerUp = (ev: PointerEvent) => {
-                        globalThis.document?.removeEventListener('pointermove', onPointerMove as unknown as EventListener);
-                        globalThis.document?.removeEventListener('pointerup', onPointerUp as unknown as EventListener);
+                        if (dragListenersRef.current.move) {
+                          globalThis.document?.removeEventListener('pointermove', dragListenersRef.current.move as unknown as EventListener);
+                          dragListenersRef.current.move = null;
+                        }
+                        if (dragListenersRef.current.up) {
+                          globalThis.document?.removeEventListener('pointerup', dragListenersRef.current.up as unknown as EventListener);
+                          dragListenersRef.current.up = null;
+                        }
                         if (!aiCardDragState.payload) return;
                         const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
                         if (scrollEl) {
@@ -262,6 +285,8 @@ export const ChatMessage = memo(function ChatMessageWip({
                       };
                       globalThis.document?.addEventListener('pointermove', onPointerMove as unknown as EventListener);
                       globalThis.document?.addEventListener('pointerup', onPointerUp as unknown as EventListener);
+                      dragListenersRef.current.move = onPointerMove;
+                      dragListenersRef.current.up = onPointerUp;
                     }}
                   >
                     <GripVertical size={13} />
