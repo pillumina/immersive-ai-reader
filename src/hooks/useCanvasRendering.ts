@@ -1382,6 +1382,31 @@ export function useCanvasRendering(
     tagChipRenderersRef.current.delete(annotationId);
   };
 
+  // Remove a capture (highlight, note card, or AI card) from the DOM by annotationId.
+  // Used by the CaptureDrawer to sync deletion with the canvas.
+  const removeCapture = (annotationId: string) => {
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (!(containerEl instanceof HTMLElement)) return;
+
+    // Remove the highlight element if present
+    const highlightEl = containerEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${annotationId}"]`);
+    if (highlightEl) highlightEl.remove();
+
+    // Remove the note/AI card if present and call its cleanup
+    const noteCardEl = containerEl.querySelector<HTMLElement>(`.pdf-note-card[data-annotation-id="${annotationId}"]`);
+    if (noteCardEl) {
+      const cleanup = (noteCardEl as HTMLElement & { _dragCleanup?: () => void })._dragCleanup;
+      if (cleanup) cleanup();
+      noteCardEl.remove();
+    }
+
+    // Remove the AI card if present
+    const aiCardEl = containerEl.querySelector<HTMLElement>(`.pdf-ai-card[data-annotation-id="${annotationId}"]`);
+    if (aiCardEl) aiCardEl.remove();
+
+    clearCardRenderer(annotationId);
+  };
+
   return {
     isRendering,
     renderError,
@@ -1399,5 +1424,6 @@ export function useCanvasRendering(
     locateAiCardByMessageId,
     refreshCardTags,
     clearCardRenderer,
+    removeCapture,
   };
 }

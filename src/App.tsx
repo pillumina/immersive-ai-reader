@@ -12,6 +12,8 @@ import { L3NoteEditor } from '@/components/capture/L3NoteEditor';
 import { MiniAIWindow } from '@/components/capture/MiniAIWindow';
 import { CaptureDrawer } from '@/components/capture/CaptureDrawer';
 import { FocusStatusBar } from '@/components/capture/FocusStatusBar';
+import type { CaptureItem } from '@/components/capture/CaptureItem';
+import type { BackendAnnotation } from '@/lib/tauri/commands';
 import { usePDF } from '@/hooks/usePDF';
 import { usePDFThumbnails } from '@/hooks/usePDFThumbnails';
 import { useAI } from '@/hooks/useAI';
@@ -193,6 +195,7 @@ function AppInner() {
     locateAiCardByMessageId,
     refreshCardTags,
     clearCardRenderer,
+    removeCapture,
   } = useCanvasRendering(
     activeTabId === 'library' ? '' : 'pdf-scroll-container',
     activeTabId === 'library' ? '' : 'pdf-pages-container',
@@ -434,6 +437,73 @@ function AppInner() {
   // ─── Focus Mode: 80% summary prompt trigger ───────────────────
   const [showFocus80Prompt, setShowFocus80Prompt] = useState(false);
 
+  // ─── Capture data for Focus Mode ────────────────────────────────
+  const NOTE_PREFIX = '__NOTE__|';
+  const [captures, setCaptures] = useState<CaptureItem[]>([]);
+
+  /** Convert a BackendAnnotation to a CaptureItem, or null if it's not a capture type */
+  const annotationToCapture = useCallback(
+    (a: BackendAnnotation): CaptureItem | null => {
+      const rawText = typeof a.text === 'string' ? a.text : '';
+      const page = Number(a.page_number) || 1;
+
+      if (rawText.startsWith(NOTE_PREFIX)) {
+        const after = rawText.slice(NOTE_PREFIX.length);
+        const [noteContent] = after.split('\n\n');
+        return {
+          type: 'note',
+          id: a.id,
+          pageNumber: page,
+          capturedAt: a.created_at,
+          preview: noteContent,
+          noteContent: noteContent,
+          tags: [],
+        };
+      }
+
+      if (rawText.startsWith(AI_CARD_PREFIX)) {
+        const after = rawText.slice(AI_CARD_PREFIX.length);
+        const parts = after.split('\n\n');
+        const messageId = parts[0]?.trim() || '';
+        const aiContent = parts.slice(1).join('\n\n');
+        return {
+          type: 'ai-response',
+          id: a.id,
+          pageNumber: page,
+          capturedAt: a.created_at,
+          preview: aiContent.slice(0, 120),
+          aiContent: aiContent,
+          messageId,
+        };
+      }
+
+      // Plain highlight
+      return {
+        type: 'highlight',
+        id: a.id,
+        pageNumber: page,
+        capturedAt: a.created_at,
+        preview: rawText.slice(0, 200),
+        highlightText: rawText,
+      };
+    },
+    []
+  );
+
+  const loadCaptures = useCallback(async () => {
+    if (!currentDocument?.id) { setCaptures([]); return; }
+    try {
+      const annotations = await annotationCommands.getByDocument(currentDocument.id);
+      const items = annotations
+        .filter((a) => a.type === 'highlight')
+        .map(annotationToCapture)
+        .filter((c): c is CaptureItem => c !== null);
+      setCaptures(items);
+    } catch (err) {
+      console.error('[captures] load failed:', err);
+    }
+  }, [currentDocument?.id, annotationToCapture]);
+
   // ─── Focus Mode: session timer ────────────────────────────────
   useEffect(() => {
     if (!focusState.isActive) {
@@ -622,6 +692,41 @@ function AppInner() {
     noteInputPositionRef.current = position;
     noteInputPageRef.current = targetPageNumber;
   };
+
+  // ─── Capture Drawer handlers ─────────────────────────────────────
+  const handleDeleteCapture = async (id: string) => {
+    try {
+      await annotationCommands.delete(id);
+      setCaptures((prev) => prev.filter((c) => c.id !== id));
+      removeCapture(id);
+      setToast({ message: '已删除', type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '删除失败';
+      setToast({ message, type: 'error' });
+    }
+  };
+
+  const handleEditCapture = (item: CaptureItem) => {
+    if (item.type === 'note') {
+      setL3Editor({ type: 'edit', annotationId: item.id });
+    } else if (item.type === 'highlight') {
+      jumpToPage(item.pageNumber);
+      setToast({ message: '跳转到高亮位置，选中文本后使用气泡按钮添加笔记', type: 'info' });
+    }
+    // AI responses: no edit support yet
+  };
+
+  // ─── Load captures when document changes ─────────────────────────
+  useEffect(() => {
+    void loadCaptures();
+  }, [loadCaptures]);
+
+  // Refresh captures when notes are added via the note input modal
+  useEffect(() => {
+    if (notesAnnotations.length > 0) {
+      void loadCaptures();
+    }
+  }, [notesAnnotations, loadCaptures]);
 
   useKeyboardShortcuts({
     onZoomIn: handleZoomIn,
@@ -1345,10 +1450,12 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       {/* Capture Drawer */}
       {focusState.isActive && focusState.captureDrawerOpen && (
         <CaptureDrawer
-          captures={[]} // TODO: wire up with actual captures
+          captures={captures}
           isOpen={focusState.captureDrawerOpen}
           onClose={toggleCaptureDrawer}
           onJumpTo={jumpToPage}
+          onEditCapture={handleEditCapture}
+          onDeleteCapture={handleDeleteCapture}
         />
       )}
 
