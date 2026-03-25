@@ -8,7 +8,7 @@ Source of truth:
 
 ## Current Goal
 
-Focus Mode + L1/L2/L3 捕获链路完整实现，达成沉浸式 AI 阅读核心闭环。
+Focus Mode Phase 1-3 完成，Phase 4 进行中：会话上下文恢复、Focus Session 历史。
 
 ---
 
@@ -166,7 +166,7 @@ Focus Mode + L1/L2/L3 捕获链路完整实现，达成沉浸式 AI 阅读核心
 - [x] mini AI 窗口（右侧抽屉，窄屏底部抽屉）
 - [x] 捕获记录抽屉（时间线分组：日期 + 时间）
 - [x] 捕获面板 CaptureItem（笔记/高亮/AI 三种卡片）
-- [ ] 一键合成按钮 + 合成状态机
+- [x] 一键合成按钮 + 合成状态机
 - [x] 像素进度检测（requestAnimationFrame + debounce）
 - [x] 80% 摘要提示 + AI 摘要生成
 
@@ -187,6 +187,8 @@ Focus Mode + L1/L2/L3 捕获链路完整实现，达成沉浸式 AI 阅读核心
 - 2026-03-25: Focus Mode Phase 2 & 3 complete: L1 auto-highlight (blue, 50ms), L1 bubble button, L2 AI popover (explain/translate/new-note flows), L3 deep note editor (markdown + tag autocomplete), Mini AI Window (Cmd+`), Capture Drawer (date grouping, filter tabs), Focus Status Bar (progress/counts/duration). Phase 3 integration: scroll progress tracking, 80% summary trigger, resume session prompt, session timer, updateCaptureCounts wired.
 - 2026-03-25: Wire CaptureDrawer with live annotation data: annotationToCapture() maps DB rows to CaptureItem (note/ai-response/highlight), removeCapture() from canvas hook syncs DOM deletion, handleDeleteCapture and handleEditCapture wired.
 - 2026-03-25: Focus Mode full UI integration in App.tsx: MiniAIWindow, CaptureDrawer, FocusStatusBar, resume prompt, 80% summary prompt, Cmd+Shift+B shortcut, session duration timer, updateCaptureCounts wired for highlights and notes.
+- 2026-03-25: One-click synthesize: handleSynthesize builds structured prompt from all captures (highlights/notes/AI responses) and sends to AI, closes drawer in Focus Mode. handlePinMessageToCanvas and ai-card-unpinned event update AI response counts.
+- 2026-03-25: Current Goal updated: Focus Mode Phase 1-3 complete. Phase 4 remaining: session resume (scroll+AI context), history, first-use tooltip.
 
 ---
 
