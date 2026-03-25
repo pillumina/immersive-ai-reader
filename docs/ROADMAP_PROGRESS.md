@@ -1,12 +1,13 @@
 # Immersive AI Reader Roadmap Progress
 
-Last updated: 2026-03-24
-Source of truth: `research/vibero-immersive-reader/沉浸式AI阅读器_PRD.md`
+Last updated: 2026-03-25
+Source of truth:
+- `docs/PRD.md`（产品需求文档 v2.2）
+- `docs/FOCUS_MODE_DESIGN.md`（Focus Mode 详设 v2.1）
 
-## Current Goal (PRD Effect First)
+## Current Goal
 
-Focus: 先完成 PRD 的“中高优先体验闭环”，再推进 P2 扩展能力。  
-Current sprint target: AI 上下文感知增强 + 画布交互升级 + 导出分享完善 + 效果指标持续追踪。
+Focus Mode + L1/L2/L3 捕获链路完整实现，达成沉浸式 AI 阅读核心闭环。
 
 ---
 
@@ -85,7 +86,8 @@ Current sprint target: AI 上下文感知增强 + 画布交互升级 + 导出分
 
 - [x] 笔记管理面板（全局列表、搜索、编辑、删除）
 - [x] AI Panel Header 快捷入口（Notes 按钮打开笔记管理）（2026-03-19）
-- [x] 笔记标签系统：annotation_tags 表 + Tag.color 字段，Preset Tags（重要/疑问/引用/待整理），预设色板（8色），Rust 增删改查，TypeScript 类型定义，标签色块显示 + 管理弹窗 UI（2026-03-24）
+- [x] 笔记标签系统：annotation_tags 表 + Tag.color 字段，Preset Tags（重要/疑问/引用/待整理），预设色板（8色），Rust 增删改查，TypeScript 类型定义，标签色块显示 + 管理弹窗 UI，内联标签编辑器（点击即输入，选颜色，suggestions 下拉）（2026-03-24）
+- [x] Canvas 卡片视觉升级：毛玻璃悬浮卡（默认半透明白色 + backdrop-filter，hover 变实心 + 阴影加深），左侧色条accent，顶部 header 含图标+类型标签+拖拽手柄，AI卡片紫/Note卡片青绿区分，Dark mode 全覆盖（2026-03-24）
 - [ ] 笔记导出增强（带格式）
 
 ### B3. 导出与分享完善（PRD 4.2.4 对齐）
@@ -121,7 +123,7 @@ Current sprint target: AI 上下文感知增强 + 画布交互升级 + 导出分
 - [x] 空状态引导：Chat 空状态显示 3 个可点击的示例问题芯片（2026-03-23）
 - [x] 笔记卡片编辑可发现性：hover 显示编辑/删除按钮，指针光标（2026-03-23）
 - [x] 阅读进度条：PDF 画布顶部显示可点击的进度条，显示当前阅读位置（2026-03-23）
-- [x] PDF 全文搜索：Cmd/Ctrl+F 打开搜索栏，Enter 搜索所有页面并跳转到第一个匹配结果（2026-03-23）
+- [x] PDF 全文搜索：Cmd/Ctrl+F 打开搜索栏，Enter 搜索所有页面并跳转到第一个匹配结果，↑↓导航 prev/next，计数显示 (2026-03-24)
 - [x] 聊天消息时间戳显示（2026-03-20）
 - [x] 连续消息合并（2026-03-20）
 - [x] Markdown 流式渐进渲染（2026-03-20）
@@ -134,6 +136,48 @@ Current sprint target: AI 上下文感知增强 + 画布交互升级 + 导出分
 - [ ] Paper + GitHub repo linked workspace
 - [ ] Knowledge graph view
 - [ ] Collaboration mode
+
+---
+
+## Focus Mode 实现计划
+
+基于 `docs/FOCUS_MODE_DESIGN.md`（v2.1），分为 4 个 Phase，共 24 个子任务。
+
+### Phase 1：Focus Mode 基础切换
+
+- [ ] FocusModeProvider 状态管理
+- [ ] 侧边栏折叠和 AI Panel 收缩
+- [ ] `Cmd+Shift+F` 快捷键
+- [ ] 进入/退出动画
+- [ ] FocusSession 数据库写入（仅保存，不恢复）
+
+### Phase 2：捕获链路（L1 → L2 → L3）
+
+- [ ] L1 自动高亮（选区检测 + 渲染 + 防抖）
+- [ ] L1 气泡按钮（Focus Mode）
+- [ ] L2 AI 浮层（两种模式差异：Focus Mode 200px+80ms，Free Mode 220px+120ms）
+- [ ] L2「解释」和「翻译」流程
+- [ ] L2「加入会话」和「新建笔记」
+- [ ] L3 深度笔记编辑器（覆盖 PDF 浮层，Free/Focus 行为一致）
+
+### Phase 3：面板和进度
+
+- [ ] mini AI 窗口（右侧抽屉，窄屏底部抽屉）
+- [ ] 捕获记录抽屉（时间线分组：日期 + 时间）
+- [ ] 捕获面板 CaptureItem（笔记/高亮/AI 三种卡片）
+- [ ] 一键合成按钮 + 合成状态机
+- [ ] 像素进度检测（requestAnimationFrame + debounce）
+- [ ] 80% 摘要提示 + AI 摘要生成
+
+### Phase 4：恢复和细节
+
+- [ ] 恢复提示 UI + 判断逻辑（7 天窗口、95% 判断）
+- [ ] 页码 + scrollTop + AI 会话上下文恢复
+- [ ] Focus Session 历史记录
+- [ ] 首次使用 Tooltip（`localStorage` 标记）
+- [ ] Settings 字段接入（showResumePrompt、autoEnterFocusOnDocOpen）
+- [ ] 动画性能优化（GPU 加速 `will-change`）
+- [ ] 快捷键完善（`Cmd+Shift+B` 捕获抽屉、`Cmd+\`` AI 窗口）
 
 ---
 
