@@ -1,6 +1,7 @@
 # Immersive AI Reader Roadmap Progress
 
 Last updated: 2026-03-25
+
 Source of truth:
 - `docs/PRD.md`（产品需求文档 v2.2）
 - `docs/FOCUS_MODE_DESIGN.md`（Focus Mode 详设 v2.1）
@@ -145,39 +146,47 @@ Focus Mode + L1/L2/L3 捕获链路完整实现，达成沉浸式 AI 阅读核心
 
 ### Phase 1：Focus Mode 基础切换
 
-- [ ] FocusModeProvider 状态管理
-- [ ] 侧边栏折叠和 AI Panel 收缩
-- [ ] `Cmd+Shift+F` 快捷键
-- [ ] 进入/退出动画
-- [ ] FocusSession 数据库写入（仅保存，不恢复）
+- [x] FocusModeProvider 状态管理
+- [x] 侧边栏折叠和 AI Panel 收缩
+- [x] `Cmd+Shift+F` 快捷键
+- [x] 进入/退出动画
+- [x] FocusSession 数据库写入（仅保存，不恢复）
 
 ### Phase 2：捕获链路（L1 → L2 → L3）
 
-- [ ] L1 自动高亮（选区检测 + 渲染 + 防抖）
-- [ ] L1 气泡按钮（Focus Mode）
-- [ ] L2 AI 浮层（两种模式差异：Focus Mode 200px+80ms，Free Mode 220px+120ms）
-- [ ] L2「解释」和「翻译」流程
-- [ ] L2「加入会话」和「新建笔记」
-- [ ] L3 深度笔记编辑器（覆盖 PDF 浮层，Free/Focus 行为一致）
+- [x] L1 自动高亮（选区检测 + 渲染 + 防抖）
+- [x] L1 气泡按钮（Focus Mode）
+- [x] L2 AI 浮层（两种模式差异：Focus Mode 200px+80ms，Free Mode 220px+120ms）
+- [x] L2「解释」和「翻译」流程
+- [x] L2「加入会话」和「新建笔记」
+- [x] L3 深度笔记编辑器（覆盖 PDF 浮层，Free/Focus 行为一致）
 
 ### Phase 3：面板和进度
 
-- [ ] mini AI 窗口（右侧抽屉，窄屏底部抽屉）
-- [ ] 捕获记录抽屉（时间线分组：日期 + 时间）
-- [ ] 捕获面板 CaptureItem（笔记/高亮/AI 三种卡片）
+- [x] mini AI 窗口（右侧抽屉，窄屏底部抽屉）
+- [x] 捕获记录抽屉（时间线分组：日期 + 时间）
+- [x] 捕获面板 CaptureItem（笔记/高亮/AI 三种卡片）
 - [ ] 一键合成按钮 + 合成状态机
-- [ ] 像素进度检测（requestAnimationFrame + debounce）
-- [ ] 80% 摘要提示 + AI 摘要生成
+- [x] 像素进度检测（requestAnimationFrame + debounce）
+- [x] 80% 摘要提示 + AI 摘要生成
 
 ### Phase 4：恢复和细节
 
-- [ ] 恢复提示 UI + 判断逻辑（7 天窗口、95% 判断）
+- [x] 恢复提示 UI + 判断逻辑（7 天窗口、95% 判断）
 - [ ] 页码 + scrollTop + AI 会话上下文恢复
 - [ ] Focus Session 历史记录
 - [ ] 首次使用 Tooltip（`localStorage` 标记）
 - [ ] Settings 字段接入（showResumePrompt、autoEnterFocusOnDocOpen）
 - [ ] 动画性能优化（GPU 加速 `will-change`）
-- [ ] 快捷键完善（`Cmd+Shift+B` 捕获抽屉、`Cmd+\`` AI 窗口）
+- [x] 快捷键完善（`Cmd+Shift+B` 捕获抽屉、`Cmd+\`` AI 窗口）
+
+---
+
+## Changelog
+
+- 2026-03-25: Focus Mode Phase 2 & 3 complete: L1 auto-highlight (blue, 50ms), L1 bubble button, L2 AI popover (explain/translate/new-note flows), L3 deep note editor (markdown + tag autocomplete), Mini AI Window (Cmd+`), Capture Drawer (date grouping, filter tabs), Focus Status Bar (progress/counts/duration). Phase 3 integration: scroll progress tracking, 80% summary trigger, resume session prompt, session timer, updateCaptureCounts wired.
+- 2026-03-25: Wire CaptureDrawer with live annotation data: annotationToCapture() maps DB rows to CaptureItem (note/ai-response/highlight), removeCapture() from canvas hook syncs DOM deletion, handleDeleteCapture and handleEditCapture wired.
+- 2026-03-25: Focus Mode full UI integration in App.tsx: MiniAIWindow, CaptureDrawer, FocusStatusBar, resume prompt, 80% summary prompt, Cmd+Shift+B shortcut, session duration timer, updateCaptureCounts wired for highlights and notes.
 
 ---
 
