@@ -29,6 +29,19 @@ export interface BackendDocument {
   updated_at: string;
 }
 
+/** Lightweight document record for list views — excludes text_content. */
+export interface BackendDocumentSummary {
+  id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  page_count: number;
+  library_id: string | null;
+  last_page: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BackendLibrary {
   id: string;
   name: string;
@@ -41,6 +54,20 @@ export interface BackendTag {
   id: string;
   name: string;
   color: string;
+  created_at: string;
+}
+
+export interface BackendAnnotation {
+  id: string;
+  document_id: string;
+  page_number: number;
+  type: string;
+  color: string;
+  position_x: number;
+  position_y: number;
+  position_width: number;
+  position_height: number;
+  text: string | null;
   created_at: string;
 }
 
@@ -87,12 +114,12 @@ export const documentCommands = {
     return await invoke<BackendDocument | null>('get_document', { id });
   },
 
-  getAll: async (): Promise<BackendDocument[]> => {
-    return await invoke<BackendDocument[]>('get_all_documents');
+  getAll: async (): Promise<BackendDocumentSummary[]> => {
+    return await invoke<BackendDocumentSummary[]>('get_all_documents');
   },
 
-  getByLibrary: async (libraryId: string): Promise<BackendDocument[]> => {
-    return await invoke<BackendDocument[]>('get_documents_by_library', { libraryId });
+  getByLibrary: async (libraryId: string): Promise<BackendDocumentSummary[]> => {
+    return await invoke<BackendDocumentSummary[]>('get_documents_by_library', { libraryId });
   },
 
   delete: async (id: string): Promise<void> => {
@@ -181,6 +208,11 @@ export const tagCommands = {
     return await invoke<BackendTag[]>('get_annotation_tags', { annotationId });
   },
 
+  getAnnotationTagsBatch: async (annotationIds: string[]): Promise<Record<string, BackendTag[]>> => {
+    if (annotationIds.length === 0) return {};
+    return await invoke<Record<string, BackendTag[]>>('get_annotation_tags_batch', { annotationIds });
+  },
+
   setAnnotationTags: async (annotationId: string, tagNames: string[], colors: string[]): Promise<void> => {
     await invoke('set_annotation_tags', { annotationId, tagNames, colors });
   },
@@ -206,11 +238,11 @@ export const annotationCommands = {
     position_width: number;
     position_height: number;
     text?: string;
-  }): Promise<any> => {
+  }): Promise<BackendAnnotation> => {
     return await invoke('create_annotation', { request });
   },
 
-  getByDocument: async (documentId: string): Promise<any[]> => {
+  getByDocument: async (documentId: string): Promise<BackendAnnotation[]> => {
     return await invoke('get_annotations_by_document', { documentId });
   },
 
