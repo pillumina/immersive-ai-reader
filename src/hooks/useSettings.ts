@@ -173,24 +173,19 @@ export function useSettings() {
         loadedActiveProfileId = loadedProfiles[0].id;
       }
 
+      const keychainKeys = (profile: ReturnType<typeof createProfile>) => [
+        buildKeychainAccount(profile.id),
+        `provider:${profile.config.provider}|endpoint:${profile.config.endpoint}|model:${profile.config.model}`,
+        profile.config.provider,
+      ];
+
       const hydratedProfiles = await Promise.all(
         loadedProfiles.map(async (profile) => {
-          let apiKey = '';
-          try {
-            apiKey = await aiCommands.getApiKey(buildKeychainAccount(profile.id));
-          } catch {
-            try {
-              apiKey = await aiCommands.getApiKey(
-                `provider:${profile.config.provider}|endpoint:${profile.config.endpoint}|model:${profile.config.model}`
-              );
-            } catch {
-              try {
-                apiKey = await aiCommands.getApiKey(profile.config.provider);
-              } catch {
-                // no-op
-              }
-            }
-          }
+          const keys = keychainKeys(profile);
+          const results = await Promise.allSettled(keys.map((k) => aiCommands.getApiKey(k)));
+          const apiKey = results
+            .find((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && !!r.value)
+            ?.value ?? '';
           return {
             ...profile,
             config: { ...profile.config, apiKey },
@@ -227,7 +222,12 @@ export function useSettings() {
       ? profiles.map((p) => (p.id === profileId ? nextProfile : p))
       : [...profiles, nextProfile];
 
-    await aiCommands.saveApiKey(buildKeychainAccount(profileId), sanitized.apiKey);
+    try {
+      await aiCommands.saveApiKey(buildKeychainAccount(profileId), sanitized.apiKey);
+    } catch (err) {
+      console.error('Failed to save API key to keychain:', err);
+      // Fall through — profile state is still persisted locally
+    }
     const nextActive = activeProfileId || profileId;
     setProfiles(nextProfiles);
     if (!activeProfileId) {

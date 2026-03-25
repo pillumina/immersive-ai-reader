@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { PDFDocument, Library } from '@/types/document';
 import { validatePDFFile } from '@/lib/pdf/validator';
 import { extractTextFromPDF, checkPageLimit } from '@/lib/pdf/parser';
-import { BackendDocument, documentCommands, libraryCommands } from '@/lib/tauri';
+import { BackendDocument, BackendDocumentSummary, documentCommands, libraryCommands } from '@/lib/tauri';
 import { formatFileSize } from '@/lib/utils/file';
 
 export function usePDF() {
@@ -12,13 +12,13 @@ export function usePDF() {
   const [error, setError] = useState<string | null>(null);
   const hasCleanedRef = useRef(false);
 
-  const mapBackendDoc = useCallback((doc: BackendDocument, fileBlob: Blob | null): PDFDocument => ({
+  const mapBackendDoc = useCallback((doc: BackendDocument | BackendDocumentSummary, fileBlob: Blob | null): PDFDocument => ({
     id: doc.id,
     fileName: doc.file_name,
     filePath: doc.file_path || '',
     fileSize: doc.file_size,
     pageCount: doc.page_count,
-    textContent: doc.text_content || '',
+    textContent: 'text_content' in doc ? (doc.text_content || '') : '',
     fileBlob,
     libraryId: doc.library_id ?? null,
     lastPage: doc.last_page ?? 1,
@@ -79,14 +79,14 @@ export function usePDF() {
         throw new Error(validation.error);
       }
 
-      // Check page limit
-      const pageCount = await checkPageLimit(file);
+      // Check page limit — returns buffer so extractTextFromPDF can reuse it (no double parse)
+      const { pageCount, buffer } = await checkPageLimit(file);
 
       // Extract text with timeout fallback so UI won't be stuck indefinitely.
       let textContent = '';
       try {
         textContent = await Promise.race<string>([
-          extractTextFromPDF(file),
+          extractTextFromPDF(file, buffer),
           new Promise<string>((_, reject) =>
             setTimeout(() => reject(new Error('Text extraction timeout')), 45000)
           ),
@@ -261,12 +261,19 @@ export function usePDF() {
       if (currentDocument?.id === id) {
         const updated = await documentCommands.getById(id);
         if (updated) {
+          // Keep the in-memory blob — getById doesn't return blob data, so the
+          // current blob (already loaded in memory) is the only source of truth.
           const frontendDoc = mapBackendDoc(updated, currentDocument.fileBlob);
           setCurrentDocument(frontendDoc);
         }
       }
     } catch (err) {
       console.error('Failed to update document library:', err);
+      const msg = err instanceof Error ? err.message : 'Failed to update document library';
+      globalThis.document?.dispatchEvent(new CustomEvent('document-library-update-error', {
+        detail: { message: msg },
+        bubbles: true,
+      }));
     }
   }, [currentDocument, loadDocuments, mapBackendDoc]);
 

@@ -147,6 +147,17 @@ h1, h2, h3, h4, h5, h6 {
   animation: pdfPageFocusPulse 1.6s ease-out;
 }
 
+/* Search result highlights */
+.pdf-search-highlight {
+  background: rgba(234, 179, 8, 0.28);
+  border-radius: 2px;
+  transition: background 0.15s ease;
+}
+.pdf-search-highlight.is-current {
+  background: rgba(234, 179, 8, 0.5);
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.8);
+}
+
 @keyframes pdfPageFocusPulse {
   0% {
     box-shadow: 0 0 0 0 rgba(194, 65, 12, 0.45), 0 10px 24px rgba(28, 25, 23, 0.08);
@@ -197,31 +208,339 @@ h1, h2, h3, h4, h5, h6 {
   z-index: 1;
 }
 
-.pdf-note-card {
+/* ─── Canvas Cards: Shared ─────────────────────────────── */
+.pdf-note-card,
+.pdf-ai-card {
   position: absolute;
-  max-width: 260px;
+  max-width: 280px;
   min-width: 160px;
-  background: var(--color-note-subtle);
-  border: 1px solid var(--color-note-border);
-  color: var(--color-note-text);
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 1.4;
-  box-shadow: 0 8px 18px rgba(13, 148, 136, 0.12);
+  border-radius: 12px;
   z-index: 3;
   pointer-events: auto;
   word-break: break-word;
-  transition: box-shadow 0.18s ease;
+  cursor: default;
+
+  /* Frosted glass default */
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+
+  /* Hover transition */
+  transition:
+    background 0.18s ease,
+    backdrop-filter 0.18s ease,
+    box-shadow 0.2s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1)),
+    transform 0.2s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1)),
+    border-color 0.18s ease;
 }
 
-.pdf-note-card:hover {
-  box-shadow: 0 10px 24px rgba(13, 148, 136, 0.18);
+/* Hover: solid + elevated */
+.pdf-note-card:hover,
+.pdf-ai-card:hover {
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(16px) saturate(200%);
+  -webkit-backdrop-filter: blur(16px) saturate(200%);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.1),
+    0 16px 40px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.8);
 }
 
+/* Dragging state */
+.pdf-note-card.is-dragging,
+.pdf-ai-card.is-dragging {
+  cursor: grabbing !important;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.18),
+    0 24px 56px rgba(0, 0, 0, 0.14);
+  transform: scale(1.02) translateY(-3px) !important;
+  z-index: 100;
+}
+
+/* Focus / selected state */
+.pdf-note-card.is-focused,
+.pdf-ai-card.is-focused {
+  box-shadow:
+    0 0 0 2px var(--color-note, #0d9488),
+    0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* ─── Card Header ─────────────────────────────────────── */
+.canvas-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 0;
+  gap: 6px;
+}
+
+.canvas-card-type {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.canvas-card-type-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.canvas-card-drag-hint {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  cursor: grab;
+  color: #c4c4c4;
+  padding: 2px;
+  border-radius: 4px;
+  background: none;
+  border: none;
+  line-height: 0;
+}
+
+.pdf-note-card:hover .canvas-card-drag-hint,
+.pdf-ai-card:hover .canvas-card-drag-hint {
+  opacity: 1;
+}
+
+.canvas-card-drag-hint:hover {
+  color: #a8a29e;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.canvas-card-drag-hint:active {
+  cursor: grabbing;
+}
+
+.canvas-card-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #d4d4d4;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s;
+}
+
+/* ─── Tag Area ─────────────────────────────────────────── */
+.note-card-tag-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-height: 26px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.note-card-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: filter 0.1s ease, transform 0.1s ease;
+}
+
+.note-card-tag-chip:hover {
+  filter: brightness(0.92);
+  transform: scale(0.97);
+}
+
+/* "+" Add tag button — always visible on card hover */
+.note-card-tag-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px dashed rgba(0, 0, 0, 0.15);
+  color: #a8a29e;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.note-card-tag-add:hover {
+  background: rgba(0, 0, 0, 0.07);
+  color: #57534e;
+  border-color: rgba(0, 0, 0, 0.25);
+  transform: scale(1.05);
+}
+
+/* Inline tag editor */
+.canvas-tag-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  animation: tagEditorOpen 0.15s var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+@keyframes tagEditorOpen {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.canvas-tag-editor-input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.canvas-tag-editor-input {
+  flex: 1;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #1c1917;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  min-width: 0;
+}
+
+.canvas-tag-editor-input:focus {
+  border-color: #0d9488;
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.15);
+}
+
+.canvas-tag-editor-confirm {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: none;
+  background: #0d9488;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s ease, transform 0.1s ease;
+  flex-shrink: 0;
+}
+
+.canvas-tag-editor-confirm:hover {
+  background: #0f766e;
+  transform: scale(1.02);
+}
+
+.canvas-tag-editor-confirm:disabled {
+  background: #e7e5e4;
+  color: #a8a29e;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.canvas-tag-editor-cancel {
+  height: 26px;
+  width: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: transparent;
+  color: #a8a29e;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.canvas-tag-editor-cancel:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #57534e;
+}
+
+.canvas-tag-color-palette {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.canvas-tag-color-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.1s ease, border-color 0.1s ease;
+  flex-shrink: 0;
+}
+
+.canvas-tag-color-dot:hover {
+  transform: scale(1.2);
+}
+
+.canvas-tag-color-dot.is-selected {
+  border-color: #1c1917;
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px white inset;
+}
+
+.canvas-tag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 64px;
+  overflow-y: auto;
+}
+
+.canvas-tag-suggestion {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid;
+  transition: filter 0.1s ease, transform 0.1s ease;
+}
+
+.canvas-tag-suggestion:hover {
+  filter: brightness(0.92);
+  transform: scale(0.97);
+}
+
+/* ─── Note Card Content ───────────────────────────────── */
 .note-card-display {
   font-size: 12px;
   line-height: 1.55;
+  padding: 8px 10px 6px;
 }
 
 .note-card-display p {
@@ -279,51 +598,23 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1.5;
   resize: vertical;
   outline: none;
+  box-sizing: border-box;
 }
 
 .note-card-editor:focus {
-  border-color: #0d9488;
+  border-color: var(--color-note, #0d9488);
   box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
 }
 
-.pdf-ai-card {
-  pointer-events: auto;
-  cursor: pointer;
-  border-color: var(--color-ai-border);
-  background: var(--color-ai-subtle);
-  color: var(--color-ai-text);
-  transition: box-shadow 0.18s ease, transform 0.18s ease;
-  min-width: 180px;
-  max-width: 280px;
-}
-
-.pdf-ai-card:hover {
-  box-shadow: 0 12px 22px rgba(107, 33, 168, 0.18);
-  transform: translateY(-1px);
-}
-
-.pdf-ai-card-dragging {
-  cursor: grabbing;
-  box-shadow: 0 14px 28px rgba(107, 33, 168, 0.26);
-}
-
-.pdf-ai-card-focus {
-  box-shadow: 0 0 0 2px rgba(192, 132, 252, 0.65), 0 12px 22px rgba(107, 33, 168, 0.2);
-}
-
-.pdf-ai-card-header {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--color-ai);
-  margin-bottom: 4px;
-}
-
+/* ─── AI Card Body & Actions ───────────────────────────── */
 .pdf-ai-card-body {
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 0 10px 8px;
 }
 
 .pdf-ai-card-body.is-expanded {
@@ -334,49 +625,15 @@ h1, h2, h3, h4, h5, h6 {
   overflow-y: auto;
 }
 
-.pdf-ai-card-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.pdf-ai-card-action {
-  border: 1px solid var(--color-ai-subtle);
-  background: #ffffff;
-  color: var(--color-ai);
-  border-radius: 9999px;
-  font-size: 10px;
-  line-height: 1;
-  padding: 3px 8px;
-  cursor: pointer;
-}
-
-.pdf-ai-card-action:hover {
-  border-color: var(--color-ai-border);
-  background: var(--color-ai-subtle);
-}
-
-.pdf-ai-card-unpin {
-  border-color: #fecaca;
-  color: #dc2626;
-}
-.pdf-ai-card-unpin:hover {
-  border-color: #f87171;
-  background: #fef2f2;
-}
-
-.pdf-ai-card-body {
-  font-size: 12px;
-  line-height: 1.55;
-}
 .pdf-ai-card-body p { margin: 2px 0; }
+
 .pdf-ai-card-body code {
-  background: #f5f5f4;
+  background: rgba(0, 0, 0, 0.06);
   border-radius: 3px;
   padding: 0 3px;
   font-size: 11px;
 }
+
 .pdf-ai-card-body pre {
   background: #1c1917;
   color: var(--color-border);
@@ -384,6 +641,44 @@ h1, h2, h3, h4, h5, h6 {
   padding: 4px 8px;
   font-size: 11px;
   overflow-x: auto;
+}
+
+.pdf-ai-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px 8px;
+  flex-wrap: wrap;
+}
+
+.pdf-ai-card-action {
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  background: rgba(124, 58, 237, 0.06);
+  color: #7c3aed;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
+}
+
+.pdf-ai-card-action:hover {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.4);
+  transform: scale(1.02);
+}
+
+.pdf-ai-card-unpin {
+  border-color: rgba(220, 38, 38, 0.2);
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.04);
+}
+
+.pdf-ai-card-unpin:hover {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.4);
 }
 
 .ai-msg-enter {
@@ -2896,6 +3191,94 @@ h1, h2, h3, h4, h5, h6 {
 [data-theme="dark"] .bg-\[#f0fdfa\],
 [data-theme="warm-dark"] .bg-\[#f0fdfa\] {
   background-color: rgba(45, 212, 191, 0.06);
+}
+
+/* Dark mode: frosted glass cards get dark surface */
+[data-theme="dark"] .pdf-note-card,
+[data-theme="dark"] .pdf-ai-card,
+[data-theme="warm-dark"] .pdf-note-card,
+[data-theme="warm-dark"] .pdf-ai-card {
+  background: rgba(35, 35, 38, 0.92);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.24);
+}
+
+[data-theme="dark"] .pdf-note-card:hover,
+[data-theme="dark"] .pdf-ai-card:hover,
+[data-theme="warm-dark"] .pdf-note-card:hover,
+[data-theme="warm-dark"] .pdf-ai-card:hover {
+  background: rgba(45, 45, 50, 0.97);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    0 16px 40px rgba(0, 0, 0, 0.32);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .note-card-tag-add,
+[data-theme="warm-dark"] .note-card-tag-add {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #a8a29e;
+}
+
+[data-theme="dark"] .note-card-tag-add:hover,
+[data-theme="warm-dark"] .note-card-tag-add:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .canvas-tag-editor-input,
+[data-theme="warm-dark"] .canvas-tag-editor-input {
+  background: rgba(35, 35, 38, 0.95);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #f5f5f4;
+}
+
+[data-theme="dark"] .note-card-editor,
+[data-theme="warm-dark"] .note-card-editor {
+  background: rgba(35, 35, 38, 0.97);
+  border-color: rgba(13, 148, 136, 0.4);
+  color: #f5f5f4;
+}
+
+[data-theme="dark"] .pdf-ai-card-action,
+[data-theme="warm-dark"] .pdf-ai-card-action {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.25);
+  color: #a78bfa;
+}
+
+[data-theme="dark"] .note-card-status,
+[data-theme="warm-dark"] .note-card-status {
+  color: #78716c;
+}
+
+[data-theme="dark"] .canvas-card-type,
+[data-theme="warm-dark"] .canvas-card-type {
+  color: #a8a29e;
+}
+
+[data-theme="dark"] .canvas-card-drag-hint,
+[data-theme="warm-dark"] .canvas-card-drag-hint {
+  color: #52525b;
+}
+
+[data-theme="dark"] .canvas-card-delete-btn,
+[data-theme="warm-dark"] .canvas-card-delete-btn {
+  color: #52525b;
+}
+
+[data-theme="dark"] .canvas-card-delete-btn:hover,
+[data-theme="warm-dark"] .canvas-card-delete-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
 }
 
 [data-theme="dark"] .border-\[#e7e5e4\],
