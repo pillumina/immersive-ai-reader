@@ -1,5 +1,5 @@
 use sqlx::SqlitePool;
-use crate::models::document::Document;
+use crate::models::document::{Document, DocumentSummary};
 use anyhow::Result;
 
 pub struct DocumentRepository {
@@ -61,9 +61,30 @@ impl DocumentRepository {
         Ok(docs)
     }
 
+    /// Lightweight list of all documents (excludes text_content for bandwidth efficiency).
+    pub async fn get_all_summaries(&self) -> Result<Vec<DocumentSummary>> {
+        let docs = sqlx::query_as::<_, DocumentSummary>(
+            r#"SELECT id, file_name, file_path, file_size, page_count, library_id, last_page, created_at, updated_at FROM documents ORDER BY created_at DESC"#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(docs)
+    }
+
     pub async fn get_by_library(&self, library_id: &str) -> Result<Vec<Document>> {
         let docs = sqlx::query_as(
             r#"SELECT id, file_name, file_path, file_size, page_count, text_content, library_id, last_page, created_at, updated_at FROM documents WHERE library_id = ? ORDER BY updated_at DESC"#,
+        )
+        .bind(library_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(docs)
+    }
+
+    /// Lightweight list of documents in a library (excludes text_content).
+    pub async fn get_summaries_by_library(&self, library_id: &str) -> Result<Vec<DocumentSummary>> {
+        let docs = sqlx::query_as::<_, DocumentSummary>(
+            r#"SELECT id, file_name, file_path, file_size, page_count, library_id, last_page, created_at, updated_at FROM documents WHERE library_id = ? ORDER BY updated_at DESC"#,
         )
         .bind(library_id)
         .fetch_all(&self.pool)
@@ -81,8 +102,38 @@ impl DocumentRepository {
         Ok(doc)
     }
 
-    pub async fn upsert(&self, doc: &Document) -> Result<()> {
-        self.save(doc).await
+    pub async fn upsert_by_file_path(&self, doc: &Document) -> Result<Document> {
+        // Atomic upsert using ON CONFLICT(file_path): preserves id/conversations
+        // on re-upload while updating metadata. Falls back to plain save for new docs.
+        sqlx::query(
+            r#"
+            INSERT INTO documents (id, file_name, file_path, file_size, page_count, text_content, library_id, last_page, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(file_path) DO UPDATE SET
+                file_name = excluded.file_name,
+                file_size = excluded.file_size,
+                page_count = excluded.page_count,
+                text_content = excluded.text_content,
+                library_id = excluded.library_id,
+                last_page = excluded.last_page,
+                updated_at = excluded.updated_at
+            "#,
+        )
+        .bind(&doc.id)
+        .bind(&doc.file_name)
+        .bind(&doc.file_path)
+        .bind(doc.file_size)
+        .bind(doc.page_count)
+        .bind(&doc.text_content)
+        .bind(&doc.library_id)
+        .bind(doc.last_page)
+        .bind(&doc.created_at)
+        .bind(&doc.updated_at)
+        .execute(&self.pool)
+        .await?;
+
+        // Re-fetch to return canonical document with preserved fields
+        self.get_by_id(&doc.id).await?.ok_or_else(|| anyhow::anyhow!("Document not found after upsert"))
     }
 
     pub async fn delete(&self, id: &str) -> Result<()> {

@@ -13,19 +13,10 @@ impl ConversationRepository {
         Self { pool }
     }
 
+    /// Get or create a conversation for a document.
+    /// Uses atomic INSERT OR IGNORE + fetch to avoid TOCTOU race conditions.
     pub async fn get_or_create(&self, document_id: &str) -> Result<Conversation> {
-        // Try to get existing conversation
-        if let Some(conv) = sqlx::query_as(
-            r#"SELECT id, document_id, created_at, updated_at FROM conversations WHERE document_id = ?"#,
-        )
-        .bind(document_id)
-        .fetch_optional(&self.pool)
-        .await?
-        {
-            return Ok(conv);
-        }
-
-        // Create new conversation
+        // Try to insert atomically; ON CONFLICT is a no-op since document_id is UNIQUE.
         let now = Utc::now().to_rfc3339();
         let conv = Conversation {
             id: Uuid::new_v4().to_string(),
@@ -35,10 +26,7 @@ impl ConversationRepository {
         };
 
         sqlx::query(
-            r#"
-            INSERT INTO conversations (id, document_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?)
-            "#,
+            r#"INSERT OR IGNORE INTO conversations (id, document_id, created_at, updated_at) VALUES (?, ?, ?, ?)"#,
         )
         .bind(&conv.id)
         .bind(&conv.document_id)
@@ -47,7 +35,15 @@ impl ConversationRepository {
         .execute(&self.pool)
         .await?;
 
-        Ok(conv)
+        // Fetch the conversation (either newly inserted or pre-existing).
+        let found = sqlx::query_as(
+            r#"SELECT id, document_id, created_at, updated_at FROM conversations WHERE document_id = ?"#,
+        )
+        .bind(document_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(found)
     }
 
     pub async fn add_message(&self, message: &Message) -> Result<i64> {

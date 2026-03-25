@@ -79,6 +79,7 @@ pub fn run() {
             commands::tag::remove_tag_from_document,
             commands::tag::delete_tag,
             commands::tag::get_annotation_tags,
+            commands::tag::get_annotation_tags_batch,
             commands::tag::set_annotation_tags,
             commands::tag::add_tag_to_annotation,
             commands::tag::remove_tag_from_annotation,

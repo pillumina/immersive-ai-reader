@@ -66,5 +66,49 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     );
     let _ = create_annotation_tags_idx2.execute(pool).await;
 
+    // Migration: add index on documents.file_path for fast duplicate-check on upload
+    let idx_file_path = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_documents_file_path ON documents(file_path)",
+    );
+    let _ = idx_file_path.execute(pool).await;
+
+    // Migration: add index on annotations.document_id for fast document annotation lookup
+    let idx_annotations_doc = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_annotations_document_id ON annotations(document_id)",
+    );
+    let _ = idx_annotations_doc.execute(pool).await;
+
+    // Migration: add index on annotations.page_number for fast page-based lookup
+    let idx_annotations_page = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_annotations_page_number ON annotations(page_number)",
+    );
+    let _ = idx_annotations_page.execute(pool).await;
+
+    // Migration: add UNIQUE constraint on tags.name to prevent race condition in get_or_create.
+    let unique_tags_name = sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name_unique ON tags(name)",
+    );
+    let _ = unique_tags_name.execute(pool).await;
+
+    // Migration: add UNIQUE constraint on conversations.document_id for atomic get_or_create.
+    let unique_conv_doc = sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_document_id_unique ON conversations(document_id)",
+    );
+    let _ = unique_conv_doc.execute(pool).await;
+
+    // Migration: add UNIQUE constraint on documents.file_path to prevent TOCTOU race
+    // on duplicate upload checks (enforced atomically via UNIQUE index + ON CONFLICT).
+    let unique_file_path = sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_file_path_unique ON documents(file_path)",
+    );
+    let _ = unique_file_path.execute(pool).await;
+
+    // Migration: add composite index on annotations(document_id, page_number)
+    // for efficient page-specific annotation queries when loading a document.
+    let idx_annotations_doc_page = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_annotations_document_page ON annotations(document_id, page_number)",
+    );
+    let _ = idx_annotations_doc_page.execute(pool).await;
+
     Ok(())
 }

@@ -67,6 +67,14 @@ pub async fn get_annotation_tags(
 }
 
 #[tauri::command]
+pub async fn get_annotation_tags_batch(
+    annotation_ids: Vec<String>,
+    repo: State<'_, TagRepository>,
+) -> Result<std::collections::HashMap<String, Vec<Tag>>, String> {
+    repo.get_by_annotations(&annotation_ids).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn set_annotation_tags(
     annotation_id: String,
     tag_names: Vec<String>,

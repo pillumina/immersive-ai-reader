@@ -16,6 +16,20 @@ pub struct Document {
     pub updated_at: String,
 }
 
+/// Lightweight document record for list views — excludes text_content.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct DocumentSummary {
+    pub id: String,
+    pub file_name: String,
+    pub file_path: String,
+    pub file_size: i64,
+    pub page_count: i32,
+    pub library_id: Option<String>,
+    pub last_page: i32,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateDocumentRequest {
     pub file_name: String,
