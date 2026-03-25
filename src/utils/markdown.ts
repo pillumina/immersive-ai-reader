@@ -3,6 +3,11 @@
  * Supports: headings, bold, italic, code, lists
  */
 
+// Pre-compiled regexes to avoid recompilation on every line
+const BOLD_RE = /\*\*(.+?)\*\*/g;
+const ITALIC_RE = /\*(.+?)\*/g;
+const CODE_RE = /`(.+?)`/g;
+
 export function simpleMarkdownToHtml(md: string): string {
   const escaped = md
     .replace(/&/g, '&amp;')
@@ -27,9 +32,9 @@ export function simpleMarkdownToHtml(md: string): string {
     }
     if (inCode) { out.push(line); continue; }
     const inlined = line
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`(.+?)`/g, '<code class="note-md-code">$1</code>');
+      .replace(BOLD_RE, '<strong>$1</strong>')
+      .replace(ITALIC_RE, '<em>$1</em>')
+      .replace(CODE_RE, '<code class="note-md-code">$1</code>');
     if (/^#{3,}\s/.test(line)) {
       if (inList) { out.push('</ul>'); inList = false; }
       out.push(`<h5 class="note-md-h">${inlined.replace(/^#{3,}\s+/, '')}</h5>`);
