@@ -110,5 +110,38 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     );
     let _ = idx_annotations_doc_page.execute(pool).await;
 
+    // Migration: create focus_sessions table for Focus Mode reading sessions
+    let create_focus_sessions = sqlx::query(
+        "CREATE TABLE IF NOT EXISTS focus_sessions (
+            id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            entered_at TEXT NOT NULL,
+            exited_at TEXT,
+            duration_minutes INTEGER,
+            last_page INTEGER NOT NULL DEFAULT 1,
+            max_scroll_top REAL NOT NULL DEFAULT 0,
+            max_read_percentage REAL NOT NULL DEFAULT 0,
+            ai_panel_collapsed INTEGER NOT NULL DEFAULT 1,
+            ai_conversation_id TEXT,
+            highlights_count INTEGER NOT NULL DEFAULT 0,
+            notes_count INTEGER NOT NULL DEFAULT 0,
+            ai_responses_count INTEGER NOT NULL DEFAULT 0,
+            summary_triggered INTEGER NOT NULL DEFAULT 0,
+            summary_action TEXT
+        )",
+    );
+    let _ = create_focus_sessions.execute(pool).await;
+
+    let idx_focus_doc = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_focus_sessions_document_id ON focus_sessions(document_id)",
+    );
+    let _ = idx_focus_doc.execute(pool).await;
+
+    let idx_focus_session = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_focus_sessions_session_id ON focus_sessions(session_id)",
+    );
+    let _ = idx_focus_session.execute(pool).await;
+
     Ok(())
 }

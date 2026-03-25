@@ -370,3 +370,75 @@ export const aiCommands = {
     }
   },
 };
+
+// Focus Session types
+export interface FocusSession {
+  id: string;
+  document_id: string;
+  session_id: string;
+  entered_at: string;
+  exited_at: string | null;
+  duration_minutes: number | null;
+  last_page: number;
+  max_scroll_top: number;
+  max_read_percentage: number;
+  ai_panel_collapsed: boolean;
+  ai_conversation_id: string | null;
+  highlights_count: number;
+  notes_count: number;
+  ai_responses_count: number;
+  summary_triggered: boolean;
+  summary_action: string | null;
+}
+
+export interface FocusSessionUpdate {
+  exited_at?: string;
+  duration_minutes?: number;
+  last_page?: number;
+  max_scroll_top?: number;
+  max_read_percentage?: number;
+  ai_panel_collapsed?: boolean;
+  ai_conversation_id?: string;
+  highlights_count?: number;
+  notes_count?: number;
+  ai_responses_count?: number;
+  summary_triggered?: boolean;
+  summary_action?: string;
+}
+
+// Focus Mode commands
+export const focusCommands = {
+  create: async (documentId: string, sessionId: string, enteredAt: string, lastPage: number): Promise<FocusSession> => {
+    try {
+      return await invoke<FocusSession>('create_focus_session', {
+        request: { document_id: documentId, session_id: sessionId, entered_at: enteredAt, last_page: lastPage },
+      });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+
+  update: async (sessionId: string, updates: FocusSessionUpdate): Promise<void> => {
+    try {
+      await invoke('update_focus_session', { sessionId, updates });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+
+  getLast: async (documentId: string): Promise<FocusSession | null> => {
+    try {
+      return await invoke<FocusSession | null>('get_last_focus_session', { documentId });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+
+  getHistory: async (documentId: string, limit: number = 10): Promise<FocusSession[]> => {
+    try {
+      return await invoke<FocusSession[]>('get_focus_session_history', { documentId, limit });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+};

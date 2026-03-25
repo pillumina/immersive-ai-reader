@@ -74,6 +74,7 @@ Key modules:
 | `src/hooks/useAI.ts` | AI chat hook with routing and streaming |
 | `src/hooks/useCanvasRendering.ts` | Canvas rendering with annotations |
 | `src/hooks/useSettings.ts` | Settings management with Zod validation |
+| `src/hooks/useFocusMode.tsx` | Focus Mode state management (FocusModeProvider + useFocusMode) |
 | `src/components/ui/ErrorBoundary.tsx` | React error boundary |
 | `src/utils/markdown.ts` | Markdown to HTML converter |
 | `vite.config.ts` | Vite config with JSX automatic mode, path aliases |

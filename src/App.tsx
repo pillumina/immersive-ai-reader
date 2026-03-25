@@ -13,6 +13,7 @@ import { useAI } from '@/hooks/useAI';
 import { useSettings } from '@/hooks/useSettings';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useCanvasRendering } from '@/hooks/useCanvasRendering';
+import { FocusModeProvider, useFocusMode } from '@/hooks/useFocusMode';
 import { AIConfig } from '@/types/settings';
 import { aiCommands, annotationCommands, tagCommands } from '@/lib/tauri';
 import { PDFDocument } from '@/types/document';
@@ -25,6 +26,14 @@ interface ToastState {
 }
 
 function App() {
+  return (
+    <FocusModeProvider>
+      <AppInner />
+    </FocusModeProvider>
+  );
+}
+
+function AppInner() {
   const AI_CARD_PREFIX = '__AICARD__|';
   const {
     currentDocument,
@@ -81,6 +90,9 @@ function App() {
 
   // Stable refs for functions defined later in the component (avoids TDZ).
   const handleDeleteDocRef = useRef<any>(null);
+
+  // Focus Mode state
+  const { state: focusState, enterFocusMode, exitFocusMode } = useFocusMode();
   /** Captured DOM range rect + page number from text selection before toolbar clears it */
   const noteInputCapturedRangeRef = useRef<{
     left: number; top: number; width: number; height: number; pageNumber: number;
@@ -135,7 +147,6 @@ function App() {
   const noteInputCapturedTextRef = useRef<string | undefined>(undefined);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<Array<{ id: string; type: 'text' | 'note'; content: string; page?: number }>>([]);
-  const [focusMode, setFocusMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [splitActive, setSplitActive] = useState(false);
   const [comparePageSignal, setComparePageSignal] = useState<number | null>(null);
@@ -454,10 +465,11 @@ function App() {
   };
   const handleResetZoom = () => setZoomLevel(1);
 
-  // Escape closes TOC, context menus, etc. handled by individual components;
-  // this catches any remaining open state at the app level.
+  // Escape — exit Focus Mode if active, otherwise handled by individual components.
   const handleEscape = () => {
-    // Handled by individual components via their own keydown/close handlers.
+    if (focusState.isActive) {
+      void exitFocusMode(currentPage, 0);
+    }
   };
 
   const handleHighlightSelection = async () => {
@@ -497,6 +509,13 @@ function App() {
     onEscape: handleEscape,
     onHighlight: handleHighlightSelection,
     onNewNote: () => handleAddNoteSelection(),
+    onToggleFocusMode: () => {
+      if (focusState.isActive) {
+        void exitFocusMode(currentPage, 0);
+      } else if (currentDocument?.id) {
+        void enterFocusMode(currentDocument.id, currentPage);
+      }
+    },
     activeTabId,
     currentPage,
     totalPages,
@@ -875,7 +894,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
 
         {/* Document reader — always in DOM, shown when document tab active */}
         <main className={`flex flex-1 min-h-0 transition-opacity duration-150 ${!isLibraryTab ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-          {!focusMode && sidebarOpen && (
+          {!focusState.isActive && sidebarOpen && (
             <Sidebar
               onUpload={handleUpload}
               onOpenSettings={() => setSettingsOpen(true)}
@@ -894,7 +913,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
           )}
 
           {/* Collapsed sidebar strip */}
-          {!focusMode && !sidebarOpen && (
+          {!focusState.isActive && !sidebarOpen && (
             <div className="w-11 border-r border-[#e7e5e4] bg-white flex flex-col items-center py-3 gap-1 shrink-0">
               <button
                 type="button"
@@ -925,15 +944,21 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             onExplainSelection={() => { void handleExplainTerm(); }}
             onDropAICard={handleDropAICard}
             documentId={currentDocument?.id}
-            onToggleFocusMode={() => setFocusMode((v) => !v)}
-            isFocusMode={focusMode}
+            onToggleFocusMode={() => {
+              if (focusState.isActive) {
+                void exitFocusMode(currentPage, 0);
+              } else if (currentDocument?.id) {
+                void enterFocusMode(currentDocument.id, currentPage);
+              }
+            }}
+            isFocusMode={focusState.isActive}
             comparePageSignal={comparePageSignal}
             comparePaneCommand={comparePaneCommand}
             onSplitModeChange={setSplitActive}
             pdfFileBlob={currentDocument?.fileBlob ?? null}
           />
 
-          {!focusMode && !splitActive && (
+          {!focusState.isActive && !splitActive && (
             <AIPanel
               messages={messages}
               isLoading={aiLoading}

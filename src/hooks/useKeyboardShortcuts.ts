@@ -9,6 +9,7 @@ interface KeyboardShortcutHandlers {
   onEscape?: () => void;
   onHighlight?: () => void;
   onNewNote?: () => void;
+  onToggleFocusMode?: () => void;
   activeTabId?: string;
   currentPage?: number;
   totalPages?: number;
@@ -27,6 +28,7 @@ export function useKeyboardShortcuts({
   onEscape,
   onHighlight,
   onNewNote,
+  onToggleFocusMode,
   activeTabId,
   currentPage = 1,
   totalPages = 0,
@@ -53,6 +55,14 @@ export function useKeyboardShortcuts({
       if (isTyping(e.target)) return;
 
       const mod = isMac ? e.metaKey : e.ctrlKey;
+      const shift = e.shiftKey;
+
+      // Cmd/Ctrl + Shift + F — toggle Focus Mode.
+      if (mod && shift && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        onToggleFocusMode?.();
+        return;
+      }
 
       // Cmd/Ctrl + W — close current tab.
       if (mod && e.key.toLowerCase() === 'w') {
@@ -132,5 +142,5 @@ export function useKeyboardShortcuts({
 
     globalThis.addEventListener('keydown', handler);
     return () => globalThis.removeEventListener('keydown', handler);
-  }, [onZoomIn, onZoomOut, onResetZoom, onJumpToPage, onCloseTab, onEscape, onHighlight, onNewNote, activeTabId, currentPage, totalPages]);
+  }, [onZoomIn, onZoomOut, onResetZoom, onJumpToPage, onCloseTab, onEscape, onHighlight, onNewNote, onToggleFocusMode, activeTabId, currentPage, totalPages]);
 }

@@ -3,3 +3,4 @@ pub mod annotation_repo;
 pub mod conversation_repo;
 pub mod library_repo;
 pub mod tag_repo;
+pub mod focus_repo;
