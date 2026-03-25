@@ -28,6 +28,10 @@ interface MainCanvasProps {
   documentId?: string;
   onToggleFocusMode: () => void;
   isFocusMode: boolean;
+  /** Called when L1 "+" bubble is clicked — opens L2 AI popover */
+  onOpenL2Popover?: (position: { x: number; y: number }, text: string, page?: number) => void;
+  /** L1 auto-highlight in Focus Mode — uses blue instead of yellow */
+  onHighlightSelectionFocus?: () => void;
   comparePageSignal?: number | null;
   comparePaneCommand?: {
     page: number;
@@ -56,6 +60,8 @@ export function MainCanvas({
   documentId,
   onToggleFocusMode,
   isFocusMode,
+  onOpenL2Popover,
+  onHighlightSelectionFocus,
   comparePageSignal,
   comparePaneCommand,
   onSplitModeChange,
@@ -75,6 +81,12 @@ export function MainCanvas({
   const [compareHistory, setCompareHistory] = useState<number[]>([]);
   const [compareHistoryIndex, setCompareHistoryIndex] = useState(-1);
   const [splitReason, setSplitReason] = useState<'evidence' | 'reference' | 'compare'>('compare');
+
+  // L1 bubble state (Focus Mode auto-highlight + "+" button)
+  type L1Bubble = { x: number; y: number; text: string; page?: number };
+  const [l1Bubble, setL1Bubble] = useState<L1Bubble | null>(null);
+  const l1BubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const l1BubbleHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textHandleRef = useRef<{ x: number; y: number; page?: number; text: string } | null>(null);
   const compareStageRef = useRef<HTMLElement | null>(null);
   const [, forceTextToolbarUpdate] = useState(0);
@@ -156,9 +168,20 @@ export function MainCanvas({
     containerEl.querySelectorAll('.pdf-search-highlight').forEach((el) => el.remove());
   };
 
-  // Monitor text selection to show floating drag handle
+  // Monitor text selection to show floating drag handle.
+  // In Focus Mode: auto-highlights after 50ms and shows L1 "+" bubble.
   useEffect(() => {
+    // Clean up L1 bubble timers
+    const cleanup = () => {
+      if (l1BubbleTimerRef.current) { clearTimeout(l1BubbleTimerRef.current); l1BubbleTimerRef.current = null; }
+      if (l1BubbleHideTimerRef.current) { clearTimeout(l1BubbleHideTimerRef.current); l1BubbleHideTimerRef.current = null; }
+    };
+
     const update = () => {
+      // Dismiss any existing L1 bubble immediately on new selection
+      cleanup();
+      setL1Bubble(null);
+
       const sel = globalThis.getSelection?.();
       if (!sel || sel.isCollapsed || !sel.toString().trim()) {
         textHandleRef.current = null;
@@ -170,7 +193,7 @@ export function MainCanvas({
         const rect = range.getBoundingClientRect();
         if (rect.width === 0 && rect.height === 0) {
           textHandleRef.current = null;
-        forceTextToolbarUpdate((n) => n + 1);
+          forceTextToolbarUpdate((n) => n + 1);
           return;
         }
         // Find page element
@@ -179,33 +202,69 @@ export function MainCanvas({
               ?.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
               ?.closest('.pdf-page') as HTMLElement | null
           : null;
-        // Guard: only show toolbar when selection is inside a PDF page
         if (!pageEl) {
           textHandleRef.current = null;
-        forceTextToolbarUpdate((n) => n + 1);
+          forceTextToolbarUpdate((n) => n + 1);
           return;
         }
         const page = Number(pageEl.dataset.pageNumber || '0') || undefined;
         const selectedText = sel.toString().trim();
-        // Guard: require meaningful selection text
         if (!selectedText || selectedText.length < 2) {
           textHandleRef.current = null;
-        forceTextToolbarUpdate((n) => n + 1);
+          forceTextToolbarUpdate((n) => n + 1);
           return;
         }
-        // Position toolbar centered above the selection, offset upward
         const toolbarX = Math.max(8, rect.left + rect.width / 2);
-        const toolbarY = Math.max(8, rect.top - 44); // above selection
+        const toolbarY = Math.max(8, rect.top - 44);
         textHandleRef.current = { x: toolbarX, y: toolbarY, page, text: selectedText };
         forceTextToolbarUpdate((n) => n + 1);
+
+        // In Focus Mode: auto-highlight after 50ms + show L1 bubble
+        if (isFocusMode) {
+          l1BubbleTimerRef.current = setTimeout(() => {
+            // Trigger L1 auto-highlight with blue color
+            onHighlightSelectionFocus?.();
+            // Show "+" bubble at the selection position
+            const updatedSel = globalThis.getSelection?.();
+            if (updatedSel && !updatedSel.isCollapsed) {
+              const updatedRange = updatedSel.getRangeAt(0);
+              const updatedRect = updatedRange.getBoundingClientRect();
+              if (updatedRect.width > 0 && updatedRect.height > 0) {
+                const bubbleX = updatedRect.right + 8;
+                const bubbleY = updatedRect.top + updatedRect.height / 2;
+                setL1Bubble({ x: bubbleX, y: bubbleY, text: selectedText, page });
+                // Auto-hide after 2 seconds
+                l1BubbleHideTimerRef.current = setTimeout(() => {
+                  setL1Bubble(null);
+                }, 2000);
+              }
+            }
+          }, 50);
+        }
       } catch {
         textHandleRef.current = null;
         forceTextToolbarUpdate((n) => n + 1);
       }
     };
     globalThis.addEventListener('mouseup', update);
-    return () => globalThis.removeEventListener('mouseup', update);
-  }, []);
+    return () => {
+      globalThis.removeEventListener('mouseup', update);
+      cleanup();
+    };
+  }, [isFocusMode, onHighlightSelectionFocus]);
+
+  // Hide L1 bubble on scroll in Focus Mode.
+  useEffect(() => {
+    if (!isFocusMode) return;
+    const scrollContainer = globalThis.document?.getElementById('pdf-scroll-container');
+    if (!scrollContainer) return;
+    const handler = () => {
+      if (l1BubbleHideTimerRef.current) { clearTimeout(l1BubbleHideTimerRef.current); l1BubbleHideTimerRef.current = null; }
+      setL1Bubble(null);
+    };
+    scrollContainer.addEventListener('scroll', handler, { passive: true });
+    return () => scrollContainer.removeEventListener('scroll', handler);
+  }, [isFocusMode]);
 
   // Cmd/Ctrl+F — toggle search bar.
   useEffect(() => {
@@ -1067,8 +1126,30 @@ export function MainCanvas({
         </button>
       )}
 
-      {/* Context toolbar for selected text — iOS/Mac-style inline action bar */}
-      {textHandleRef.current && textHandleRef.current.text?.trim() && (
+      {/* L1 "+" bubble in Focus Mode — replaces the full toolbar */}
+      {isFocusMode && l1Bubble && (
+        <button
+          type="button"
+          className="l1-bubble fixed z-50 flex h-7 w-7 items-center justify-center rounded-full border border-[#e7e5e4]/80 bg-white/95 shadow-[0_2px_12px_rgba(0,0,0,0.15)] backdrop-blur-md transition-all duration-150 hover:scale-110 hover:bg-blue-50 hover:border-blue-300 active:scale-95"
+          style={{ left: l1Bubble.x, top: l1Bubble.y, transform: 'translateY(-50%)' }}
+          onClick={(e) => {
+            e.stopPropagation();
+            // Dismiss bubble and open L2 popover
+            if (l1BubbleHideTimerRef.current) { clearTimeout(l1BubbleHideTimerRef.current); l1BubbleHideTimerRef.current = null; }
+            setL1Bubble(null);
+            onOpenL2Popover?.({ x: l1Bubble.x, y: l1Bubble.y }, l1Bubble.text, l1Bubble.page);
+          }}
+          title="Open capture options"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+      )}
+
+      {/* Context toolbar for selected text — iOS/Mac-style inline action bar (NOT in Focus Mode) */}
+      {!isFocusMode && textHandleRef.current && textHandleRef.current.text?.trim() && (
         <>
           {/* Invisible backdrop to catch outside clicks */}
           <div

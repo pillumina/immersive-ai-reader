@@ -3521,3 +3521,12 @@ h1, h2, h3, h4, h5, h6 {
   background: #e7e5e4;
   flex-shrink: 0;
 }
+
+/* L1 bubble button — Focus Mode "+" capture trigger */
+.l1-bubble {
+  cursor: pointer;
+  outline: none;
+}
+.l1-bubble:focus-visible {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}

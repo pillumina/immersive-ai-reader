@@ -12,6 +12,7 @@ export function useCanvasRendering(
   pdfDocument: PDFDocument | null,
   zoomLevel: number,
   onPinnedIdsChange?: (messageId: string) => void,
+  onHighlightDoubleClick?: (annotationId: string, pageNumber: number) => void,
 ) {
   const renderJobIdRef = useRef(0);
   const latestZoomRef = useRef(zoomLevel);
@@ -1289,6 +1290,28 @@ export function useCanvasRendering(
 
     return () => pageObserver.disconnect();
   }, [scrollContainerId, containerId, totalPages]);
+
+  // Double-click on highlight → open L3 note editor (via callback)
+  useEffect(() => {
+    if (!onHighlightDoubleClick) return;
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (!containerEl) return;
+
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const highlightEl = target.closest('.pdf-highlight') as HTMLElement | null;
+      if (!highlightEl) return;
+      const annotationId = highlightEl.dataset.annotationId;
+      const pageEl = highlightEl.closest('.pdf-page') as HTMLElement | null;
+      const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber || '1') : 1;
+      if (annotationId) {
+        onHighlightDoubleClick(annotationId, pageNumber);
+      }
+    };
+
+    containerEl.addEventListener('dblclick', handler);
+    return () => containerEl.removeEventListener('dblclick', handler);
+  }, [containerId, onHighlightDoubleClick]);
 
   const jumpToPage = (pageNumber: number) => {
     // Update UI state immediately so sidebar red-dot moves without waiting for scroll.

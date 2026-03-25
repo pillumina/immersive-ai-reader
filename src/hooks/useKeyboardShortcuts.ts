@@ -10,6 +10,8 @@ interface KeyboardShortcutHandlers {
   onHighlight?: () => void;
   onNewNote?: () => void;
   onToggleFocusMode?: () => void;
+  onToggleMiniAI?: () => void;
+  onToggleCaptureDrawer?: () => void;
   activeTabId?: string;
   currentPage?: number;
   totalPages?: number;
@@ -29,6 +31,8 @@ export function useKeyboardShortcuts({
   onHighlight,
   onNewNote,
   onToggleFocusMode,
+  onToggleMiniAI,
+  onToggleCaptureDrawer,
   activeTabId,
   currentPage = 1,
   totalPages = 0,
@@ -61,6 +65,20 @@ export function useKeyboardShortcuts({
       if (mod && shift && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         onToggleFocusMode?.();
+        return;
+      }
+
+      // Cmd/Ctrl + ` (backtick) — toggle Mini AI window (Focus Mode only).
+      if (mod && e.key === '`') {
+        e.preventDefault();
+        onToggleMiniAI?.();
+        return;
+      }
+
+      // Cmd/Ctrl + Shift + B — toggle Capture Drawer.
+      if (mod && shift && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        onToggleCaptureDrawer?.();
         return;
       }
 
@@ -142,5 +160,5 @@ export function useKeyboardShortcuts({
 
     globalThis.addEventListener('keydown', handler);
     return () => globalThis.removeEventListener('keydown', handler);
-  }, [onZoomIn, onZoomOut, onResetZoom, onJumpToPage, onCloseTab, onEscape, onHighlight, onNewNote, onToggleFocusMode, activeTabId, currentPage, totalPages]);
+  }, [onZoomIn, onZoomOut, onResetZoom, onJumpToPage, onCloseTab, onEscape, onHighlight, onNewNote, onToggleFocusMode, onToggleMiniAI, onToggleCaptureDrawer, activeTabId, currentPage, totalPages]);
 }

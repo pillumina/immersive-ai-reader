@@ -7,6 +7,11 @@ import { LibraryView } from '@/components/features/LibraryView';
 import { SettingsModal } from '@/components/features/SettingsModal';
 import { Toast } from '@/components/ui/Toast';
 import { TagManagePopup } from '@/components/ui/TagManagePopup';
+import { L2AIPopover } from '@/components/capture/L2AIPopover';
+import { L3NoteEditor } from '@/components/capture/L3NoteEditor';
+import { MiniAIWindow } from '@/components/capture/MiniAIWindow';
+import { CaptureDrawer } from '@/components/capture/CaptureDrawer';
+import { FocusStatusBar } from '@/components/capture/FocusStatusBar';
 import { usePDF } from '@/hooks/usePDF';
 import { usePDFThumbnails } from '@/hooks/usePDFThumbnails';
 import { useAI } from '@/hooks/useAI';
@@ -91,8 +96,20 @@ function AppInner() {
   // Stable refs for functions defined later in the component (avoids TDZ).
   const handleDeleteDocRef = useRef<any>(null);
 
-  // Focus Mode state
-  const { state: focusState, enterFocusMode, exitFocusMode } = useFocusMode();
+  // ─── Focus Mode ─────────────────────────────────────────────────
+  const [sessionDurationSecs, setSessionDurationSecs] = useState(0);
+  const {
+    state: focusState,
+    enterFocusMode,
+    exitFocusMode,
+    updateProgress,
+    updateCaptureCounts,
+    triggerSummary,
+    toggleMiniAI,
+    toggleCaptureDrawer,
+    dismissResumePrompt,
+    dismissSummary80,
+  } = useFocusMode();
   /** Captured DOM range rect + page number from text selection before toolbar clears it */
   const noteInputCapturedRangeRef = useRef<{
     left: number; top: number; width: number; height: number; pageNumber: number;
@@ -181,7 +198,10 @@ function AppInner() {
     activeTabId === 'library' ? '' : 'pdf-pages-container',
     currentDocument,
     zoomLevel,
-    (messageId: string) => setPinnedMessageIds((prev) => prev.filter((id) => id !== messageId))
+    (messageId: string) => setPinnedMessageIds((prev) => prev.filter((id) => id !== messageId)),
+    (annotationId: string) => {
+      setL3Editor({ type: 'edit', annotationId });
+    }
   );
 
   // Stable callbacks passed to AIPanel to prevent unnecessary re-renders
@@ -411,7 +431,51 @@ function AppInner() {
     if (aiError) setToast({ message: aiError, type: 'error' });
   }, [aiError]);
 
-  // ─── Handlers ────────────────────────────────────────────────
+  // ─── Focus Mode: 80% summary prompt trigger ───────────────────
+  const [showFocus80Prompt, setShowFocus80Prompt] = useState(false);
+
+  // ─── Focus Mode: session timer ────────────────────────────────
+  useEffect(() => {
+    if (!focusState.isActive) {
+      setSessionDurationSecs(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setSessionDurationSecs((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [focusState.isActive]);
+
+  // ─── Focus Mode: scroll-based progress tracking ───────────────
+  const maxPercentageRef = useRef(0);
+  const maxScrollTopRef = useRef(0);
+
+  useEffect(() => {
+    if (!focusState.isActive) {
+      maxPercentageRef.current = 0;
+      return;
+    }
+    const container = globalThis.document?.getElementById('pdf-scroll-container');
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const total = scrollHeight - clientHeight;
+      if (total <= 0) return;
+      const pct = Math.round((scrollTop / total) * 100);
+      if (pct > maxPercentageRef.current) maxPercentageRef.current = pct;
+      if (scrollTop > maxScrollTopRef.current) maxScrollTopRef.current = scrollTop;
+      void updateProgress(currentPage ?? 1, scrollTop, maxPercentageRef.current);
+      if (pct >= 80 && !focusState.summary80Shown && !focusState.summary80Visible) {
+        setShowFocus80Prompt(true);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [focusState.isActive, focusState.summary80Shown, focusState.summary80Visible, currentPage, updateProgress]);
+
+  // ─── Focus Mode: 80% summary trigger ─────────────────────────
   const handleUpload = useCallback(async () => {
     try {
       setToast({ message: 'Opening PDF file…', type: 'info' });
@@ -468,17 +532,76 @@ function AppInner() {
   // Escape — exit Focus Mode if active, otherwise handled by individual components.
   const handleEscape = () => {
     if (focusState.isActive) {
-      void exitFocusMode(currentPage, 0);
+      void exitFocusMode(currentPage ?? 1, maxScrollTopRef.current);
     }
   };
 
   const handleHighlightSelection = async () => {
     try {
       const count = await highlightSelection();
+      if (count > 0 && focusState.isActive) {
+        updateCaptureCounts(focusState.highlightsCount + count, focusState.notesCount, focusState.aiResponsesCount);
+      }
       setToast({ message: `Added ${count} highlight${count > 1 ? 's' : ''}`, type: 'success' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to highlight selection';
       setToast({ message, type: 'info' });
+    }
+  };
+
+  /** L1 auto-highlight in Focus Mode — uses blue instead of yellow */
+  const handleHighlightSelectionFocus = async () => {
+    try {
+      await highlightSelection('rgba(59, 130, 246, 0.2)');
+    } catch {
+      // Silent fail for auto-highlight; user can still use the toolbar
+    }
+  };
+
+  /** L2 AI popover state — shown when L1 bubble is clicked */
+  const [l2Popover, setL2Popover] = useState<{ position: { x: number; y: number }; text: string; page?: number } | null>(null);
+
+  /** L3 note editor state */
+  type L3EditorState =
+    | { type: 'edit'; annotationId: string }
+    | { type: 'new'; selectedText: string; pageNumber?: number }
+    | null;
+  const [l3Editor, setL3Editor] = useState<L3EditorState>(null);
+
+  /** Handle L2 popover action — explain/translate/add-to-session/new-note */
+  const handleL2Action = async (
+    action: { type: string; text: string; page?: number }
+  ) => {
+    setL2Popover(null);
+    switch (action.type) {
+      case 'explain': {
+        if (focusState.isActive) {
+          setToast({ message: 'AI explanation will open in mini AI window', type: 'info' });
+        }
+        await explainTerm(action.text);
+        break;
+      }
+      case 'translate': {
+        if (focusState.isActive) {
+          setToast({ message: 'Translation will open in mini AI window', type: 'info' });
+        }
+        await sendMessage(
+          `Translate the following text${action.page ? ` from page ${action.page}` : ''}:\n\n${action.text}`,
+          'term_light'
+        );
+        break;
+      }
+      case 'add-to-session': {
+        // TODO(Phase 3): add to mini AI window input
+        setToast({ message: '加入会话 — mini AI 窗口 Phase 3 实现', type: 'info' });
+        break;
+      }
+      case 'new-note': {
+        setL3Editor({ type: 'new', selectedText: action.text, pageNumber: action.page });
+        break;
+      }
+      default:
+        break;
     }
   };
 
@@ -511,11 +634,13 @@ function AppInner() {
     onNewNote: () => handleAddNoteSelection(),
     onToggleFocusMode: () => {
       if (focusState.isActive) {
-        void exitFocusMode(currentPage, 0);
+        void exitFocusMode(currentPage ?? 1, maxScrollTopRef.current);
       } else if (currentDocument?.id) {
-        void enterFocusMode(currentDocument.id, currentPage);
+        void enterFocusMode(currentDocument.id, currentPage ?? 1);
       }
     },
+    onToggleMiniAI: toggleMiniAI,
+    onToggleCaptureDrawer: toggleCaptureDrawer,
     activeTabId,
     currentPage,
     totalPages,
@@ -538,6 +663,9 @@ function AppInner() {
       noteInputCapturedRangeRef.current = null;
       if (created) {
         setNotesAnnotations((prev) => [created, ...prev]);
+        if (focusState.isActive) {
+          updateCaptureCounts(focusState.highlightsCount, focusState.notesCount + 1, focusState.aiResponsesCount);
+        }
       }
       setToast({ message: 'Note added', type: 'success' });
     } catch (error) {
@@ -946,12 +1074,16 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             documentId={currentDocument?.id}
             onToggleFocusMode={() => {
               if (focusState.isActive) {
-                void exitFocusMode(currentPage, 0);
+                void exitFocusMode(currentPage ?? 1, maxScrollTopRef.current);
               } else if (currentDocument?.id) {
                 void enterFocusMode(currentDocument.id, currentPage);
               }
             }}
             isFocusMode={focusState.isActive}
+            onOpenL2Popover={(position, text, page) => {
+              setL2Popover({ position, text, page });
+            }}
+            onHighlightSelectionFocus={handleHighlightSelectionFocus}
             comparePageSignal={comparePageSignal}
             comparePaneCommand={comparePaneCommand}
             onSplitModeChange={setSplitActive}
@@ -1086,6 +1218,152 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             </div>
           </div>
         </div>
+      )}
+
+      {l2Popover && (
+        <L2AIPopover
+          position={l2Popover.position}
+          text={l2Popover.text}
+          page={l2Popover.page}
+          isFocusMode={focusState.isActive}
+          onAction={(action) => { void handleL2Action(action); }}
+          onClose={() => setL2Popover(null)}
+        />
+      )}
+
+      {l3Editor?.type === 'edit' && (
+        <L3NoteEditor
+          annotationId={l3Editor.annotationId}
+          onClose={() => setL3Editor(null)}
+          onSave={() => setL3Editor(null)}
+        />
+      )}
+
+      {l3Editor?.type === 'new' && (
+        <L3NoteEditor
+          selectedText={l3Editor.selectedText}
+          pageNumber={l3Editor.pageNumber}
+          onClose={() => setL3Editor(null)}
+          onAddNote={async (content, position, targetPage, capturedText) => {
+            await addNoteForSelection(content, position, targetPage, capturedText);
+          }}
+        />
+      )}
+
+      {/* ── Focus Mode UI ─────────────────────────────────────────── */}
+
+      {/* Resume session prompt */}
+      {focusState.resumePromptVisible && focusState.resumeSession && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/20">
+          <div className="bg-white rounded-2xl shadow-2xl border border-[#e7e5e4] p-5 w-[360px] flex flex-col gap-3 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📖</span>
+              <p className="text-sm font-semibold text-[#1c1917]">继续上次阅读</p>
+            </div>
+            <p className="text-[13px] text-[#78716c] leading-relaxed">
+              上次阅读到第 <span className="font-semibold text-[#1c1917]">p{focusState.resumeSession.last_page}</span>，
+              进度 <span className="font-semibold text-[#1c1917]">{Math.round(focusState.resumeSession.max_read_percentage ?? 0)}%</span>。
+              {focusState.resumeSession.duration_minutes && (
+                <> 学习了 <span className="font-semibold text-[#1c1917]">{focusState.resumeSession.duration_minutes} 分钟</span>。</>
+              )}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#78716c] hover:bg-[#f5f5f4] transition-colors"
+                onClick={() => {
+                  dismissResumePrompt();
+                }}
+              >
+                重新开始
+              </button>
+              <button
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                onClick={() => {
+                  if (focusState.resumeSession?.last_page) {
+                    jumpToPage(focusState.resumeSession.last_page);
+                  }
+                  dismissResumePrompt();
+                }}
+              >
+                继续阅读
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 80% summary prompt */}
+      {showFocus80Prompt && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/20">
+          <div className="bg-white rounded-2xl shadow-2xl border border-[#e7e5e4] p-5 w-[360px] flex flex-col gap-3 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🎯</span>
+              <p className="text-sm font-semibold text-[#1c1917]">阅读进度达到 80%</p>
+            </div>
+            <p className="text-[13px] text-[#78716c] leading-relaxed">
+              不错！你已经阅读了大部分内容。要不要生成一份总结来巩固所学？
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#78716c] hover:bg-[#f5f5f4] transition-colors"
+                onClick={() => {
+                  setShowFocus80Prompt(false);
+                  dismissSummary80();
+                }}
+              >
+                稍后
+              </button>
+              <button
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                onClick={() => {
+                  setShowFocus80Prompt(false);
+                  dismissSummary80();
+                  triggerSummary();
+                  setToast({ message: '正在准备生成总结…', type: 'info' });
+                  void handleSummarize();
+                }}
+              >
+                生成总结
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mini AI Window */}
+      {focusState.isActive && focusState.miniAIWindowOpen && (
+        <MiniAIWindow
+          messages={messages}
+          isLoading={aiLoading}
+          onSendMessage={(content) => { void sendMessage(content, 'auto', []); }}
+          onStopGeneration={stopGeneration}
+          onToggleMiniAI={toggleMiniAI}
+          sessionDurationSecs={sessionDurationSecs}
+        />
+      )}
+
+      {/* Capture Drawer */}
+      {focusState.isActive && focusState.captureDrawerOpen && (
+        <CaptureDrawer
+          captures={[]} // TODO: wire up with actual captures
+          isOpen={focusState.captureDrawerOpen}
+          onClose={toggleCaptureDrawer}
+          onJumpTo={jumpToPage}
+        />
+      )}
+
+      {/* Focus Status Bar */}
+      {focusState.isActive && (
+        <FocusStatusBar
+          currentPage={currentPage ?? 1}
+          totalPages={totalPages}
+          maxProgress={focusState.maxProgress}
+          highlightsCount={focusState.highlightsCount}
+          notesCount={focusState.notesCount}
+          aiResponsesCount={focusState.aiResponsesCount}
+          sessionDurationSecs={sessionDurationSecs}
+          onExitFocusMode={() => { void exitFocusMode(currentPage ?? 1, maxScrollTopRef.current); }}
+        />
       )}
     </div>
   );

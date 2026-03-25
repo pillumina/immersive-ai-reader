@@ -6,6 +6,8 @@ export interface FocusModeState {
   currentSessionId: string | null;
   currentDocumentId: string | null;
   resumeSession: FocusSession | null;
+  /** Whether to show the resume session prompt */
+  resumePromptVisible: boolean;
   miniAIWindowOpen: boolean;
   captureDrawerOpen: boolean;
   maxProgress: number;
@@ -13,6 +15,10 @@ export interface FocusModeState {
   notesCount: number;
   aiResponsesCount: number;
   summaryTriggered: boolean;
+  /** Whether 80% summary prompt has been shown (to avoid showing twice) */
+  summary80Shown: boolean;
+  /** Whether 80% summary prompt is currently visible */
+  summary80Visible: boolean;
 }
 
 interface FocusModeContextValue {
@@ -25,6 +31,9 @@ interface FocusModeContextValue {
   toggleMiniAI: () => void;
   toggleCaptureDrawer: () => void;
   loadResumeSession: (documentId: string) => Promise<FocusSession | null>;
+  dismissResumePrompt: () => void;
+  dismissSummary80: () => void;
+  acknowledgeSummary80: () => void;
 }
 
 const FocusModeContext = createContext<FocusModeContextValue | null>(null);
@@ -35,6 +44,7 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
     currentSessionId: null,
     currentDocumentId: null,
     resumeSession: null,
+    resumePromptVisible: false,
     miniAIWindowOpen: false,
     captureDrawerOpen: false,
     maxProgress: 0,
@@ -42,6 +52,8 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
     notesCount: 0,
     aiResponsesCount: 0,
     summaryTriggered: false,
+    summary80Shown: false,
+    summary80Visible: false,
   });
 
   const enterTimeRef = useRef<Date | null>(null);
@@ -53,20 +65,31 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
     const enteredAt = new Date().toISOString();
     enterTimeRef.current = new Date();
 
+    // Check for existing session to show resume prompt
+    let existingSession: FocusSession | null = null;
+    try {
+      existingSession = await focusCommands.getLast(documentId);
+    } catch {
+      // ignore — proceed without resume
+    }
+
     try {
       const session = await focusCommands.create(documentId, sessionId, enteredAt, currentPage);
       setState({
         isActive: true,
         currentSessionId: session.session_id,
         currentDocumentId: documentId,
-        resumeSession: null,
+        resumeSession: existingSession,
+        resumePromptVisible: existingSession !== null,
         miniAIWindowOpen: false,
         captureDrawerOpen: false,
-        maxProgress: 0,
-        highlightsCount: 0,
-        notesCount: 0,
-        aiResponsesCount: 0,
+        maxProgress: existingSession?.max_read_percentage ?? 0,
+        highlightsCount: existingSession?.highlights_count ?? 0,
+        notesCount: existingSession?.notes_count ?? 0,
+        aiResponsesCount: existingSession?.ai_responses_count ?? 0,
         summaryTriggered: false,
+        summary80Shown: false,
+        summary80Visible: false,
       });
     } catch (err) {
       console.error('[FocusMode] Failed to create session:', err);
@@ -76,6 +99,14 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
         isActive: true,
         currentSessionId: sessionId,
         currentDocumentId: documentId,
+        resumeSession: existingSession,
+        resumePromptVisible: existingSession !== null,
+        maxProgress: existingSession?.max_read_percentage ?? 0,
+        highlightsCount: existingSession?.highlights_count ?? 0,
+        notesCount: existingSession?.notes_count ?? 0,
+        aiResponsesCount: existingSession?.ai_responses_count ?? 0,
+        summary80Shown: false,
+        summary80Visible: false,
       }));
     }
   }, []);
@@ -195,10 +226,22 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
     setState((prev) => ({ ...prev, captureDrawerOpen: !prev.captureDrawerOpen }));
   }, []);
 
+  const dismissResumePrompt = useCallback(() => {
+    setState((prev) => ({ ...prev, resumePromptVisible: false }));
+  }, []);
+
+  const dismissSummary80 = useCallback(() => {
+    setState((prev) => ({ ...prev, summary80Visible: false }));
+  }, []);
+
+  const acknowledgeSummary80 = useCallback(() => {
+    setState((prev) => ({ ...prev, summary80Visible: false, summary80Shown: true }));
+  }, []);
+
   const loadResumeSession = useCallback(async (documentId: string): Promise<FocusSession | null> => {
     try {
       const session = await focusCommands.getLast(documentId);
-      setState((prev) => ({ ...prev, resumeSession: session ?? null }));
+      setState((prev) => ({ ...prev, resumeSession: session ?? null, resumePromptVisible: session !== null }));
       return session;
     } catch (err) {
       console.error('[FocusMode] Failed to load resume session:', err);
@@ -224,6 +267,9 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
         toggleMiniAI,
         toggleCaptureDrawer,
         loadResumeSession,
+        dismissResumePrompt,
+        dismissSummary80,
+        acknowledgeSummary80,
       }}
     >
       {children}
