@@ -8,7 +8,7 @@ import { AI_PROVIDER_PRESETS, getPresetByProvider } from '@/constants/aiProvider
 import { Plus, Trash2, Cpu, MessageSquare, Info, ChevronRight, Check, X, Eye, EyeOff, Palette } from 'lucide-react';
 import { AIConnectivityResult } from '@/lib/tauri';
 
-type SettingsSection = 'provider' | 'chat' | 'appearance' | 'about';
+type SettingsSection = 'provider' | 'chat' | 'focus' | 'appearance' | 'about';
 
 interface SettingsModalProps {
   open: boolean;
@@ -33,6 +33,10 @@ interface SettingsModalProps {
   onToggleRememberRoutePreferenceAcrossSessions: (enabled: boolean) => void;
   currentTheme?: ThemeOption;
   onChangeTheme: (theme: ThemeOption) => void;
+  showFocusResumePrompt: boolean;
+  onToggleFocusResumePrompt: (enabled: boolean) => void;
+  autoEnterFocusOnDocOpen: boolean;
+  onToggleAutoEnterFocusOnDocOpen: (enabled: boolean) => void;
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
@@ -98,6 +102,10 @@ export function SettingsModal({
   onToggleRememberRoutePreferenceAcrossSessions,
   currentTheme,
   onChangeTheme,
+  showFocusResumePrompt,
+  onToggleFocusResumePrompt,
+  autoEnterFocusOnDocOpen,
+  onToggleAutoEnterFocusOnDocOpen,
 }: SettingsModalProps) {
   const activeProfile = profiles.find((p) => p.id === activeProfileId) ?? null;
 
@@ -184,6 +192,7 @@ export function SettingsModal({
   const navItems: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
     { id: 'provider', label: 'AI Provider', icon: <Cpu size={14} /> },
     { id: 'chat', label: 'Chat & Routing', icon: <MessageSquare size={14} /> },
+    { id: 'focus', label: 'Focus Mode', icon: <Eye size={14} /> },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={14} /> },
     { id: 'about', label: 'About', icon: <Info size={14} /> },
   ];
@@ -465,6 +474,40 @@ export function SettingsModal({
                       </Button>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Focus Mode ── */}
+            {section === 'focus' && (
+              <div className="settings-section">
+                <SectionHeader
+                  title="Focus Mode"
+                  subtitle="Configure behavior when entering Focus Mode"
+                />
+
+                <div className="settings-group">
+                  <SettingRow
+                    label="Resume Prompt"
+                    description="Show prompt to resume from last reading position when reopening a document"
+                  >
+                    <Toggle
+                      checked={showFocusResumePrompt}
+                      onChange={onToggleFocusResumePrompt}
+                      label="Toggle resume prompt"
+                    />
+                  </SettingRow>
+
+                  <SettingRow
+                    label="Auto-Enter on Open"
+                    description="Automatically enter Focus Mode when opening any document"
+                  >
+                    <Toggle
+                      checked={autoEnterFocusOnDocOpen}
+                      onChange={onToggleAutoEnterFocusOnDocOpen}
+                      label="Toggle auto-enter Focus Mode"
+                    />
+                  </SettingRow>
                 </div>
               </div>
             )}

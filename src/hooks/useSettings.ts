@@ -12,6 +12,8 @@ const UISettingsSchema = z.object({
   chatInputModeDefault: z.enum(['auto', 'chat', 'doc']),
   rememberRoutePreferenceAcrossSessions: z.boolean(),
   theme: z.enum(['light', 'dark', 'warm-dark', 'sepia']).optional(),
+  showFocusResumePrompt: z.boolean().optional(),
+  autoEnterFocusOnDocOpen: z.boolean().optional(),
 });
 
 const StoredProfileSchema = z.object({
@@ -38,6 +40,8 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   chatInputModeDefault: 'auto',
   rememberRoutePreferenceAcrossSessions: true,
   theme: 'light',
+  showFocusResumePrompt: true,
+  autoEnterFocusOnDocOpen: false,
 };
 
 /**

@@ -556,6 +556,19 @@ function AppInner() {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [focusState.isActive, focusState.summary80Shown, focusState.summary80Visible, currentPage, updateProgress]);
 
+  // ─── Focus Mode: auto-enter on document open ─────────────────
+  const autoEnteredRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!uiSettings.autoEnterFocusOnDocOpen) return;
+    if (!currentDocument?.id) return;
+    if (focusState.isActive) return;
+    if (autoEnteredRef.current.has(currentDocument.id)) return;
+
+    autoEnteredRef.current.add(currentDocument.id);
+    void enterFocusMode(currentDocument.id, currentPage ?? 1, false);
+  }, [currentDocument?.id, uiSettings.autoEnterFocusOnDocOpen, focusState.isActive, currentPage]);
+
   // ─── Focus Mode: 80% summary trigger ─────────────────────────
   const handleUpload = useCallback(async () => {
     try {
@@ -809,7 +822,7 @@ Please provide a comprehensive synthesis in Chinese.`;
       if (focusState.isActive) {
         void exitFocusMode(currentPage ?? 1, maxScrollTopRef.current);
       } else if (currentDocument?.id) {
-        void enterFocusMode(currentDocument.id, currentPage ?? 1);
+        void enterFocusMode(currentDocument.id, currentPage ?? 1, uiSettings.showFocusResumePrompt);
       }
     },
     onToggleMiniAI: toggleMiniAI,
@@ -1252,7 +1265,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
               if (focusState.isActive) {
                 void exitFocusMode(currentPage ?? 1, maxScrollTopRef.current);
               } else if (currentDocument?.id) {
-                void enterFocusMode(currentDocument.id, currentPage);
+                void enterFocusMode(currentDocument.id, currentPage, uiSettings.showFocusResumePrompt);
               }
             }}
             isFocusMode={focusState.isActive}
@@ -1328,6 +1341,10 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
         }
         currentTheme={uiSettings.theme}
         onChangeTheme={(theme) => updateUiSettings({ theme })}
+        showFocusResumePrompt={uiSettings.showFocusResumePrompt}
+        onToggleFocusResumePrompt={(enabled) => updateUiSettings({ showFocusResumePrompt: enabled })}
+        autoEnterFocusOnDocOpen={uiSettings.autoEnterFocusOnDocOpen}
+        onToggleAutoEnterFocusOnDocOpen={(enabled) => updateUiSettings({ autoEnterFocusOnDocOpen: enabled })}
         onSaveActiveProfile={handleSaveSettings}
         onTestConnectivity={handleTestConnectivity}
       />

@@ -23,7 +23,7 @@ export interface FocusModeState {
 
 interface FocusModeContextValue {
   state: FocusModeState;
-  enterFocusMode: (documentId: string, currentPage: number) => Promise<void>;
+  enterFocusMode: (documentId: string, currentPage: number, showResumePrompt?: boolean) => Promise<void>;
   exitFocusMode: (lastPage: number, maxScrollTop: number) => Promise<void>;
   updateProgress: (lastPage: number, maxScrollTop: number, maxPercentage: number) => void;
   updateCaptureCounts: (highlights: number, notes: number, aiResponses: number) => void;
@@ -60,7 +60,7 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingProgressRef = useRef<{ lastPage: number; maxScrollTop: number; maxPercentage: number } | null>(null);
 
-  const enterFocusMode = useCallback(async (documentId: string, currentPage: number) => {
+  const enterFocusMode = useCallback(async (documentId: string, currentPage: number, showResumePrompt = true) => {
     const sessionId = crypto.randomUUID();
     const enteredAt = new Date().toISOString();
     enterTimeRef.current = new Date();
@@ -80,7 +80,7 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
         currentSessionId: session.session_id,
         currentDocumentId: documentId,
         resumeSession: existingSession,
-        resumePromptVisible: existingSession !== null,
+        resumePromptVisible: showResumePrompt && existingSession !== null,
         miniAIWindowOpen: false,
         captureDrawerOpen: false,
         maxProgress: existingSession?.max_read_percentage ?? 0,
@@ -100,7 +100,7 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
         currentSessionId: sessionId,
         currentDocumentId: documentId,
         resumeSession: existingSession,
-        resumePromptVisible: existingSession !== null,
+        resumePromptVisible: showResumePrompt && existingSession !== null,
         maxProgress: existingSession?.max_read_percentage ?? 0,
         highlightsCount: existingSession?.highlights_count ?? 0,
         notesCount: existingSession?.notes_count ?? 0,

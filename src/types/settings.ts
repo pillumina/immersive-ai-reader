@@ -21,6 +21,10 @@ export interface UISettings {
   chatInputModeDefault: ChatInputMode;
   rememberRoutePreferenceAcrossSessions: boolean;
   theme?: ThemeOption;
+  /** Show resume session prompt when entering Focus Mode for a previously-read document */
+  showFocusResumePrompt: boolean;
+  /** Auto-enter Focus Mode when opening any document */
+  autoEnterFocusOnDocOpen: boolean;
 }
 
 export interface Settings {
