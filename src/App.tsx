@@ -59,7 +59,15 @@ function App() {
 
   // ─── Tab management ────────────────────────────────────────────
   const [tabs, setTabs] = useState<AppTab[]>([{ id: 'library', label: 'Library', type: 'library' }]);
-  const [activeTabId, setActiveTabId] = useState('library');
+  const [activeTabId, _setActiveTabId] = useState('library');
+  /** Always-read ref to avoid stale closure in handleCloseTab */
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+  /** Stable setter that also keeps activeTabIdRef in sync */
+  const setActiveTabIdWithSync = useCallback((id: string) => {
+    activeTabIdRef.current = id;
+    _setActiveTabId(id);
+  }, []);
 
   // ─── Library management state ────────────────────────────────
   const [libraries, setLibraries] = useState<any[]>([]);
@@ -68,6 +76,15 @@ function App() {
   const [allTags, setAllTags] = useState<string[]>([]);
   const [recentDocuments, setRecentDocuments] = useState<PDFDocument[]>([]);
   const recentDocIdsRef = useRef<Set<string>>(new Set());
+  const documentsRef = useRef(documents);
+  documentsRef.current = documents;
+
+  // Stable refs for functions defined later in the component (avoids TDZ).
+  const handleDeleteDocRef = useRef<any>(null);
+  /** Captured DOM range rect + page number from text selection before toolbar clears it */
+  const noteInputCapturedRangeRef = useRef<{
+    left: number; top: number; width: number; height: number; pageNumber: number;
+  } | null>(null);
 
   // ─── Tag popup state ───────────────────────────────────────
   const [tagPopupAnnotationId, setTagPopupAnnotationId] = useState<string | null>(null);
@@ -78,27 +95,27 @@ function App() {
       if (prev.some((t) => t.id === tabId)) return prev;
       return [...prev, { id: tabId, label: doc.fileName, type: 'document', documentId: doc.id }];
     });
-    setActiveTabId(tabId);
+    setActiveTabIdWithSync(tabId);
     // Track recents
     recentDocIdsRef.current.delete(doc.id);
     const newSet = new Set([doc.id, ...recentDocIdsRef.current]);
     recentDocIdsRef.current = newSet;
-    // Keep only the 8 most recent
+    // Keep only the 8 most recent — use ref to avoid depending on documents state
     setRecentDocuments(
-      documents.filter((d) => newSet.has(d.id)).slice(0, 8)
+      documentsRef.current.filter((d) => newSet.has(d.id)).slice(0, 8)
     );
-  }, [documents]);
+  }, []);
 
   const handleCloseTab = useCallback((tabId: string) => {
     if (tabId === 'library') return;
     setTabs((prev) => prev.filter((t) => t.id !== tabId));
-    if (activeTabId === tabId) {
-      setActiveTabId('library');
+    if (activeTabIdRef.current === tabId) {
+      setActiveTabIdWithSync('library');
     }
-  }, [activeTabId]);
+  }, []); // activeTabIdRef is always current via the ref
 
   const handleSelectTab = useCallback((tabId: string) => {
-    setActiveTabId(tabId);
+    setActiveTabIdWithSync(tabId);
     if (tabId !== 'library' && tabId.startsWith('doc-')) {
       const docId = tabId.replace('doc-', '');
       void selectDocument(docId);
@@ -114,6 +131,8 @@ function App() {
   const noteInputRef = useRef<HTMLInputElement>(null);
   const noteInputPositionRef = useRef<{ x: number; y: number } | undefined>(undefined);
   const noteInputPageRef = useRef<number | undefined>(undefined);
+  /** Captured selection text from before the toolbar modal cleared it */
+  const noteInputCapturedTextRef = useRef<string | undefined>(undefined);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<Array<{ id: string; type: 'text' | 'note'; content: string; page?: number }>>([]);
   const [focusMode, setFocusMode] = useState(false);
@@ -124,7 +143,6 @@ function App() {
     page: number;
     openSplit?: boolean;
     reason?: 'evidence' | 'reference' | 'compare';
-    nonce: number;
   } | null>(null);
   const [chapterSelectorOpen, setChapterSelectorOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(380);
@@ -146,6 +164,7 @@ function App() {
     unpinAiCardByMessageId,
     locateAiCardByMessageId,
     refreshCardTags,
+    clearCardRenderer,
   } = useCanvasRendering(
     activeTabId === 'library' ? '' : 'pdf-scroll-container',
     activeTabId === 'library' ? '' : 'pdf-pages-container',
@@ -153,6 +172,17 @@ function App() {
     zoomLevel,
     (messageId: string) => setPinnedMessageIds((prev) => prev.filter((id) => id !== messageId))
   );
+
+  // Stable callbacks passed to AIPanel to prevent unnecessary re-renders
+  const handleAIPanelJumpToPage = useCallback((page: number) => {
+    jumpToPage(page);
+    setComparePageSignal(page);
+    setComparePaneCommand({ page, openSplit: true, reason: 'reference' });
+  }, [jumpToPage]);
+
+  const handleRemoveAttachment = useCallback((id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
 
   const { thumbnails, isLoading: thumbnailsLoading } = usePDFThumbnails(
     currentDocument?.fileBlob ?? null,
@@ -176,12 +206,10 @@ function App() {
     return findChapterForPage(currentPage, outline) || null;
   }, [currentPage, chapterList, outline]);
 
-  const getAIContext = useMemo(() => {
-    return () => ({
-      ...aiContext,
-      selectedText: globalThis.getSelection?.()?.toString().trim() || '',
-    });
-  }, [aiContext]);
+  const getAIContext = useCallback(() => ({
+    ...aiContext,
+    selectedText: globalThis.getSelection?.()?.toString().trim() || '',
+  }), [aiContext]);
 
   const {
     messages,
@@ -203,6 +231,9 @@ function App() {
     getAIContext,
     { rememberRoutePreferenceAcrossSessions: uiSettings.rememberRoutePreferenceAcrossSessions }
   );
+
+  const handleConfirmRouteAsChat = useCallback(() => { void confirmPendingRoute('chat'); }, [confirmPendingRoute]);
+  const handleConfirmRouteAsDoc = useCallback(() => { void confirmPendingRoute('doc'); }, [confirmPendingRoute]);
 
   // ─── Load data on mount ───────────────────────────────────────
   useEffect(() => { void loadSettings(); }, [loadSettings]);
@@ -294,14 +325,37 @@ function App() {
     return () => globalThis.removeEventListener('ai-card-unpinned', handler);
   }, []);
 
+  // Use a ref to always call the latest handleDeleteNote (avoids stale closure in event listener).
+  const handleDeleteNoteRef = useRef<any>(null);
+
   // Listen for note card delete from canvas
   useEffect(() => {
     const handler = (e: Event) => {
       const { annotationId } = (e as CustomEvent<{ annotationId: string }>).detail;
-      void handleDeleteNote(annotationId);
+      void handleDeleteNoteRef.current(annotationId);
     };
     globalThis.document?.addEventListener('note-card-delete-app', handler);
     return () => globalThis.document?.removeEventListener('note-card-delete-app', handler);
+  }, []);
+
+  // Listen for note card save errors from canvas
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { message } = (e as CustomEvent<{ message: string }>).detail;
+      setToast({ message, type: 'error' });
+    };
+    globalThis.document?.addEventListener('note-card-save-error', handler);
+    return () => globalThis.document?.removeEventListener('note-card-save-error', handler);
+  }, []);
+
+  // Listen for document library update errors
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { message } = (e as CustomEvent<{ message: string }>).detail;
+      setToast({ message, type: 'error' });
+    };
+    globalThis.document?.addEventListener('document-library-update-error', handler);
+    return () => globalThis.document?.removeEventListener('document-library-update-error', handler);
   }, []);
 
   // Listen for tag popup open from canvas cards
@@ -347,7 +401,7 @@ function App() {
   }, [aiError]);
 
   // ─── Handlers ────────────────────────────────────────────────
-  const handleUpload = async () => {
+  const handleUpload = useCallback(async () => {
     try {
       setToast({ message: 'Opening PDF file…', type: 'info' });
       await openPDFFile();
@@ -356,12 +410,42 @@ function App() {
       const message = error instanceof Error ? error.message : 'Failed to load PDF';
       setToast({ message, type: 'error' });
     }
-  };
+  }, [openPDFFile]);
+
+  const handleSidebarSelectDocument = useCallback(async (id: string) => {
+    await selectDocument(id);
+    const existingTab = tabs.find((t) => t.documentId === id);
+    if (existingTab) setActiveTabIdWithSync(existingTab.id);
+  }, [selectDocument, tabs]);
+
+  const handleSidebarDeleteDocument = useCallback(async (id: string) => {
+    // Use ref to avoid TDZ: handleDeleteDocument is defined later in the component.
+    await handleDeleteDocRef.current(id);
+    const tabId = `doc-${id}`;
+    setTabs((prev) => prev.filter((t) => t.id !== tabId));
+    if (activeTabId === tabId) setActiveTabIdWithSync('library');
+  }, [tabs, activeTabId]); // handleDeleteDocRef is always stable
 
   const handleSaveSettings = async (nextConfig: AIConfig, profileName?: string) => {
     await saveActiveProfile(nextConfig, profileName);
     setToast({ message: 'AI settings saved', type: 'success' });
   };
+
+  const handleDeleteProfile = useCallback(async (profileId: string) => {
+    try {
+      await deleteProfile(profileId);
+      setToast({ message: 'Profile deleted', type: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete profile';
+      setToast({ message, type: 'error' });
+    }
+  }, [deleteProfile]);
+
+  const handleTestConnectivity = useCallback(async (config: {
+    provider: string; endpoint: string; model: string; apiKey: string;
+  }) => {
+    return await aiCommands.testConnectivity(config.provider, config.endpoint, config.model, config.apiKey);
+  }, []);
 
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev * 1.2, 3));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev / 1.2, 0.3));
@@ -386,7 +470,19 @@ function App() {
     }
   };
 
-  const handleAddNoteSelection = (position?: { x: number; y: number }, targetPageNumber?: number) => {
+  const handleAddNoteSelection = (
+    position?: { x: number; y: number },
+    targetPageNumber?: number,
+    capturedText?: string,
+    capturedRange?: { left: number; top: number; width: number; height: number; pageNumber: number }
+  ) => {
+    // Use text passed from toolbar/right-click if available, otherwise try DOM selection
+    noteInputCapturedTextRef.current =
+      capturedText ?? (() => {
+        const sel = globalThis.getSelection?.();
+        return (sel && !sel.isCollapsed) ? sel.toString().trim() : undefined;
+      })();
+    noteInputCapturedRangeRef.current = capturedRange ?? null;
     setNoteInputOpen(true);
     noteInputPositionRef.current = position;
     noteInputPageRef.current = targetPageNumber;
@@ -410,9 +506,17 @@ function App() {
     setNoteInputOpen(false);
     if (!note.trim()) return;
     try {
-      const created = await addNoteForSelection(note, noteInputPositionRef.current, noteInputPageRef.current);
+      const created = await addNoteForSelection(
+        note,
+        noteInputPositionRef.current,
+        noteInputPageRef.current,
+        noteInputCapturedTextRef.current,
+        noteInputCapturedRangeRef.current ?? undefined,
+      );
       noteInputPositionRef.current = undefined;
       noteInputPageRef.current = undefined;
+      noteInputCapturedTextRef.current = undefined;
+      noteInputCapturedRangeRef.current = null;
       if (created) {
         setNotesAnnotations((prev) => [created, ...prev]);
       }
@@ -544,13 +648,15 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       // Delete from DB first — only update UI on success
       await annotationCommands.delete(annotationId);
       setNotesAnnotations((prev) => prev.filter((a) => a.id !== annotationId));
+      clearCardRenderer(annotationId);
       setToast({ message: 'Note deleted', type: 'success' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to delete note';
       setToast({ message, type: 'error' });
-      throw error;
+      // Don't re-throw — caller doesn't await this, would become unhandled rejection
     }
   };
+  handleDeleteNoteRef.current = handleDeleteNote;
 
   const handleUpdateNote = async (annotationId: string, newContent: string) => {
     try {
@@ -567,7 +673,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update note';
       setToast({ message, type: 'error' });
-      throw error;
+      // Don't re-throw — caller doesn't await this, would become unhandled rejection
     }
   };
   const handlePinMessageToCanvas = async (messageId: string, pageHint?: number) => {
@@ -611,8 +717,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
     setComparePaneCommand({
       page,
       openSplit: true,
-      reason: 'evidence',
-      nonce: Date.now(),
+      reason: 'evidence'
     });
   };
   const handleSendToRightPane = (messageId: string, pageHint?: number) => {
@@ -630,8 +735,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
     setComparePaneCommand({
       page: targetPage,
       openSplit: true,
-      reason: 'reference',
-      nonce: Date.now(),
+      reason: 'reference'
     });
     setToast({ message: `Verify source · page ${targetPage}`, type: 'success' });
   };
@@ -708,6 +812,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       setToast({ message, type: 'error' });
     }
   };
+  handleDeleteDocRef.current = handleDeleteDocument;
 
   const handleUpdateDocLibrary = async (docId: string, libraryId: string | null) => {
     try {
@@ -777,17 +882,8 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
               onToggleSidebar={() => setSidebarOpen(false)}
               documents={documents}
               currentDocumentId={currentDocument?.id}
-              onSelectDocument={async (id) => {
-                await selectDocument(id);
-                const existingTab = tabs.find((t) => t.documentId === id);
-                if (existingTab) setActiveTabId(existingTab.id);
-              }}
-              onDeleteDocument={async (id) => {
-                await handleDeleteDocument(id);
-                const tabId = `doc-${id}`;
-                setTabs((prev) => prev.filter((t) => t.id !== tabId));
-                if (activeTabId === tabId) setActiveTabId('library');
-              }}
+              onSelectDocument={handleSidebarSelectDocument}
+              onDeleteDocument={handleSidebarDeleteDocument}
               onRelinkDocument={relinkDocument}
               totalPages={totalPages}
               currentPage={currentPage}
@@ -857,23 +953,14 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
               notesAnnotations={notesAnnotations}
               onDeleteNote={handleDeleteNote}
               onUpdateNote={handleUpdateNote}
-              onJumpToPage={(page) => {
-                jumpToPage(page);
-                setComparePageSignal(page);
-                setComparePaneCommand({
-                  page,
-                  openSplit: true,
-                  reason: 'reference',
-                  nonce: Date.now(),
-                });
-              }}
+              onJumpToPage={handleAIPanelJumpToPage}
               pendingRouteConfirmation={pendingRouteConfirmation}
-              onConfirmRouteAsChat={() => { void confirmPendingRoute('chat'); }}
-              onConfirmRouteAsDoc={() => { void confirmPendingRoute('doc'); }}
+              onConfirmRouteAsChat={handleConfirmRouteAsChat}
+              onConfirmRouteAsDoc={handleConfirmRouteAsDoc}
               onDismissRouteConfirm={dismissPendingRoute}
               pinnedMessageIds={pinnedMessageIds}
               attachments={attachments}
-              onRemoveAttachment={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
+              onRemoveAttachment={handleRemoveAttachment}
               width={panelWidth}
               isCollapsed={isPanelCollapsed}
               onWidthChange={setPanelWidth}
@@ -890,15 +977,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
         activeProfileId={activeProfile?.id || ''}
         onSwitchProfile={switchProfile}
         onCreateProfile={createNewProfile}
-        onDeleteProfile={async (profileId) => {
-          try {
-            await deleteProfile(profileId);
-            setToast({ message: 'Profile deleted', type: 'success' });
-          } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to delete profile';
-            setToast({ message, type: 'error' });
-          }
-        }}
+        onDeleteProfile={handleDeleteProfile}
         onRenameProfile={renameProfile}
         showChatPerfHints={uiSettings.showChatPerfHints}
         onToggleChatPerfHints={(enabled) => updateUiSettings({ showChatPerfHints: enabled })}
@@ -917,14 +996,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
         currentTheme={uiSettings.theme}
         onChangeTheme={(theme) => updateUiSettings({ theme })}
         onSaveActiveProfile={handleSaveSettings}
-        onTestConnectivity={async (config) => {
-          return await aiCommands.testConnectivity(
-            config.provider,
-            config.endpoint,
-            config.model,
-            config.apiKey
-          );
-        }}
+        onTestConnectivity={handleTestConnectivity}
       />
 
       {tagPopupAnnotationId && (

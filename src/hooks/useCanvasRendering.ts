@@ -3,8 +3,8 @@ import { annotationCommands, documentCommands, tagCommands } from '@/lib/tauri';
 import { PdfOutlineItem, renderPagesToContainer } from '@/lib/pdf/renderer';
 import { PDFDocument } from '@/types/document';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
-import { aiCardDragState } from '@/components/layout/AIPanel';
 import type { Tag } from '@/types/annotation';
+import { TAG_PRESET_COLORS, PRESET_TAGS } from '@/types/annotation';
 
 export function useCanvasRendering(
   scrollContainerId: string,
@@ -16,6 +16,7 @@ export function useCanvasRendering(
   const renderJobIdRef = useRef(0);
   const latestZoomRef = useRef(zoomLevel);
   const lastSavedPageRef = useRef<number | null>(null);
+  const lazyCleanupRef = useRef<(() => void) | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tagCacheRef = useRef<Map<string, Tag[]>>(new Map());
   const tagChipRenderersRef = useRef<Map<string, (tags: Tag[]) => void>>(new Map());
@@ -48,13 +49,18 @@ export function useCanvasRendering(
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(containerEl instanceof HTMLElement)) return;
 
-    // Clean up event listeners before removing elements
-    containerEl.querySelectorAll('.pdf-note-card').forEach((el) => {
-      const cleanup = (el as HTMLElement & { _dragCleanup?: () => void })._dragCleanup;
-      if (cleanup) cleanup();
+    // Clean up all card/highlight elements in a single DOM pass.
+    containerEl.querySelectorAll<HTMLElement>(
+      '.pdf-note-card, .pdf-ai-card, .pdf-highlight'
+    ).forEach((el) => {
+      if (el.classList.contains('pdf-note-card') || el.classList.contains('pdf-ai-card')) {
+        const cleanup = (el as HTMLElement & { _dragCleanup?: () => void })._dragCleanup;
+        if (cleanup) cleanup();
+      }
       el.remove();
     });
-    containerEl.querySelectorAll('.pdf-highlight').forEach((el) => el.remove());
+    // Clear stale tag chip renderer entries
+    tagChipRenderersRef.current.clear();
   };
 
   const renderHighlight = (
@@ -81,6 +87,121 @@ export function useCanvasRendering(
     pageEl.appendChild(highlight);
   };
 
+
+  // ─── Inline tag editor ────────────────────────────────────────────────────────
+
+  const openInlineTagEditor = (
+    tagArea: HTMLElement,
+    currentTags: Tag[],
+    onAdd: (name: string, color: string) => void,
+    onClose: () => void,
+    allTags: Tag[],
+  ) => {
+    tagArea.innerHTML = '';
+
+    const editor = document.createElement('div');
+    editor.className = 'canvas-tag-editor';
+
+    const inputRow = document.createElement('div');
+    inputRow.className = 'canvas-tag-editor-input-row';
+
+    const input = document.createElement('input');
+    input.className = 'canvas-tag-editor-input';
+    input.placeholder = 'Tag name...';
+    input.autocomplete = 'off';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'canvas-tag-editor-confirm';
+    confirmBtn.textContent = 'Add';
+    confirmBtn.disabled = true;
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'canvas-tag-editor-cancel';
+    cancelBtn.innerHTML = '&times;';
+    cancelBtn.title = 'Cancel (Esc)';
+
+    inputRow.appendChild(input);
+    inputRow.appendChild(confirmBtn);
+    inputRow.appendChild(cancelBtn);
+
+    const palette = document.createElement('div');
+    palette.className = 'canvas-tag-color-palette';
+    let selectedColor = '#6B7280';
+    TAG_PRESET_COLORS.forEach((color) => {
+      const dot = document.createElement('button');
+      dot.className = 'canvas-tag-color-dot' + (color === selectedColor ? ' is-selected' : '');
+      dot.style.background = color;
+      dot.title = color;
+      dot.type = 'button';
+      dot.addEventListener('click', (e) => {
+        e.stopPropagation();
+        palette.querySelectorAll('.canvas-tag-color-dot').forEach((d) => d.classList.remove('is-selected'));
+        dot.classList.add('is-selected');
+        selectedColor = color;
+      });
+      palette.appendChild(dot);
+    });
+
+    const suggestionsEl = document.createElement('div');
+    suggestionsEl.className = 'canvas-tag-suggestions';
+
+    editor.appendChild(inputRow);
+    editor.appendChild(palette);
+    editor.appendChild(suggestionsEl);
+    tagArea.appendChild(editor as HTMLElement);
+
+    const showSuggestions = (query: string) => {
+      suggestionsEl.innerHTML = '';
+      const filtered = allTags.filter(
+        (t) => t.name.toLowerCase().includes(query.toLowerCase()) && !currentTags.some((ct) => ct.id === t.id)
+      );
+      const toShow = query.trim()
+        ? filtered.slice(0, 5)
+        : PRESET_TAGS.filter((pt) => !currentTags.some((ct) => ct.name === pt.name)).slice(0, 5);
+      toShow.forEach((t) => {
+        const s = document.createElement('button');
+        s.className = 'canvas-tag-suggestion';
+        s.style.background = t.color + '18';
+        s.style.borderColor = t.color + '44';
+        s.style.color = t.color;
+        s.type = 'button';
+        s.textContent = t.name;
+        s.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onAdd(t.name, t.color);
+          onClose();
+        });
+        suggestionsEl.appendChild(s);
+      });
+    };
+
+    showSuggestions('');
+
+    const doAdd = () => {
+      const name = input.value.trim();
+      if (!name) return;
+      onAdd(name, selectedColor);
+      onClose();
+    };
+
+    input.addEventListener('input', () => {
+      const val = input.value.trim();
+      confirmBtn.disabled = !val;
+      showSuggestions(val);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); doAdd(); }
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+    });
+
+    confirmBtn.addEventListener('click', (e) => { e.stopPropagation(); doAdd(); });
+    cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); onClose(); });
+
+    requestAnimationFrame(() => input.focus());
+  };
+
+
   const renderNoteCard = (
     pageNumber: number,
     x: number,
@@ -95,31 +216,104 @@ export function useCanvasRendering(
 
     const card = document.createElement('div');
     const kind = options?.kind || 'note';
-    card.className = `pdf-note-card ${kind === 'ai-card' ? 'pdf-ai-card' : ''}`;
+    card.className = `pdf-note-card${kind === 'ai-card' ? ' pdf-ai-card' : ''}`;
 
-    // Absolute position within scroll container (card floats above pages, not clipped by page)
+    // Colored left-border accent
+    const accentColor = kind === 'ai-card' ? '#7c3aed' : '#0d9488';
+    card.style.borderLeft = `3px solid ${accentColor}`;
+
+    // Absolute position within scroll container
     const pageOffsetTop = pageEl.offsetTop;
     card.style.left = `${Math.max(x + 8, 8)}px`;
     card.style.top = `${pageOffsetTop + Math.max(y + 8, 8)}px`;
 
-    // Tag area — shown when annotationId is present
+    // ── Card header ───────────────────────────────────────
+    const header = document.createElement('div');
+    header.className = 'canvas-card-header';
+
+    const typeLabel = document.createElement('div');
+    typeLabel.className = 'canvas-card-type';
+    typeLabel.style.color = accentColor;
+
+    const dot = document.createElement('span');
+    dot.className = 'canvas-card-type-dot';
+    dot.style.background = accentColor;
+    dot.style.boxShadow = `0 0 4px ${accentColor}66`;
+
+    const typeText = document.createElement('span');
+    typeText.textContent = kind === 'ai-card' ? 'AI Card' : 'Note';
+
+    typeLabel.appendChild(dot);
+    typeLabel.appendChild(typeText);
+
+    const dragHandle = document.createElement('button');
+    dragHandle.className = 'canvas-card-drag-hint';
+    dragHandle.type = 'button';
+    dragHandle.title = 'Drag to reposition';
+    dragHandle.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>`;
+
+    // Delete button (only for note cards)
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'canvas-card-delete-btn';
+    deleteBtn.title = 'Delete note';
+    deleteBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+    deleteBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#d4d4d4;font-size:13px;line-height:1;padding:2px;border-radius:4px;transition:color 0.12s,background 0.12s;opacity:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+    deleteBtn.addEventListener('click', (evt) => {
+      evt.stopPropagation();
+      const annotationId = options?.annotationId;
+      card.remove();
+      // Clean up connector SVG line if present
+      if (annotationId) {
+        const connectorEl = containerEl.querySelector<SVGElement>(`#connector-${annotationId}`);
+        if (connectorEl) connectorEl.remove();
+        globalThis.document?.dispatchEvent(new CustomEvent('note-card-delete-app', {
+          detail: { annotationId },
+          bubbles: true,
+        }));
+      }
+    });
+    deleteBtn.addEventListener('mouseenter', () => {
+      deleteBtn.style.color = '#ef4444';
+      deleteBtn.style.background = 'rgba(239,68,68,0.08)';
+    });
+    deleteBtn.addEventListener('mouseleave', () => {
+      deleteBtn.style.color = '#d4d4d4';
+      deleteBtn.style.background = 'transparent';
+    });
+    // Show delete on card hover
+    card.addEventListener('mouseenter', () => { deleteBtn.style.opacity = '1'; });
+    card.addEventListener('mouseleave', () => { deleteBtn.style.opacity = '0'; });
+
+    header.appendChild(typeLabel);
+    header.appendChild(deleteBtn);
+    header.appendChild(dragHandle);
+    card.appendChild(header);
+
+    // ── Tag area ──────────────────────────────────────────
     const tagArea = document.createElement('div');
     tagArea.className = 'note-card-tag-area';
-    tagArea.style.cssText = 'display:flex;flex-wrap:wrap;gap:3px;align-items:center;min-height:22px;margin-bottom:5px;padding-bottom:5px;border-bottom:1px solid rgba(0,0,0,0.05);';
 
-    // Always show "+" button when annotationId is present (even if no tags yet)
+    let cardTags: Tag[] = options?.tags
+      ? [...options.tags]
+      : (options?.annotationId ? (tagCacheRef.current.get(options.annotationId) || []) : []);
+
     const renderTagChips = (tags: Tag[]) => {
       tagArea.innerHTML = '';
+      cardTags = tags;
+
       tags.forEach((tag) => {
         const chip = document.createElement('span');
         chip.className = 'note-card-tag-chip';
-        chip.style.cssText = `display:inline-flex;align-items:center;gap:2px;height:16px;padding:0 4px;border-radius:4px;background:${tag.color}22;border:1px solid ${tag.color}55;color:${tag.color};font-size:9px;font-weight:500;cursor:pointer;user-select:none;white-space:nowrap;`;
+        chip.style.background = `${tag.color}1a`;
+        chip.style.borderColor = `${tag.color}55`;
+        chip.style.color = tag.color;
         chip.textContent = tag.name;
         chip.title = `${tag.name} — click to manage`;
         chip.addEventListener('click', (e) => {
           e.stopPropagation();
           if (options?.annotationId) {
-            globalThis.dispatchEvent(new CustomEvent('open-card-tag-popup', {
+            document.dispatchEvent(new CustomEvent('open-card-tag-popup', {
               detail: { annotationId: options.annotationId },
               bubbles: true,
             }));
@@ -127,53 +321,60 @@ export function useCanvasRendering(
         });
         tagArea.appendChild(chip);
       });
-      // Always render "+" button when annotationId is present
+
       if (options?.annotationId) {
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'note-card-tag-add';
-        addBtn.style.cssText = 'display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 5px;border-radius:4px;background:#f1f5f9;border:1px solid #e2e8f0;color:#94a3b8;font-size:10px;cursor:pointer;line-height:1;transition:background 0.1s,color 0.1s;white-space:nowrap;';
-        addBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg> Add tag`;
+        addBtn.innerHTML = `+ Add tag`;
         addBtn.title = 'Add tag';
         addBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (options?.annotationId) {
-            globalThis.dispatchEvent(new CustomEvent('open-card-tag-popup', {
-              detail: { annotationId: options.annotationId },
-              bubbles: true,
-            }));
-          }
-        });
-        addBtn.addEventListener('mouseenter', () => {
-          addBtn.style.background = '#e2e8f0';
-          addBtn.style.color = '#0d9488';
-          addBtn.style.borderColor = '#0d9488';
-        });
-        addBtn.addEventListener('mouseleave', () => {
-          addBtn.style.background = '#f1f5f9';
-          addBtn.style.color = '#94a3b8';
-          addBtn.style.borderColor = '#e2e8f0';
+          e.stopImmediatePropagation();
+          openInlineTagEditor(
+            tagArea,
+            cardTags,
+            async (name, color) => {
+              if (!options.annotationId) return;
+              try {
+                await tagCommands.addToAnnotation(options.annotationId, name, color);
+                const updated = await tagCommands.getByAnnotation(options.annotationId);
+                const mapped = updated.map((t) => ({ id: t.id, name: t.name, color: t.color }));
+                tagCacheRef.current.set(options.annotationId, mapped);
+                renderTagChips(mapped);
+                tagChipRenderersRef.current.get(options.annotationId)?.(mapped);
+                globalThis.document?.dispatchEvent(new CustomEvent('card-tags-changed', {
+                  detail: { annotationId: options.annotationId, tags: mapped },
+                  bubbles: true,
+                }));
+              } catch (err) {
+                console.error('Failed to add tag:', err);
+              }
+            },
+            () => renderTagChips(cardTags),
+            [],
+          );
         });
         tagArea.appendChild(addBtn);
       }
     };
 
-    // Register renderer and initialize — always call to show "+" button
     if (options?.annotationId) {
       tagChipRenderersRef.current.set(options.annotationId, renderTagChips);
-      const initialTags = options.tags || tagCacheRef.current.get(options.annotationId) || [];
-      renderTagChips(initialTags);
+      renderTagChips(cardTags);
     }
 
+    card.appendChild(tagArea);
+
+    // ── AI card ───────────────────────────────────────────
     if (kind === 'ai-card') {
-      const header = document.createElement('div');
-      header.className = 'pdf-ai-card-header';
-      header.textContent = 'AI Card';
       const body = document.createElement('div');
       body.className = 'pdf-ai-card-body';
       body.innerHTML = simpleMarkdownToHtml(content);
+
       const actions = document.createElement('div');
       actions.className = 'pdf-ai-card-actions';
+
       const openBtn = document.createElement('button');
       openBtn.type = 'button';
       openBtn.className = 'pdf-ai-card-action';
@@ -182,24 +383,6 @@ export function useCanvasRendering(
       expandBtn.type = 'button';
       expandBtn.className = 'pdf-ai-card-action';
       expandBtn.textContent = 'Expand';
-      actions.appendChild(openBtn);
-      actions.appendChild(expandBtn);
-      // Add Unpin button for AI cards — calls handleCanvasUnpin which deletes from DB.
-      if (options?.messageId) {
-        const unpinBtn = document.createElement('button');
-        unpinBtn.type = 'button';
-        unpinBtn.className = 'pdf-ai-card-action pdf-ai-card-unpin';
-        unpinBtn.textContent = 'Unpin';
-        unpinBtn.addEventListener('click', (evt) => {
-          evt.stopPropagation();
-          handleCanvasUnpin(options.messageId!);
-        });
-        actions.appendChild(unpinBtn);
-      }
-      card.appendChild(header);
-      card.appendChild(tagArea);
-      card.appendChild(body);
-      card.appendChild(actions);
 
       let expanded = false;
       expandBtn.addEventListener('click', (evt) => {
@@ -211,27 +394,183 @@ export function useCanvasRendering(
       openBtn.addEventListener('click', (evt) => {
         evt.stopPropagation();
         if (!options?.messageId) return;
-        globalThis.dispatchEvent(
-          new CustomEvent('ai-open-message', {
-            detail: { messageId: options.messageId },
-          })
-        );
+        globalThis.dispatchEvent(new CustomEvent('ai-open-message', { detail: { messageId: options.messageId } }));
       });
-    } else {
+
+      actions.appendChild(openBtn);
+      actions.appendChild(expandBtn);
+
+      if (options?.messageId) {
+        const unpinBtn = document.createElement('button');
+        unpinBtn.type = 'button';
+        unpinBtn.className = 'pdf-ai-card-action pdf-ai-card-unpin';
+        unpinBtn.textContent = 'Unpin';
+        unpinBtn.addEventListener('click', (evt) => {
+          evt.stopPropagation();
+          handleCanvasUnpin(options.messageId!);
+        });
+        actions.appendChild(unpinBtn);
+      }
+
+      card.appendChild(body);
+      card.appendChild(actions);
+
+      if (options?.messageId) {
+        card.dataset.messageId = options.messageId;
+        if (options.annotationId) card.dataset.annotationId = options.annotationId;
+        card.title = 'Drag to reposition';
+
+        let dragging = false;
+        let startClientX = 0;
+        let startClientY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+        let lastLeft = 0;
+        let lastTop = 0;
+        let didDrag = false;
+
+        const onPointerMove = (evt: PointerEvent) => {
+          if (!dragging) return;
+          const dx = evt.clientX - startClientX;
+          const dy = evt.clientY - startClientY;
+          if (Math.abs(dx) + Math.abs(dy) > 3) didDrag = true;
+          if (!hasActivatedDrag && didDrag) {
+            hasActivatedDrag = true;
+            card.classList.add('is-dragging');
+          }
+          const containerRect = containerEl.getBoundingClientRect();
+          const maxLeft = Math.max(containerRect.width - card.offsetWidth - 8, 8);
+          const maxTop = Math.max(containerRect.height - card.offsetHeight - 8, 8);
+          lastLeft = Math.min(Math.max(startLeft + dx, 8), maxLeft);
+          lastTop = Math.min(Math.max(startTop + dy, 8), maxTop);
+          card.style.left = `${lastLeft}px`;
+          card.style.top = `${lastTop}px`;
+        };
+
+        const stopDrag = () => {
+          dragging = false;
+          card.classList.remove('is-dragging');
+          globalThis.removeEventListener('pointermove', onPointerMove);
+          globalThis.removeEventListener('pointerup', onPointerUp);
+        };
+
+        const onPointerUp = async () => {
+          if (!dragging) return;
+          stopDrag();
+          const nextX = Math.max(lastLeft, 0);
+          const nextY = Math.max(lastTop, 0);
+          try {
+            if (options.annotationId) await annotationCommands.updatePosition(options.annotationId, nextX, nextY);
+          } catch {
+            card.style.left = `${startLeft}px`;
+            card.style.top = `${startTop}px`;
+          }
+          if (didDrag) {
+            card.dataset.dragged = '1';
+            globalThis.setTimeout(() => { if (card.dataset.dragged === '1') delete card.dataset.dragged; }, 120);
+          }
+        };
+
+        let hasActivatedDrag = false;
+
+        const pointerDownHandler = (evt: PointerEvent) => {
+          if (evt.button !== 0) return;
+          if ((evt.target as HTMLElement)?.closest('.pdf-ai-card-action')) return;
+          dragging = true;
+          hasActivatedDrag = false;
+          startClientX = evt.clientX;
+          startClientY = evt.clientY;
+          startLeft = card.offsetLeft;
+          startTop = card.offsetTop;
+          lastLeft = startLeft;
+          lastTop = startTop;
+          didDrag = false;
+          globalThis.addEventListener('pointermove', onPointerMove);
+          globalThis.addEventListener('pointerup', onPointerUp);
+        };
+
+        (card as HTMLElement & { _dragCleanup?: () => void; _connectorRafIds?: number[] })._dragCleanup = () => {
+          stopDrag();
+          card.removeEventListener('pointerdown', pointerDownHandler);
+          // Cancel any pending RAFs for the connector line.
+          const rafIds = (card as HTMLElement & { _connectorRafIds?: number[] })._connectorRafIds;
+          if (rafIds) rafIds.forEach((id) => cancelAnimationFrame(id));
+          // Clear any pending auto-save timer.
+          const saveTimer = (card as HTMLElement & { _noteSaveTimer?: ReturnType<typeof setTimeout> | null })._noteSaveTimer;
+          if (saveTimer) clearTimeout(saveTimer);
+        };
+
+        card.addEventListener('pointerdown', pointerDownHandler);
+      }
+    }
+
+    // ── Note card ────────────────────────────────────────
+    else {
       const displayEl = document.createElement('div');
       displayEl.className = 'note-card-display';
       displayEl.innerHTML = simpleMarkdownToHtml(content);
-      card.appendChild(tagArea);
-      card.appendChild(displayEl);
 
       const statusEl = document.createElement('div');
       statusEl.className = 'note-card-status';
-      statusEl.style.cssText = 'font-size:10px;opacity:0.55;margin-top:4px;color:#94a3b8;height:14px;';
+      statusEl.style.cssText = 'font-size:10px;opacity:0.5;margin:2px 10px 6px;color:#a8a29e;';
+
+      card.appendChild(displayEl);
       card.appendChild(statusEl);
+
+      // Draw dashed connector line if this note is anchored to selected text
+      // Defer until after renderHighlight has added the element to DOM
+      if (options?.selectedText) {
+        const annotationId = options.annotationId;
+        const setupConnector = () => {
+          const hlEl = pageEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${annotationId}"]`);
+          if (!hlEl) return;
+          const connectorId = `connector-${annotationId}`;
+          let existingConnector = containerEl.querySelector<SVGElement>(`#${connectorId}`);
+          if (!existingConnector) {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.id = connectorId;
+            svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:2;';
+            containerEl.appendChild(svg);
+            existingConnector = svg;
+          }
+          const updateConnector = () => {
+            const hlRect = hlEl.getBoundingClientRect();
+            const cardRect = card.getBoundingClientRect();
+            const containerRect = containerEl.getBoundingClientRect();
+            const x1 = hlRect.left - containerRect.left + hlRect.width / 2;
+            const y1 = hlRect.top - containerRect.top + hlRect.height;
+            const x2 = cardRect.left - containerRect.left;
+            const y2 = cardRect.top - containerRect.top;
+            existingConnector!.innerHTML = `
+              <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+                stroke="#0d9488" stroke-width="1.5" stroke-dasharray="4 3" stroke-opacity="0.5" />
+              <circle cx="${x1}" cy="${y1}" r="3" fill="#0d9488" fill-opacity="0.5" />`;
+          };
+          updateConnector();
+          const cardExt = card as HTMLElement & { _updateConnector?: () => void; _connectorId?: string; _connectorRafIds?: number[] };
+          cardExt._updateConnector = updateConnector;
+          cardExt._connectorId = connectorId;
+          const rafId2 = requestAnimationFrame(setupConnector);
+          cardExt._connectorRafIds = [rafId2];
+        };
+        requestAnimationFrame(setupConnector);
+      }
+
+      if (options?.annotationId) card.dataset.noteAnnotationId = options.annotationId;
+      if (options?.selectedText) card.dataset.noteSelectedText = options.selectedText;
+      card.dataset.notePageNumber = String(pageNumber);
+      card.title = 'Double-click to edit. Drag to reposition.';
 
       let currentContent = content;
       let editing = false;
-      let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+      // Extended card object to store timer refs that survive DOM removal.
+      const cardExt = card as HTMLElement & {
+        _updateConnector?: () => void;
+        _connectorId?: string;
+        _connectorRafIds?: number[];
+        _noteSaveTimer?: ReturnType<typeof setTimeout> | null;
+      };
 
       const doSave = async (text: string) => {
         const annotationId = card.dataset.noteAnnotationId;
@@ -240,8 +579,13 @@ export function useCanvasRendering(
         const fullText = `${NOTE_PREFIX}${text}${selectedPart ? `\n\n${selectedPart}` : ''}`;
         try {
           await annotationCommands.updateText(annotationId, fullText);
-        } catch {
-          // silent – local display is already updated
+        } catch (err) {
+          // Show error to user via toast
+          const msg = err instanceof Error ? err.message : 'Failed to save note';
+          globalThis.document?.dispatchEvent(new CustomEvent('note-card-save-error', {
+            detail: { message: msg },
+            bubbles: true,
+          }));
         }
       };
 
@@ -252,7 +596,6 @@ export function useCanvasRendering(
         textarea.className = 'note-card-editor';
         textarea.value = currentContent;
         displayEl.style.display = 'none';
-        statusEl.textContent = '';
         card.appendChild(textarea);
         textarea.focus();
         textarea.setSelectionRange(textarea.value.length, textarea.value.length);
@@ -260,7 +603,7 @@ export function useCanvasRendering(
         const saveAndExit = async () => {
           if (!editing) return;
           editing = false;
-          if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+          if (cardExt._noteSaveTimer) { clearTimeout(cardExt._noteSaveTimer); cardExt._noteSaveTimer = null; }
           const newContent = textarea.value.trim();
           textarea.remove();
           displayEl.style.display = '';
@@ -277,10 +620,10 @@ export function useCanvasRendering(
 
         textarea.addEventListener('input', () => {
           const val = textarea.value.trim();
-          if (saveTimer) clearTimeout(saveTimer);
+          if (cardExt._noteSaveTimer) clearTimeout(cardExt._noteSaveTimer);
           if (val !== currentContent) {
             statusEl.textContent = 'saving...';
-            saveTimer = setTimeout(async () => {
+            cardExt._noteSaveTimer = setTimeout(async () => {
               if (textarea.value.trim() !== currentContent) {
                 await doSave(textarea.value.trim());
                 currentContent = textarea.value.trim();
@@ -290,11 +633,12 @@ export function useCanvasRendering(
             }, 500);
           }
         });
+
         textarea.addEventListener('blur', () => { void saveAndExit(); });
         textarea.addEventListener('keydown', (evt) => {
           if (evt.key === 'Escape') {
             editing = false;
-            if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+            if (cardExt._noteSaveTimer) { clearTimeout(cardExt._noteSaveTimer); cardExt._noteSaveTimer = null; }
             textarea.remove();
             displayEl.style.display = '';
             statusEl.textContent = '';
@@ -305,70 +649,16 @@ export function useCanvasRendering(
         });
       };
 
-      if (options?.annotationId) {
-        card.dataset.noteAnnotationId = options.annotationId;
-      }
-      if (options?.selectedText) {
-        card.dataset.noteSelectedText = options.selectedText;
-      }
-
       card.addEventListener('dblclick', (evt) => {
         evt.stopPropagation();
         enterEdit();
       });
-      card.style.cursor = 'pointer';
-      card.title = 'Double-click to edit. Drag to reposition.';
-      card.dataset.notePageNumber = String(pageNumber);
 
-      // Action bar: edit + delete + drag handle
-      const actionBar = document.createElement('div');
-      actionBar.className = 'note-card-actions';
-      actionBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:4px;border-top:1px solid rgba(13,148,136,0.12)';
-
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.className = 'note-card-edit-btn';
-      editBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#94a3b8;font-size:13px;line-height:1;padding:0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:color 0.1s,background 0.1s;opacity:0;transition:opacity 0.15s;color:#94a3b8';
-      editBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-      editBtn.title = 'Edit note';
-      editBtn.addEventListener('click', (evt) => {
-        evt.stopPropagation();
-        enterEdit();
-      });
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.type = 'button';
-      deleteBtn.className = 'note-card-del-btn';
-      deleteBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#94a3b8;font-size:13px;line-height:1;padding:0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:3px;transition:color 0.1s,background 0.1s;opacity:0;transition:opacity 0.15s';
-      deleteBtn.textContent = '×';
-      deleteBtn.title = 'Delete note';
-      deleteBtn.addEventListener('click', (evt) => {
-        evt.stopPropagation();
-        const annotationId = options?.annotationId;
-        // Remove card from DOM immediately (synchronous)
-        card.remove();
-        // Notify App to delete from DB
-        if (annotationId) {
-          globalThis.document?.dispatchEvent(new CustomEvent('note-card-delete-app', {
-            detail: { annotationId },
-            bubbles: true,
-          }));
-        }
-      });
-      deleteBtn.addEventListener('mouseenter', () => {
-        (deleteBtn as HTMLElement).style.color = '#ef4444';
-        (deleteBtn as HTMLElement).style.background = 'rgba(239,68,68,0.08)';
-      });
-      deleteBtn.addEventListener('mouseleave', () => {
-        (deleteBtn as HTMLElement).style.color = '#94a3b8';
-        (deleteBtn as HTMLElement).style.background = 'transparent';
-      });
-
-      // Whole-card drag (no need for a tiny drag handle)
+      // Whole-card drag — activates after real movement
+      const dragHandlers = { onMove: (_ev: PointerEvent) => {}, onUp: () => {} };
       card.addEventListener('pointerdown', (e: PointerEvent) => {
         if (e.button !== 0) return;
-        // Don't drag if user is trying to select text or click a button
-        if ((e.target as HTMLElement).closest('button, textarea, input')) return;
+        if ((e.target as HTMLElement)?.closest('.canvas-card-delete-btn, textarea, input')) return;
         e.preventDefault();
         const startX = e.clientX;
         const startY = e.clientY;
@@ -376,167 +666,63 @@ export function useCanvasRendering(
         const origTop = parseFloat(card.style.top || '0');
         let moved = false;
 
-        // Set note drag state for AIPanel to detect
-        aiCardDragState.payload = { type: 'note', content, page: pageNumber };
-        aiCardDragState.isDragging = true;
-
-        const onMove = (ev: PointerEvent) => {
-          if (!moved && (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3)) {
-            moved = true;
-          }
-          card.style.cursor = 'grabbing';
+        dragHandlers.onMove = (ev: PointerEvent) => {
           const dx = ev.clientX - startX;
           const dy = ev.clientY - startY;
-          // Unconstrained drag within container
+          if (!moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+            moved = true;
+            card.classList.add('is-dragging');
+          }
+          if (!moved) return;
           card.style.left = `${Math.max(origLeft + dx, 0)}px`;
           card.style.top = `${Math.max(origTop + dy, 0)}px`;
-
-          // Check if over AIPanel — dispatch note-attachment-drop
-          const panelEl = globalThis.document?.querySelector<HTMLElement>('#ai-panel-scroll, aside[class*="flex-col"]');
-          if (panelEl && ev.clientX >= panelEl.getBoundingClientRect().left) {
-            globalThis.document?.dispatchEvent(new CustomEvent('note-attachment-drop', {
-              detail: { content, page: pageNumber },
-              bubbles: true,
-            }));
-            aiCardDragState.payload = null;
-            aiCardDragState.isDragging = false;
-            cleanup();
-          }
+          // Update connector line if attached to selected text
+          (card as HTMLElement & { _updateConnector?: () => void })._updateConnector?.();
         };
-        const onUp = () => {
+
+        const cleanup = () => {
+          card.classList.remove('is-dragging');
+          globalThis.document?.removeEventListener('pointermove', dragHandlers.onMove);
+          globalThis.document?.removeEventListener('pointerup', dragHandlers.onUp);
+        };
+
+        dragHandlers.onUp = async () => {
           cleanup();
-          card.style.cursor = 'default';
-          if (!moved && options?.annotationId) {
-            void annotationCommands.updatePosition(
+          if (options?.annotationId) {
+            await annotationCommands.updatePosition(
               options.annotationId,
               parseFloat(card.style.left || '0'),
-              parseFloat(card.style.top || '0')
+              parseFloat(card.style.top || '0'),
             );
           }
-          aiCardDragState.payload = null;
-          aiCardDragState.isDragging = false;
         };
-        const cleanup = () => {
-          globalThis.document?.removeEventListener('pointermove', onMove);
-          globalThis.document?.removeEventListener('pointerup', onUp);
-        };
-        globalThis.document?.addEventListener('pointermove', onMove);
-        globalThis.document?.addEventListener('pointerup', onUp);
+
+        globalThis.document?.addEventListener('pointermove', dragHandlers.onMove);
+        globalThis.document?.addEventListener('pointerup', dragHandlers.onUp);
       });
 
-      card.addEventListener('mouseenter', () => {
-        (editBtn as HTMLElement).style.opacity = '1';
-        (deleteBtn as HTMLElement).style.opacity = '1';
-      });
-      card.addEventListener('mouseleave', () => {
-        (editBtn as HTMLElement).style.opacity = '0';
-        (deleteBtn as HTMLElement).style.opacity = '0';
-      });
-
-      actionBar.appendChild(editBtn);
-      actionBar.appendChild(deleteBtn);
-      card.appendChild(actionBar);
-    }
-    if (kind === 'ai-card' && options?.messageId) {
-      card.dataset.messageId = options.messageId;
-      if (options.annotationId) {
-        card.dataset.annotationId = options.annotationId;
-      }
-      card.title = 'Drag to reposition';
-      const attachDrag = () => {
-        const annotationId = options.annotationId;
-        let dragging = false;
-        let startClientX = 0;
-        let startClientY = 0;
-        let startLeft = 0;
-        let startTop = 0;
-        let lastLeft = 0;
-        let lastTop = 0;
-        let didDrag = false;
-
-        const onPointerMove = (evt: PointerEvent) => {
-          if (!dragging) return;
-          const containerRect = containerEl.getBoundingClientRect();
-          const dx = evt.clientX - startClientX;
-          const dy = evt.clientY - startClientY;
-          if (Math.abs(dx) + Math.abs(dy) > 3) {
-            didDrag = true;
-          }
-          // Unconstrained drag within container
-          const maxLeft = Math.max(containerRect.width - card.offsetWidth - 8, 8);
-          const maxTop = Math.max(containerRect.height - card.offsetHeight - 8, 8);
-          lastLeft = Math.min(Math.max(startLeft + dx, 8), maxLeft);
-          lastTop = Math.min(Math.max(startTop + dy, 8), maxTop);
-          card.style.left = `${lastLeft}px`;
-          card.style.top = `${lastTop}px`;
-        };
-
-        // Cleanup function to prevent memory leaks
-        const cleanup = () => {
-          dragging = false;
-          card.classList.remove('pdf-ai-card-dragging');
-          globalThis.removeEventListener('pointermove', onPointerMove);
-        };
-
-        const onPointerUp = async () => {
-          if (!dragging) return;
-          cleanup();
-          // Save the current visual position directly — the +8 offset is
-          // already baked into card.style.left at render time, so on reload
-          // the card will render at the exact same spot.
-          const nextX = Math.max(lastLeft, 0);
-          const nextY = Math.max(lastTop, 0);
-          try {
-            if (annotationId) await annotationCommands.updatePosition(annotationId, nextX, nextY);
-          } catch {
-            card.style.left = `${startLeft}px`;
-            card.style.top = `${startTop}px`;
-          }
-          if (didDrag) {
-            card.dataset.dragged = '1';
-            globalThis.setTimeout(() => {
-              if (card.dataset.dragged === '1') delete card.dataset.dragged;
-            }, 120);
-          }
-        };
-
-        // Store handler reference for cleanup
-        const pointerDownHandler = (evt: PointerEvent) => {
-          if (evt.button !== 0) return;
-          const targetEl = evt.target as HTMLElement | null;
-          if (targetEl?.closest('.pdf-ai-card-action')) return;
-          dragging = true;
-          startClientX = evt.clientX;
-          startClientY = evt.clientY;
-          startLeft = card.offsetLeft;
-          startTop = card.offsetTop;
-          lastLeft = startLeft;
-          lastTop = startTop;
-          didDrag = false;
-          card.classList.add('pdf-ai-card-dragging');
-          globalThis.addEventListener('pointermove', onPointerMove);
-          // Use explicit listener instead of { once: true } for better cleanup control
-          globalThis.addEventListener('pointerup', onPointerUp);
-        };
-
-        // Store cleanup function on card for later removal
-        (card as HTMLElement & { _dragCleanup?: () => void })._dragCleanup = () => {
-          cleanup();
-          card.removeEventListener('pointerdown', pointerDownHandler);
-        };
-
-        card.addEventListener('pointerdown', pointerDownHandler);
+      (card as HTMLElement & { _dragCleanup?: () => void })._dragCleanup = () => {
+        card.classList.remove('is-dragging');
+        globalThis.document?.removeEventListener('pointermove', dragHandlers.onMove);
+        globalThis.document?.removeEventListener('pointerup', dragHandlers.onUp);
+        // Clean up connector SVG line if present
+        const connId = (card as HTMLElement & { _connectorId?: string })._connectorId;
+        if (connId) {
+          const connEl = containerEl.querySelector<SVGElement>(`#${connId}`);
+          if (connEl) connEl.remove();
+        }
       };
-      attachDrag();
     }
+
     containerEl.appendChild(card);
   };
+
 
   const loadStoredHighlights = async (documentId: string) => {
     clearHighlights();
     const annotations = await annotationCommands.getByDocument(documentId);
 
-    // Pre-load tags for all annotations that need them
+    // Pre-load tags for all annotations that need them (single batch query, not N per-annotation queries)
     const annotationIds = annotations
       .filter((a) => {
         const text = typeof a.text === 'string' ? a.text : '';
@@ -544,23 +730,17 @@ export function useCanvasRendering(
       })
       .map((a) => a.id);
 
-    // Batch load tags
-    const tagResults = await Promise.all(
-      annotationIds.map(async (id) => {
-        try {
-          const tags = await tagCommands.getByAnnotation(id);
-          return { id, tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color })) };
-        } catch {
-          return { id, tags: [] };
+    if (annotationIds.length > 0) {
+      try {
+        const tagMap = await tagCommands.getAnnotationTagsBatch(annotationIds);
+        for (const [id, tags] of Object.entries(tagMap)) {
+          tagCacheRef.current.set(id, tags.map((t) => ({ id: t.id, name: t.name, color: t.color })));
         }
-      })
-    );
-    tagResults.forEach(({ id, tags }) => {
-      if (tags.length > 0) tagCacheRef.current.set(id, tags);
-    });
+      } catch { /* silent — individual cards render without tags */ }
+    }
 
     annotations
-      .filter((a) => a.annotation_type === 'highlight')
+      .filter((a) => a.type === 'highlight')
       .forEach((a) => {
         const textValue = typeof a.text === 'string' ? a.text : '';
         const isNote = textValue.startsWith(NOTE_PREFIX);
@@ -629,6 +809,9 @@ export function useCanvasRendering(
         setIsRendering(false);
         return;
       }
+      // Cancel any previous render's lazy cleanup before starting a new one.
+      lazyCleanupRef.current?.();
+      lazyCleanupRef.current = null;
       setIsRendering(true);
       setRenderError(null);
 
@@ -707,6 +890,8 @@ export function useCanvasRendering(
         setTotalPages(result.totalPages);
         setCurrentPage(pdfDocument.lastPage ?? 1);
         setOutline(result.outline);
+        // Store the lazy renderer's IntersectionObserver cleanup.
+        lazyCleanupRef.current = result.cleanup ?? null;
         console.log('Rendered pages count:', result.totalPages);
 
         await loadStoredHighlights(pdfDocument.id);
@@ -726,6 +911,11 @@ export function useCanvasRendering(
     };
 
     renderDocument();
+    // Return cleanup that cancels the lazy renderer and clears the IntersectionObserver.
+    return () => {
+      lazyCleanupRef.current?.();
+      lazyCleanupRef.current = null;
+    };
   }, [containerId, pdfDocument]);
 
   const highlightSelection = async (color = 'rgba(255, 235, 59, 0.35)') => {
@@ -748,7 +938,11 @@ export function useCanvasRendering(
       throw new Error('未找到可高亮的文本区域');
     }
 
-    let count = 0;
+    // Collect rect data first (sync), then create all annotations in parallel
+    const pendingAnnotations: Array<{
+      pageNumber: number; x: number; y: number; width: number; height: number;
+    }> = [];
+
     for (const rect of clientRects) {
       const target = globalThis.document
         ?.elementFromPoint(rect.left + 1, rect.top + 1)
@@ -762,41 +956,54 @@ export function useCanvasRendering(
       const width = Math.min(rect.width, pageRect.width - x);
       const height = Math.min(rect.height, pageRect.height - y);
       if (width <= 1 || height <= 1) continue;
+      pendingAnnotations.push({ pageNumber, x, y, width, height });
+    }
 
-      await annotationCommands.create({
-        document_id: pdfDocument.id,
-        page_number: pageNumber,
-        annotation_type: 'highlight',
-        color,
-        position_x: x,
-        position_y: y,
-        position_width: width,
-        position_height: height,
-        text,
-      });
+    if (pendingAnnotations.length === 0) {
+      throw new Error('未找到可高亮的文本区域');
+    }
 
-      renderHighlight(pageNumber, x, y, width, height, color);
-      count += 1;
+    // Create all annotations in parallel (no await per-item)
+    const created = await Promise.all(
+      pendingAnnotations.map(({ pageNumber, x, y, width, height }) =>
+        annotationCommands.create({
+          document_id: pdfDocument.id,
+          page_number: pageNumber,
+          annotation_type: 'highlight',
+          color,
+          position_x: x,
+          position_y: y,
+          position_width: width,
+          position_height: height,
+          text,
+        })
+      )
+    );
+
+    // Render all highlights (sync DOM ops)
+    for (let i = 0; i < pendingAnnotations.length; i++) {
+      const { pageNumber, x, y, width, height } = pendingAnnotations[i];
+      renderHighlight(pageNumber, x, y, width, height, color, created[i]?.id);
     }
 
     selection.removeAllRanges();
-    if (count === 0) {
-      throw new Error('未能识别可高亮区域');
-    }
-    return count;
+    return pendingAnnotations.length;
   };
 
   const addNoteForSelection = async (
     content: string,
-    position?: { x: number; y: number },
-    targetPageNumber?: number
+    position: { x: number; y: number } | undefined,
+    targetPageNumber: number | undefined,
+    /** Text captured from DOM selection before toolbar cleared it */
+    capturedSelectedText?: string,
+    capturedRange?: { left: number; top: number; width: number; height: number; pageNumber: number }
   ) => {
     if (!pdfDocument) throw new Error('请先上传或选择文档');
     const note = content.trim();
     if (!note) throw new Error('笔记内容不能为空');
 
     const selection = globalThis.getSelection?.();
-    const hasSelection = selection && selection.rangeCount > 0 && !selection.isCollapsed;
+    const domHasSelection = selection && selection.rangeCount > 0 && !selection.isCollapsed;
 
     let pageNumber: number;
     let x: number;
@@ -804,27 +1011,48 @@ export function useCanvasRendering(
     let width: number;
     let height: number;
     let selectedText = '';
+    const hasSelection = domHasSelection || !!capturedSelectedText;
 
     if (hasSelection) {
       // Anchored note: attached to selected text
-      const range = selection!.getRangeAt(0);
-      const rect = Array.from(range.getClientRects()).find((r) => r.width > 1 && r.height > 1);
-      if (!rect) throw new Error('未找到可锚定区域');
+      // Try DOM selection first, fall back to captured range
+      let rangeRect: DOMRect | undefined;
+      let targetPageEl: HTMLElement | null = null;
 
-      const target = globalThis.document
-        ?.elementFromPoint(rect.left + 1, rect.top + 1)
-        ?.closest('.pdf-page') as HTMLElement | null;
-      if (!target) throw new Error('未找到页面锚点');
+      if (domHasSelection) {
+        const range = selection!.getRangeAt(0);
+        rangeRect = Array.from(range.getClientRects()).find((r) => r.width > 1 && r.height > 1);
+        if (rangeRect) {
+          targetPageEl = globalThis.document
+            ?.elementFromPoint(rangeRect.left + 1, rangeRect.top + 1)
+            ?.closest('.pdf-page') as HTMLElement | null;
+        }
+      }
 
-      pageNumber = Number(target.dataset.pageNumber || '0');
+      // Fall back to captured range from before selection was cleared
+      if (!rangeRect && capturedRange) {
+        rangeRect = {
+          left: capturedRange.left,
+          top: capturedRange.top,
+          width: capturedRange.width,
+          height: capturedRange.height,
+        } as DOMRect;
+        const containerEl = globalThis.document?.getElementById(containerId);
+        targetPageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${capturedRange.pageNumber}"]`) ?? null;
+      }
+
+      if (!rangeRect) throw new Error('未找到可锚定区域');
+      if (!targetPageEl) throw new Error('未找到页面锚点');
+
+      pageNumber = Number(targetPageEl.dataset.pageNumber || '0');
       if (!pageNumber) throw new Error('未找到页面编号');
 
-      const pageRect = target.getBoundingClientRect();
-      x = Math.max(rect.left - pageRect.left, 0);
-      y = Math.max(rect.top - pageRect.top, 0);
-      width = Math.min(rect.width, pageRect.width - x);
-      height = Math.min(rect.height, pageRect.height - y);
-      selectedText = selection!.toString().trim();
+      const pageRect = targetPageEl.getBoundingClientRect();
+      x = Math.max(rangeRect.left - pageRect.left, 0);
+      y = Math.max(rangeRect.top - pageRect.top, 0);
+      width = Math.min(rangeRect.width, pageRect.width - x);
+      height = Math.min(rangeRect.height, pageRect.height - y);
+      selectedText = capturedSelectedText ?? selection!.toString().trim();
     } else {
       // Free-floating note: use right-click position on the known page
       const containerEl = globalThis.document?.getElementById(containerId);
@@ -863,7 +1091,7 @@ export function useCanvasRendering(
     });
 
     if (hasSelection) {
-      renderHighlight(pageNumber, x, y, width, height, 'rgba(14, 165, 233, 0.25)');
+      renderHighlight(pageNumber, x, y, width, height, 'rgba(14, 165, 233, 0.25)', createdNote?.id);
     }
     renderNoteCard(pageNumber, x, y, note, { annotationId: createdNote?.id, selectedText });
     selection?.removeAllRanges();
@@ -987,10 +1215,11 @@ export function useCanvasRendering(
     const annotations = await annotationCommands.getByDocument(pdfDocument.id);
     const prefix = `${AI_CARD_PREFIX}${messageId}`;
     const aiAnnotation = annotations.find(
-      (a: { text?: string }) => typeof a.text === 'string' && a.text.startsWith(prefix)
+      (a) => typeof a.text === 'string' && a.text.startsWith(prefix)
     );
     if (!aiAnnotation?.id) throw new Error('未找到对应的 AI 卡片');
     await annotationCommands.delete(aiAnnotation.id);
+    tagChipRenderersRef.current.delete(aiAnnotation.id);
     const containerEl = globalThis.document?.getElementById(containerId);
     if (containerEl instanceof HTMLElement) {
       const card = containerEl.querySelector<HTMLElement>(`.pdf-ai-card[data-message-id="${messageId}"]`);
@@ -1062,11 +1291,21 @@ export function useCanvasRendering(
   }, [scrollContainerId, containerId, totalPages]);
 
   const jumpToPage = (pageNumber: number) => {
+    // Update UI state immediately so sidebar red-dot moves without waiting for scroll.
+    setCurrentPage(pageNumber);
+
     const scroller = globalThis.document?.getElementById(scrollContainerId);
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(scroller instanceof HTMLElement) || !(containerEl instanceof HTMLElement)) return;
-    const target = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
+
+    // First try rendered page element.
+    let target = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
+    // Fall back to skeleton placeholder (lazy rendering — page not yet rendered).
+    if (!target) {
+      target = containerEl.querySelector<HTMLElement>(`.pdf-page-skeleton[data-page-number="${pageNumber}"]`);
+    }
     if (!target) return;
+
     // Use instant jump for large distances (PageUp/Down, TOC click, card pin).
     // Use smooth scroll for small nudges (arrow keys).
     const dist = Math.abs(target.offsetTop - 16 - scroller.scrollTop);
@@ -1115,6 +1354,11 @@ export function useCanvasRendering(
     if (renderFn) renderFn(tags);
   };
 
+  // Remove a tag chip renderer entry from the Map (prevents memory leak on delete).
+  const clearCardRenderer = (annotationId: string) => {
+    tagChipRenderersRef.current.delete(annotationId);
+  };
+
   return {
     isRendering,
     renderError,
@@ -1131,5 +1375,6 @@ export function useCanvasRendering(
     handleCanvasUnpin,
     locateAiCardByMessageId,
     refreshCardTags,
+    clearCardRenderer,
   };
 }

@@ -1,5 +1,5 @@
 import { ZoomIn, ZoomOut, X, StickyNote, MessageCircleQuestion, Highlighter, Copy } from 'lucide-react';
-import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState, useCallback } from 'react';
+import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PdfOutlineItem } from '@/lib/pdf/renderer';
 import { aiCardDragState } from '@/components/layout/AIPanel';
@@ -17,7 +17,12 @@ interface MainCanvasProps {
   outline: PdfOutlineItem[];
   onJumpToPage: (page: number) => void;
   onHighlightSelection: () => void;
-  onAddNoteSelection: (position?: { x: number; y: number }, targetPageNumber?: number) => void;
+  onAddNoteSelection: (
+    position?: { x: number; y: number },
+    targetPageNumber?: number,
+    capturedText?: string,
+    capturedRange?: { left: number; top: number; width: number; height: number; pageNumber: number }
+  ) => void;
   onExplainSelection: () => void;
   onDropAICard: (payload: { messageId: string; content: string; pageHint?: number }, clientX: number, clientY: number) => void;
   documentId?: string;
@@ -28,7 +33,6 @@ interface MainCanvasProps {
     page: number;
     openSplit?: boolean;
     reason?: 'evidence' | 'reference' | 'compare';
-    nonce: number;
   } | null;
   onSplitModeChange?: (active: boolean) => void;
   pdfFileBlob?: Blob | null;
@@ -71,7 +75,9 @@ export function MainCanvas({
   const [compareHistory, setCompareHistory] = useState<number[]>([]);
   const [compareHistoryIndex, setCompareHistoryIndex] = useState(-1);
   const [splitReason, setSplitReason] = useState<'evidence' | 'reference' | 'compare'>('compare');
-  const [textHandle, setTextHandle] = useState<{ x: number; y: number; page?: number; text: string } | null>(null);
+  const textHandleRef = useRef<{ x: number; y: number; page?: number; text: string } | null>(null);
+  const compareStageRef = useRef<HTMLElement | null>(null);
+  const [, forceTextToolbarUpdate] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
@@ -79,19 +85,92 @@ export function MainCanvas({
   const [searchCurrentIndex, setSearchCurrentIndex] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  /** Per-page search match positions (in CSS px, relative to page container top-left) */
+  type SearchMatchPos = { x: number; y: number; width: number; height: number };
+  const [searchMatches, setSearchMatches] = useState<Map<number, SearchMatchPos[]>>(new Map());
+
+  /** Remove all search highlight overlays from a page */
+  const clearSearchHighlightsOnPage = (pageNumber: number) => {
+    const containerEl = globalThis.document?.getElementById('pdf-pages-container');
+    if (!containerEl) return;
+    containerEl.querySelectorAll(`.pdf-search-highlight[data-page="${pageNumber}"]`).forEach((el) => el.remove());
+  };
+
+  /** Render search highlight overlays for all matches on a given page.
+   *  `currentIdx` is passed explicitly (not read from state) to avoid stale closure. */
+  const renderSearchHighlightsOnPage = useCallback((
+    pageNumber: number,
+    matches: SearchMatchPos[],
+    pageMatchesOffset: number,
+    totalPageMatches: number,
+    currentIdx: number
+  ) => {
+    const containerEl = globalThis.document?.getElementById('pdf-pages-container');
+    const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
+    if (!containerEl || !scrollEl) return;
+
+    // Remove old highlights on this page first
+    clearSearchHighlightsOnPage(pageNumber);
+
+    const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
+    if (!pageEl) return;
+
+    // The text layer sits on top of the canvas, same dimensions
+    const textLayerEl = pageEl.querySelector<HTMLElement>('.pdf-text-layer');
+    if (!textLayerEl) return;
+
+    matches.forEach((match, localIdx) => {
+      const isCurrent = pageMatchesOffset + localIdx === currentIdx;
+      const hl = globalThis.document!.createElement('div');
+      hl.className = `pdf-search-highlight${isCurrent ? ' is-current' : ''}`;
+      hl.dataset.page = String(pageNumber);
+      hl.style.cssText = [
+        'position:absolute',
+        `left:${match.x}px`,
+        `top:${match.y}px`,
+        `width:${match.width}px`,
+        `height:${match.height}px`,
+        'pointer-events:none',
+        'z-index:4',
+        'border-radius:2px',
+        isCurrent
+          ? 'background:rgba(234,179,8,0.45);box-shadow:0 0 0 2px rgba(234,179,8,0.7)'
+          : 'background:rgba(234,179,8,0.25)',
+      ].join(';');
+      textLayerEl.appendChild(hl);
+    });
+
+    // Scroll the active match into view
+    if (pageMatchesOffset + totalPageMatches > currentIdx) {
+      const currentHl = pageEl.querySelector<HTMLElement>('.pdf-search-highlight.is-current');
+      if (currentHl) {
+        currentHl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+  }, [clearSearchHighlightsOnPage]);
+
+  /** Clear all search highlights from all pages */
+  const clearAllSearchHighlights = () => {
+    const containerEl = globalThis.document?.getElementById('pdf-pages-container');
+    if (!containerEl) return;
+    containerEl.querySelectorAll('.pdf-search-highlight').forEach((el) => el.remove());
+  };
+
   // Monitor text selection to show floating drag handle
   useEffect(() => {
     const update = () => {
       const sel = globalThis.getSelection?.();
       if (!sel || sel.isCollapsed || !sel.toString().trim()) {
-        setTextHandle(null);
+        textHandleRef.current = null;
+        forceTextToolbarUpdate((n) => n + 1);
         return;
       }
       try {
         const range = sel.getRangeAt(0);
         const rect = range.getBoundingClientRect();
         if (rect.width === 0 && rect.height === 0) {
-          setTextHandle(null);
+          textHandleRef.current = null;
+        forceTextToolbarUpdate((n) => n + 1);
           return;
         }
         // Find page element
@@ -102,22 +181,26 @@ export function MainCanvas({
           : null;
         // Guard: only show toolbar when selection is inside a PDF page
         if (!pageEl) {
-          setTextHandle(null);
+          textHandleRef.current = null;
+        forceTextToolbarUpdate((n) => n + 1);
           return;
         }
         const page = Number(pageEl.dataset.pageNumber || '0') || undefined;
         const selectedText = sel.toString().trim();
         // Guard: require meaningful selection text
         if (!selectedText || selectedText.length < 2) {
-          setTextHandle(null);
+          textHandleRef.current = null;
+        forceTextToolbarUpdate((n) => n + 1);
           return;
         }
         // Position toolbar centered above the selection, offset upward
         const toolbarX = Math.max(8, rect.left + rect.width / 2);
         const toolbarY = Math.max(8, rect.top - 44); // above selection
-        setTextHandle({ x: toolbarX, y: toolbarY, page, text: selectedText });
+        textHandleRef.current = { x: toolbarX, y: toolbarY, page, text: selectedText };
+        forceTextToolbarUpdate((n) => n + 1);
       } catch {
-        setTextHandle(null);
+        textHandleRef.current = null;
+        forceTextToolbarUpdate((n) => n + 1);
       }
     };
     globalThis.addEventListener('mouseup', update);
@@ -135,27 +218,33 @@ export function MainCanvas({
       if (isTyping(e.target)) return;
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
-        setSearchOpen((v) => !v);
-        if (!searchOpen) setSearchQuery('');
+        setSearchOpen((prev) => {
+          if (!prev) setSearchQuery(''); // clear query when opening
+          else { setSearchResultPages([]); setSearchMatches(new Map()); clearAllSearchHighlights(); }
+          return !prev;
+        });
       }
     };
     globalThis.addEventListener('keydown', handler);
     return () => globalThis.removeEventListener('keydown', handler);
-  }, [searchOpen]);
+  }, []);
 
   // Escape dismisses the text selection toolbar
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && textHandle) {
+      if (e.key === 'Escape' && textHandleRef.current) {
         globalThis.getSelection?.()?.removeAllRanges();
-        setTextHandle(null);
+        textHandleRef.current = null;
+        forceTextToolbarUpdate((n) => n + 1);
       }
     };
     globalThis.addEventListener('keydown', handler);
     return () => globalThis.removeEventListener('keydown', handler);
-  }, [textHandle]);
+  }, []);
 
   // Search PDF text across all pages, collect all matches.
+  // Processes pages in batches of 20, yielding to the main thread between batches
+  // to keep the UI responsive on large documents.
   const searchInPDF = useCallback(async (query: string, fileBlob: Blob, total: number) => {
     if (!query.trim()) { setSearchResultPages([]); return; }
     setSearchLoading(true);
@@ -165,37 +254,111 @@ export function MainCanvas({
       const arrayBuffer = await file.arrayBuffer();
       const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const q = query.toLowerCase();
-      const matches: number[] = [];
-      for (let i = 1; i <= Math.min(total, pdfDoc.numPages); i++) {
-        const page = await pdfDoc.getPage(i);
-        const content = await page.getTextContent();
-        const pageText = content.items.map((item: any) => item.str).join(' ');
-        if (pageText.toLowerCase().includes(q)) {
-          matches.push(i);
+      const pageMatchesMap = new Map<number, SearchMatchPos[]>();
+      const BATCH_SIZE = 20;
+      const maxPage = Math.min(total, pdfDoc.numPages);
+      for (let batchStart = 1; batchStart <= maxPage; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, maxPage);
+        for (let i = batchStart; i <= batchEnd; i++) {
+          const page = await pdfDoc.getPage(i);
+          const viewport = page.getViewport({ scale: 1 });
+          const pageMatchPos: SearchMatchPos[] = [];
+          // Use PDF.js findText for precise per-match bounding boxes
+          // normalizeViewportCoords: converts PDF coords → CSS pixels automatically
+          const textItems = await page.getTextContent();
+          for (const item of textItems.items as any[]) {
+            const itemText = item.str || '';
+            const itemTextLower = itemText.toLowerCase();
+            // Only highlight if query is a whole word, full item text, or item starts with query
+            const wordBoundaryRegex = new RegExp(`(^|\\s)${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|\\s)`, 'i');
+            if (itemTextLower === q || wordBoundaryRegex.test(itemText) || itemTextLower.startsWith(q)) {
+              const tx = item.transform[4] ?? 0;
+              const ty = item.transform[5] ?? 0;
+              const scale = viewport.scale;
+              const cssX = tx * scale;
+              // PDF y origin is bottom-left; browser y origin is top-left
+              const cssY = (viewport.height - ty) * scale;
+              // Use canvas measureText for accurate width (item.width is unreliable in PDF.js 4.x)
+              const measWidth = (() => {
+                try {
+                  const c = globalThis.document?.createElement('canvas');
+                  if (!c) return 0;
+                  const ctx2d = c.getContext('2d');
+                  if (!ctx2d) return 0;
+                  // fontSize in PDF pts → multiply by scale to get CSS px
+                  const cssFontSize = (item.fontSize ?? 12) * scale;
+                  ctx2d.font = `${cssFontSize}px ${item.fontName ?? 'sans-serif'}`;
+                  return ctx2d.measureText(itemText).width;
+                } catch { return 0; }
+              })();
+              const itemH = Math.max((item.height ?? 12) * scale, 8);
+              pageMatchPos.push({
+                x: cssX,
+                y: cssY - itemH,
+                width: Math.max(measWidth, itemText.length * 5),
+                height: itemH,
+              });
+            }
+          }
+          if (pageMatchPos.length > 0) {
+            pageMatchesMap.set(i, pageMatchPos);
+          }
+        }
+        // Yield to main thread between batches so UI stays responsive
+        if (batchEnd < maxPage) {
+          await new Promise<void>((resolve) => { globalThis.setTimeout(resolve, 0); });
         }
       }
-      setSearchResultPages(matches);
+      setSearchMatches(pageMatchesMap);
+      const orderedPages = Array.from(pageMatchesMap.keys()).sort((a, b) => a - b);
+      setSearchResultPages(orderedPages);
       setSearchCurrentIndex(0);
-      if (matches.length > 0) {
-        onJumpToPage(matches[0]);
+      if (orderedPages.length > 0) {
+        onJumpToPage(orderedPages[0]);
+        setTimeout(() => {
+          const matches = pageMatchesMap.get(orderedPages[0]) || [];
+          renderSearchHighlightsOnPage(orderedPages[0], matches, 0, matches.length, 0);
+        }, 150);
       }
     } catch { /* silent */ }
     setSearchLoading(false);
   }, [onJumpToPage]);
 
-  const goToPrevSearchResult = () => {
+  const goToPrevSearchResult = useCallback(() => {
     if (searchResultPages.length === 0) return;
     const newIndex = searchCurrentIndex > 0 ? searchCurrentIndex - 1 : searchResultPages.length - 1;
     setSearchCurrentIndex(newIndex);
     onJumpToPage(searchResultPages[newIndex]);
-  };
+    setTimeout(() => {
+      const pageNum = searchResultPages[newIndex];
+      const matches = searchMatches.get(pageNum) || [];
+      let pageOffset = 0;
+      for (const p of searchResultPages) {
+        if (p === pageNum) break;
+        pageOffset += (searchMatches.get(p) || []).length;
+      }
+      clearAllSearchHighlights();
+      renderSearchHighlightsOnPage(pageNum, matches, pageOffset, matches.length, newIndex);
+    }, 150);
+  }, [searchResultPages, searchCurrentIndex, searchMatches, onJumpToPage, renderSearchHighlightsOnPage]);
 
-  const goToNextSearchResult = () => {
+  const goToNextSearchResult = useCallback(() => {
     if (searchResultPages.length === 0) return;
     const newIndex = searchCurrentIndex < searchResultPages.length - 1 ? searchCurrentIndex + 1 : 0;
     setSearchCurrentIndex(newIndex);
     onJumpToPage(searchResultPages[newIndex]);
-  };
+    setTimeout(() => {
+      const pageNum = searchResultPages[newIndex];
+      const matches = searchMatches.get(pageNum) || [];
+      let pageOffset = 0;
+      for (const p of searchResultPages) {
+        if (p === pageNum) break;
+        pageOffset += (searchMatches.get(p) || []).length;
+      }
+      clearAllSearchHighlights();
+      renderSearchHighlightsOnPage(pageNum, matches, pageOffset, matches.length, newIndex);
+    }, 150);
+  }, [searchResultPages, searchCurrentIndex, searchMatches, onJumpToPage, renderSearchHighlightsOnPage]);
 
   // Notify parent when split mode changes so it can adjust layout (e.g. hide AI panel).
   useEffect(() => {
@@ -306,7 +469,7 @@ export function MainCanvas({
     setCompareHistoryIndex(0);
   }, [splitMode, comparePage, compareHistory.length]);
 
-  const navigateComparePage = (target: number, options?: { recordHistory?: boolean }) => {
+  const navigateComparePage = useCallback((target: number, options?: { recordHistory?: boolean }) => {
     const clamped = Math.min(Math.max(Math.round(target), 1), totalPages || 1);
     setComparePage(clamped);
     setComparePageInput(String(clamped));
@@ -322,21 +485,21 @@ export function MainCanvas({
       setCompareHistoryIndex(next.length - 1);
       return next;
     });
-  };
+  }, [totalPages, compareHistoryIndex]);
 
   useEffect(() => {
     if (!splitMode || !compareFollowCitation) return;
     if (!comparePageSignal || comparePageSignal <= 0) return;
     setSplitReason('evidence');
     navigateComparePage(comparePageSignal);
-  }, [splitMode, compareFollowCitation, comparePageSignal]);
+  }, [splitMode, compareFollowCitation, comparePageSignal, navigateComparePage]);
 
   // Follow main view scroll: sync reference pane to the current page the user is viewing.
   useEffect(() => {
     if (!splitMode || !compareFollowCitation) return;
     if (currentPage <= 0 || currentPage === comparePage) return;
     navigateComparePage(currentPage);
-  }, [splitMode, compareFollowCitation, currentPage]);
+  }, [splitMode, compareFollowCitation, currentPage, comparePage, navigateComparePage]);
 
   useEffect(() => {
     if (!comparePaneCommand) return;
@@ -349,10 +512,17 @@ export function MainCanvas({
     if (comparePaneCommand.page > 0) {
       navigateComparePage(comparePaneCommand.page);
     }
-  }, [comparePaneCommand]);
+  }, [comparePaneCommand, navigateComparePage]);
 
   useEffect(() => {
-    if (!splitMode || !hasDocument || totalPages <= 0) return;
+    if (!splitMode || !hasDocument || totalPages <= 0) {
+      // Clean up previous stage if exists
+      if (compareStageRef.current?.parentElement) {
+        compareStageRef.current.parentElement.removeChild(compareStageRef.current);
+        compareStageRef.current = null;
+      }
+      return;
+    }
     const sourceContainer = globalThis.document?.getElementById('pdf-pages-container');
     const targetContainer = globalThis.document?.getElementById('pdf-compare-container');
     if (!(sourceContainer instanceof HTMLElement) || !(targetContainer instanceof HTMLElement)) return;
@@ -386,6 +556,14 @@ export function MainCanvas({
     stage.style.height = `${targetPageEl.offsetHeight * compareZoom}px`;
     stage.appendChild(clone);
     targetContainer.appendChild(stage);
+    compareStageRef.current = stage;
+
+    return () => {
+      if (stage.parentElement) {
+        stage.parentElement.removeChild(stage);
+      }
+      compareStageRef.current = null;
+    };
   }, [splitMode, comparePage, hasDocument, totalPages, currentPage, compareZoom]);
 
   // Listen for custom ai-card-drop events dispatched by AIPanel pointer events
@@ -471,24 +649,29 @@ export function MainCanvas({
 
   // Canvas card drag handlers
 
-  const filteredOutline = outline.filter((item) => {
-    if (!tocQuery.trim()) return true;
-    return item.title.toLowerCase().includes(tocQuery.trim().toLowerCase());
-  });
-  const activeOutlineId = (() => {
+  const filteredOutline = useMemo(() => {
+    if (!tocQuery.trim()) return outline;
+    const q = tocQuery.trim().toLowerCase();
+    return outline.filter((item) => item.title.toLowerCase().includes(q));
+  }, [outline, tocQuery]);
+
+  const activeOutlineId = useMemo(() => {
     const candidates = outline.filter((item) => typeof item.pageNumber === 'number' && (item.pageNumber || 0) <= currentPage);
     if (candidates.length === 0) return null;
     return candidates[candidates.length - 1].id;
-  })();
-  const compareActiveOutlineId = (() => {
+  }, [outline, currentPage]);
+
+  const compareActiveOutlineId = useMemo(() => {
     const candidates = outline.filter((item) => typeof item.pageNumber === 'number' && (item.pageNumber || 0) <= comparePage);
     if (candidates.length === 0) return null;
     return candidates[candidates.length - 1].id;
-  })();
-  const filteredCompareOutline = outline.filter((item) => {
-    if (!compareTocQuery.trim()) return true;
-    return item.title.toLowerCase().includes(compareTocQuery.trim().toLowerCase());
-  });
+  }, [outline, comparePage]);
+
+  const filteredCompareOutline = useMemo(() => {
+    if (!compareTocQuery.trim()) return outline;
+    const q = compareTocQuery.trim().toLowerCase();
+    return outline.filter((item) => item.title.toLowerCase().includes(q));
+  }, [outline, compareTocQuery]);
 
   return (
     <main className="flex-1 min-w-0 overflow-hidden flex flex-col bg-[#fafaf9] relative">
@@ -553,9 +736,10 @@ export function MainCanvas({
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
+                  clearAllSearchHighlights();
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); }
+                  if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); setSearchResultPages([]); setSearchMatches(new Map()); clearAllSearchHighlights(); }
                   if (e.key === 'Enter') {
                     if (!pdfFileBlob) { setSearchError('请重新打开文档（从文件）以启用搜索'); return; }
                     if (!searchQuery.trim()) { setSearchError(null); return; }
@@ -884,16 +1068,17 @@ export function MainCanvas({
       )}
 
       {/* Context toolbar for selected text — iOS/Mac-style inline action bar */}
-      {textHandle && textHandle.text?.trim() && (
+      {textHandleRef.current && textHandleRef.current.text?.trim() && (
         <>
           {/* Invisible backdrop to catch outside clicks */}
           <div
             className="fixed inset-0 z-30"
-            onClick={() => { setTextHandle(null); globalThis.getSelection?.()?.removeAllRanges(); }}
+            onClick={() => { textHandleRef.current = null; forceTextToolbarUpdate((n) => n + 1); globalThis.getSelection?.()?.removeAllRanges(); }}
             onMouseDown={(e) => {
               // Don't dismiss if clicking inside the toolbar itself
               if ((e.target as HTMLElement).closest('[data-text-toolbar]')) return;
-              setTextHandle(null);
+              textHandleRef.current = null;
+              forceTextToolbarUpdate((n) => n + 1);
               globalThis.getSelection?.()?.removeAllRanges();
             }}
           />
@@ -901,7 +1086,7 @@ export function MainCanvas({
           <div
             data-text-toolbar
             className="text-action-toolbar fixed z-40 flex items-center gap-0.5 rounded-xl border border-[#e7e5e4]/80 bg-white/95 shadow-[0_4px_20px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.08)] px-1 py-1 backdrop-blur-md"
-            style={{ left: textHandle.x, top: textHandle.y, transform: 'translateX(-50%)' }}
+            style={{ left: textHandleRef.current.x, top: textHandleRef.current.y, transform: 'translateX(-50%)' }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             <button
@@ -910,7 +1095,8 @@ export function MainCanvas({
               title="Highlight"
               onClick={() => {
                 globalThis.getSelection?.()?.removeAllRanges();
-                setTextHandle(null);
+                textHandleRef.current = null;
+        forceTextToolbarUpdate((n) => n + 1);
                 onHighlightSelection();
               }}
             >
@@ -925,9 +1111,30 @@ export function MainCanvas({
               className="text-action-btn"
               title="Add Note"
               onClick={() => {
-                globalThis.getSelection?.()?.removeAllRanges();
-                setTextHandle(null);
-                onAddNoteSelection();
+                // Capture selection range before clearing it — needed for anchored note connector.
+                const sel = globalThis.getSelection?.();
+                const capturedText = (sel && !sel.isCollapsed) ? sel.toString().trim() : undefined;
+                let capturedRange: { left: number; top: number; width: number; height: number; pageNumber: number } | undefined;
+                if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                  const range = sel.getRangeAt(0);
+                  const rects = Array.from(range.getClientRects()).filter((r) => r.width > 1 && r.height > 1);
+                  if (rects.length > 0) {
+                    const rect = rects[0];
+                    const pageEl = globalThis.document?.elementFromPoint(rect.left + 1, rect.top + 1)
+                      ?.closest('.pdf-page') as HTMLElement | null;
+                    capturedRange = {
+                      left: rect.left,
+                      top: rect.top,
+                      width: rect.width,
+                      height: rect.height,
+                      pageNumber: pageEl ? Number(pageEl.dataset.pageNumber || '1') : 1,
+                    };
+                  }
+                }
+                sel?.removeAllRanges();
+                textHandleRef.current = null;
+                forceTextToolbarUpdate((n) => n + 1);
+                onAddNoteSelection(undefined, undefined, capturedText, capturedRange);
               }}
             >
               <span className="text-action-icon"><StickyNote size={14} /></span>
@@ -942,7 +1149,8 @@ export function MainCanvas({
               title="Ask AI about selected text"
               onClick={() => {
                 globalThis.getSelection?.()?.removeAllRanges();
-                setTextHandle(null);
+                textHandleRef.current = null;
+        forceTextToolbarUpdate((n) => n + 1);
                 onExplainSelection();
               }}
             >
@@ -958,10 +1166,11 @@ export function MainCanvas({
               title="Copy selected text"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(textHandle.text);
+                  await navigator.clipboard.writeText(textHandleRef.current?.text || '');
                 } catch { /* ignore */ }
                 globalThis.getSelection?.()?.removeAllRanges();
-                setTextHandle(null);
+                textHandleRef.current = null;
+        forceTextToolbarUpdate((n) => n + 1);
               }}
             >
               <span className="text-action-icon"><Copy size={14} /></span>
@@ -985,7 +1194,26 @@ export function MainCanvas({
           <button className="ctx-menu-item" onClick={() => { onHighlightSelection(); setContextMenu(null); }}>
             Highlight
           </button>
-          <button className="ctx-menu-item" onClick={() => { setContextMenu(null); onAddNoteSelection(contextMenu ? { x: contextMenu.x, y: contextMenu.y } : undefined, contextMenu?.targetPageNumber); }}>
+          <button className="ctx-menu-item" onClick={() => {
+            const sel = globalThis.getSelection?.();
+            const capturedText = (sel && !sel.isCollapsed) ? sel.toString().trim() : undefined;
+            let capturedRange: { left: number; top: number; width: number; height: number; pageNumber: number } | undefined;
+            if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+              const range = sel.getRangeAt(0);
+              const rects = Array.from(range.getClientRects()).filter((r) => r.width > 1 && r.height > 1);
+              if (rects.length > 0) {
+                const rect = rects[0];
+                const pageEl = globalThis.document?.elementFromPoint(rect.left + 1, rect.top + 1)
+                  ?.closest('.pdf-page') as HTMLElement | null;
+                capturedRange = {
+                  left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+                  pageNumber: pageEl ? Number(pageEl.dataset.pageNumber || '1') : 1,
+                };
+              }
+            }
+            setContextMenu(null);
+            onAddNoteSelection(contextMenu ? { x: contextMenu.x, y: contextMenu.y } : undefined, contextMenu?.targetPageNumber, capturedText, capturedRange);
+          }}>
             Add Note
           </button>
           <button className="ctx-menu-item" onClick={() => { onExplainSelection(); setContextMenu(null); }}>

@@ -17,16 +17,23 @@ function getCachedThumbnail(fingerprint: string, pageNum: number): string | unde
 }
 
 function setCachedThumbnail(fingerprint: string, pageNum: number, dataUrl: string): void {
-  // Evict oldest entries when cache grows large (LRU approximation).
-  if (pageThumbnailCache.size > 500) {
-    const firstKey = pageThumbnailCache.keys().next().value;
-    if (firstKey) pageThumbnailCache.delete(firstKey);
+  // Evict oldest 20% of entries when cache grows too large (batch LRU eviction).
+  const MAX_SIZE = 500;
+  const EVICT_BATCH = Math.max(10, Math.floor(MAX_SIZE * 0.2));
+  if (pageThumbnailCache.size > MAX_SIZE) {
+    const keysToEvict = Array.from(pageThumbnailCache.keys()).slice(0, EVICT_BATCH);
+    keysToEvict.forEach((k) => pageThumbnailCache.delete(k));
   }
   pageThumbnailCache.set(cacheKey(fingerprint, pageNum), dataUrl);
 }
 
-function clearThumbnailCache(): void {
-  pageThumbnailCache.clear();
+/** Evict only entries from other documents (different fingerprint), preserving current session's cache. */
+function evictOtherFingerprints(currentFingerprint: string): void {
+  for (const key of pageThumbnailCache.keys()) {
+    if (!key.startsWith(`${currentFingerprint}:`)) {
+      pageThumbnailCache.delete(key);
+    }
+  }
 }
 
 export interface PdfOutlineItem {
@@ -39,6 +46,7 @@ export interface PdfOutlineItem {
 export interface RenderPdfResult {
   totalPages: number;
   outline: PdfOutlineItem[];
+  cleanup?: () => void;
 }
 
 interface RenderOptions {
@@ -206,9 +214,19 @@ export async function renderSinglePage(
   await page.render({ canvasContext: ctx, viewport }).promise;
 
   // Cache the rendered canvas for future instant display.
+  // Downscale to max 200px dimension to avoid memory-intensive data URLs on high-DPI screens.
   if (fingerprint) {
     try {
-      setCachedThumbnail(fingerprint, pageNum, canvas.toDataURL('image/jpeg', 0.75));
+      const maxDim = 200;
+      const scale = Math.min(maxDim / canvas.width, maxDim / canvas.height, 1);
+      const thumbCanvas = document.createElement('canvas');
+      thumbCanvas.width = Math.max(1, Math.floor(canvas.width * scale));
+      thumbCanvas.height = Math.max(1, Math.floor(canvas.height * scale));
+      const thumbCtx = thumbCanvas.getContext('2d');
+      if (thumbCtx) {
+        thumbCtx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+        setCachedThumbnail(fingerprint, pageNum, thumbCanvas.toDataURL('image/jpeg', 0.7));
+      }
     } catch {
       // Storage errors are non-fatal.
     }
@@ -266,6 +284,8 @@ interface LazyRenderState {
   /** The highest page number currently rendered or in-flight.
    *  Used to keep the queue focused near the visible front. */
   maxLoadedPage: number;
+  /** Track skeleton page numbers that have been enqueued to avoid repeated querySelectorAll calls. */
+  knownSkeletonPages: Set<number>;
 }
 
 function createLazyState(
@@ -289,6 +309,7 @@ function createLazyState(
     rootMargin: '400px 0px', // pre-render 400px before viewport
     LAZY_BATCH: 5,
     maxLoadedPage: 0,
+    knownSkeletonPages: new Set(),
   };
 }
 
@@ -303,17 +324,23 @@ function enqueueLazyPages(
   // from flooding with far-away pages and keeps render budget focused.
   const LOOKAHEAD = 2;
   const cutoff = state.maxLoadedPage + LOOKAHEAD;
-  const skeletons = container.querySelectorAll<HTMLElement>(
+
+  // Find skeleton pages we haven't enqueued yet by querying once for new skeletons.
+  // We track enqueued pages in knownSkeletonPages to avoid repeated DOM queries.
+  const unknownSkeletons = container.querySelectorAll<HTMLElement>(
     '.pdf-page-skeleton[data-page-number]'
   );
-  for (const skeleton of skeletons) {
+  for (const skeleton of unknownSkeletons) {
     const pageNum = Number(skeleton.dataset.pageNumber);
-    if (pageNum > cutoff) continue;
-    if (!state.renderedPages.has(pageNum) && !state.pendingPages.has(pageNum)) {
-      state.renderQueue.push(pageNum);
-      state.pendingPages.add(pageNum);
+    if (!state.knownSkeletonPages.has(pageNum)) {
+      state.knownSkeletonPages.add(pageNum);
+      if (pageNum <= cutoff && !state.renderedPages.has(pageNum) && !state.pendingPages.has(pageNum)) {
+        state.renderQueue.push(pageNum);
+        state.pendingPages.add(pageNum);
+      }
     }
   }
+
   if (!state.isProcessing) {
     processRenderQueue(container, state);
   }
@@ -420,9 +447,9 @@ export async function renderPagesToContainer(
   container.innerHTML = '';
   const dpr = Math.min(globalThis.window?.devicePixelRatio || 1, 2);
 
-  // Compute fingerprint for thumbnail cache and clear stale entries.
+  // Compute fingerprint for thumbnail cache and evict entries from other documents.
   const fingerprint = fingerprintFile(file);
-  clearThumbnailCache();
+  evictOtherFingerprints(fingerprint);
 
   // Extract outline (non-blocking, happens while pages render)
   const outlinePromise = extractOutline(pdfDoc).then((extracted) => {
@@ -486,7 +513,8 @@ export async function renderPagesToContainer(
   for (let i = 1; i <= initialBatchEnd; i++) {
     lazyState.renderedPages.add(i);
   }
-  const cleanupLazy = setupLazyRendering(container, lazyState);
+  // setupLazyRendering returns an observer cleanup; chain it with our own cancel logic.
+  const lazyObsCleanup = setupLazyRendering(container, lazyState);
 
   // Predictive preload: immediately queue the next LAZY_BATCH pages after initial
   // render completes, without waiting for scroll/IntersectionObserver.
@@ -504,8 +532,14 @@ export async function renderPagesToContainer(
   // Wait for outline extraction
   const outline = await outlinePromise;
 
-  // Expose cleanup on container for callers that need to teardown
-  (container as any).__lazyCleanup = cleanupLazy;
-
-  return { totalPages, outline };
+  // Return cleanup function so callers can properly teardown
+  const cleanupLazy = () => {
+    lazyState.shouldCancel = () => true;
+    lazyObsCleanup(); // disconnect IntersectionObserver
+    if (lazyState.observer) {
+      lazyState.observer.disconnect();
+      lazyState.observer = null;
+    }
+  };
+  return { totalPages, outline, cleanup: cleanupLazy };
 }

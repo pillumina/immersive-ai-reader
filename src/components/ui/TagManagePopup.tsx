@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Plus, X, Tag } from 'lucide-react';
 import { Tag as TagType, TAG_PRESET_COLORS, PRESET_TAGS, DEFAULT_TAG_COLOR } from '@/types/annotation';
 import { tagCommands } from '@/lib/tauri';
@@ -122,7 +122,7 @@ export function TagManagePopup({ annotationId, onClose, onTagsChanged }: TagMana
   }, [annotationId]);
 
   // Filter suggestions
-  const suggestions = search.trim()
+  const suggestions = useMemo(() => search.trim()
     ? allTags.filter(
         (t) =>
           t.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -130,7 +130,9 @@ export function TagManagePopup({ annotationId, onClose, onTagsChanged }: TagMana
       )
     : PRESET_TAGS.filter(
         (pt) => !tags.some((tt) => tt.name === pt.name)
-      );
+      ),
+    [search, allTags, tags]
+  );
 
   const handleAddTag = async (name: string, color: string) => {
     if (!name.trim()) return;

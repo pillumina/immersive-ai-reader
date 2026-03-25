@@ -64,12 +64,18 @@ export function usePDFThumbnails(
         const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         if (abortRef.current) return;
 
-        // Render first page immediately, rest sequentially to avoid blocking
+        // Render first page immediately, rest in parallel batches of 4
         await renderThumbnail(pdfDoc, 1);
 
-        for (let page = 2; page <= pageCount; page++) {
+        const BATCH_SIZE = 4;
+        for (let batchStart = 2; batchStart <= pageCount; batchStart += BATCH_SIZE) {
           if (abortRef.current) break;
-          await renderThumbnail(pdfDoc, page);
+          const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, pageCount);
+          await Promise.all(
+            Array.from({ length: batchEnd - batchStart + 1 }, (_, i) =>
+              renderThumbnail(pdfDoc, batchStart + i)
+            )
+          );
         }
       } catch (err) {
         console.warn('Thumbnail rendering error:', err);

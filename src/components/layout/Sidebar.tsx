@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Settings, Trash2, Link, FileText, Library, Columns, Search } from 'lucide-react';
 import { PDFDocument } from '@/types/document';
 import { Logo } from '@/components/ui/Logo';
@@ -40,12 +40,15 @@ export function Sidebar({
   const [activeTab, setActiveTab] = useState<TabId>('library');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredDocs = searchQuery.trim()
-    ? documents.filter((d) => d.fileName.toLowerCase().includes(searchQuery.toLowerCase()))
-    : documents;
+  const filteredDocs = useMemo(() =>
+    searchQuery.trim()
+      ? documents.filter((d) => d.fileName.toLowerCase().includes(searchQuery.toLowerCase()))
+      : documents,
+    [searchQuery, documents]
+  );
 
   // Group documents by approximate date for knowledge base feel
-  const grouped = filteredDocs.reduce<Record<string, PDFDocument[]>>((acc, doc) => {
+  const grouped = useMemo(() => filteredDocs.reduce<Record<string, PDFDocument[]>>((acc, doc) => {
     const date = new Date(doc.updatedAt || doc.createdAt);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
@@ -58,10 +61,13 @@ export function Sidebar({
     if (!acc[label]) acc[label] = [];
     acc[label].push(doc);
     return acc;
-  }, {});
+  }, {}), [filteredDocs]);
 
   const groupOrder = ['Today', 'Yesterday', 'This Week', 'This Month', 'Earlier'];
-  const sortedGroups = groupOrder.filter((g) => grouped[g]?.length > 0);
+  const sortedGroups = useMemo(() =>
+    groupOrder.filter((g) => grouped[g]?.length > 0),
+    [grouped]
+  );
 
   return (
     <aside className="w-[260px] border-r border-[#e7e5e4] bg-white flex flex-col select-none overflow-hidden">

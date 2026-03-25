@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useId } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 
@@ -27,7 +27,8 @@ export function DialogContent({
   title?: string;
   description?: string;
 }) {
-  const descId = description ? `dialog-desc-${Math.random().toString(36).slice(2)}` : undefined;
+  const generatedId = useId();
+  const descId = description ? `dialog-desc-${generatedId}` : undefined;
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="dialog-overlay" />

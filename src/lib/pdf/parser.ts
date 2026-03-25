@@ -16,9 +16,9 @@ export interface ChapterInfo {
 }
 
 /**
- * 检查页数限制
+ * 检查页数限制，并返回 arrayBuffer 以便复用（避免二次解析）
  */
-export async function checkPageLimit(file: File): Promise<number> {
+export async function checkPageLimit(file: File): Promise<{ pageCount: number; buffer: ArrayBuffer }> {
   const arrayBuffer = await file.arrayBuffer();
   const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const pageCount = pdfDoc.numPages;
@@ -27,14 +27,15 @@ export async function checkPageLimit(file: File): Promise<number> {
     throw new Error(`PDF has ${pageCount} pages. Maximum supported is ${MAX_PAGE_COUNT} pages.`);
   }
 
-  return pageCount;
+  return { pageCount, buffer: arrayBuffer };
 }
 
 /**
  * 从 PDF 提取文本（支持大文档分批处理）
+ * 如果传入 buffer 则复用之，不再重新解析
  */
-export async function extractTextFromPDF(file: Blob): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
+export async function extractTextFromPDF(file: Blob, reuseBuffer?: ArrayBuffer): Promise<string> {
+  const arrayBuffer = reuseBuffer ?? await file.arrayBuffer();
   const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const totalPages = pdfDoc.numPages;
 
@@ -62,13 +63,15 @@ export async function extractTextFromPDF(file: Blob): Promise<string> {
 
 /**
  * 从 PDF 提取指定页面范围的文本
+ * 如果传入 reuseBuffer 则复用之（避免在 extractTextFromPageRanges 中重复解析）
  */
 export async function extractTextFromPageRange(
   file: Blob,
   startPage: number,
-  endPage: number
+  endPage: number,
+  reuseBuffer?: ArrayBuffer
 ): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
+  const arrayBuffer = reuseBuffer ?? await file.arrayBuffer();
   const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const totalPages = pdfDoc.numPages;
 
@@ -104,21 +107,38 @@ export async function extractTextFromPageRange(
 
 /**
  * 从 PDF 提取多个页面范围的文本（支持多选章节）
+ * 解析 PDF 一次，并行提取各章节
+ * 如果传入 reuseBuffer 则复用（避免重复解析）
  */
 export async function extractTextFromPageRanges(
   file: Blob,
-  pageRanges: Array<{ startPage: number; endPage: number }>
+  pageRanges: Array<{ startPage: number; endPage: number }>,
+  reuseBuffer?: ArrayBuffer
 ): Promise<string> {
+  const arrayBuffer = reuseBuffer ?? await file.arrayBuffer();
+  const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const totalPages = pdfDoc.numPages;
+
   // Sort by start page to maintain document order
   const sorted = [...pageRanges].sort((a, b) => a.startPage - b.startPage);
-  const parts: string[] = [];
 
-  for (const range of sorted) {
-    const text = await extractTextFromPageRange(file, range.startPage, range.endPage);
-    if (text) parts.push(text);
+  const parts: string[] = [];
+  for (const { startPage, endPage } of sorted) {
+    const actualStart = Math.max(1, Math.min(startPage, totalPages));
+    const actualEnd = Math.max(actualStart, Math.min(endPage, totalPages));
+    if (actualStart > actualEnd) continue;
+    let text = '';
+    for (let pageNum = actualStart; pageNum <= actualEnd; pageNum++) {
+      const page = await pdfDoc.getPage(pageNum);
+      const content = await page.getTextContent();
+      text += content.items.map((item: any) => item.str).join(' ') + '\n';
+    }
+    parts.push(text.trim());
+    // Yield to UI thread to avoid blocking
+    await new Promise(resolve => setTimeout(resolve, 0));
   }
 
-  return parts.join('\n\n');
+  return parts.filter(Boolean).join('\n\n');
 }
 
 /**

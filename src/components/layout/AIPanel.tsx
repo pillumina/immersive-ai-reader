@@ -118,6 +118,12 @@ export function AIPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
+  const scrollThrottleRef = useRef<number | null>(null);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resizeListenersRef = useRef<{
+    move: ((e: PointerEvent) => void) | null;
+    up: (() => void) | null;
+  }>({ move: null, up: null });
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [focusedMessageId, setFocusedMessageId] = useState<string | null>(null);
   const pinnedIdSet = useMemo(() => new Set(pinnedMessageIds), [pinnedMessageIds]);
@@ -125,14 +131,25 @@ export function AIPanel({
 
   useEffect(() => {
     const container = messagesContainerRef.current;
-    if (!container) return;
-    if (!shouldStickToBottomRef.current) return;
+    if (!container || !shouldStickToBottomRef.current) return;
 
-    container.scrollTo({
-      top: container.scrollHeight,
-      // Streaming updates happen frequently; smooth here causes scroll jitter.
-      behavior: isLoading ? 'auto' : 'smooth',
-    });
+    // Throttle scroll updates during streaming to avoid excessive reflows.
+    if (isLoading) {
+      if (scrollThrottleRef.current !== null) return;
+      scrollThrottleRef.current = globalThis.setTimeout(() => {
+        container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+        scrollThrottleRef.current = null;
+      }, 100);
+    } else {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }
+
+    return () => {
+      if (scrollThrottleRef.current !== null) {
+        globalThis.clearTimeout(scrollThrottleRef.current);
+        scrollThrottleRef.current = null;
+      }
+    };
   }, [messages, isLoading]);
 
   useEffect(() => {
@@ -148,6 +165,23 @@ export function AIPanel({
     };
     globalThis.addEventListener('ai-open-message', handler as EventListener);
     return () => globalThis.removeEventListener('ai-open-message', handler as EventListener);
+  }, []);
+
+  // Clean up timers and event listeners on unmount.
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = null;
+      }
+      // Remove resize pointer listeners if component unmounts mid-drag.
+      if (resizeListenersRef.current.move) {
+        globalThis.document?.removeEventListener('pointermove', resizeListenersRef.current.move as unknown as EventListener);
+      }
+      if (resizeListenersRef.current.up) {
+        globalThis.document?.removeEventListener('pointerup', resizeListenersRef.current.up as unknown as EventListener);
+      }
+    };
   }, []);
 
   const handleMessagesScroll = () => {
@@ -172,7 +206,11 @@ export function AIPanel({
     try {
       await navigator.clipboard.writeText(msg.content || '');
       setCopiedMessageId(msg.id || null);
-      setTimeout(() => setCopiedMessageId(null), 1200);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => {
+        setCopiedMessageId(null);
+        copiedTimerRef.current = null;
+      }, 1200);
     } catch {
       // ignore
     }
@@ -272,10 +310,18 @@ export function AIPanel({
 
           const onPointerUp = () => {
             setIsResizing(false);
-            globalThis.document?.removeEventListener('pointermove', onPointerMove as unknown as EventListener);
-            globalThis.document?.removeEventListener('pointerup', onPointerUp);
+            if (resizeListenersRef.current.move) {
+              globalThis.document?.removeEventListener('pointermove', resizeListenersRef.current.move as unknown as EventListener);
+              resizeListenersRef.current.move = null;
+            }
+            if (resizeListenersRef.current.up) {
+              globalThis.document?.removeEventListener('pointerup', resizeListenersRef.current.up as unknown as EventListener);
+              resizeListenersRef.current.up = null;
+            }
           };
 
+          resizeListenersRef.current.move = onPointerMove;
+          resizeListenersRef.current.up = onPointerUp;
           globalThis.document?.addEventListener('pointermove', onPointerMove as unknown as EventListener);
           globalThis.document?.addEventListener('pointerup', onPointerUp);
         }}

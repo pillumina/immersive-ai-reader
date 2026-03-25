@@ -41,6 +41,16 @@ function LibraryList({
   const [renameValue, setRenameValue] = useState('');
   const newLibRef = useRef<HTMLInputElement>(null);
   const renameRef = useRef<HTMLInputElement>(null);
+  const renameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tagBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up pending timers on unmount.
+  useEffect(() => {
+    return () => {
+      if (renameTimerRef.current) clearTimeout(renameTimerRef.current);
+      if (tagBlurTimerRef.current) clearTimeout(tagBlurTimerRef.current);
+    };
+  }, []);
 
   // Close context menu on outside click
   useEffect(() => {
@@ -52,10 +62,16 @@ function LibraryList({
 
   // Focus rename input when activated
   useEffect(() => {
-    if (renamingLibId) {
-      setRenameValue(libraries.find((l) => l.id === renamingLibId)?.name ?? '');
-      setTimeout(() => renameRef.current?.select(), 50);
-    }
+    if (!renamingLibId) return;
+    setRenameValue(libraries.find((l) => l.id === renamingLibId)?.name ?? '');
+    if (renameTimerRef.current) clearTimeout(renameTimerRef.current);
+    renameTimerRef.current = setTimeout(() => renameRef.current?.select(), 50);
+    return () => {
+      if (renameTimerRef.current) {
+        clearTimeout(renameTimerRef.current);
+        renameTimerRef.current = null;
+      }
+    };
   }, [renamingLibId, libraries]);
 
   const handleRenameSubmit = (libId: string) => {
@@ -505,6 +521,7 @@ function DocumentDetail({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const tagBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleTagInput = (value: string) => {
     setTagInput(value);
@@ -530,6 +547,13 @@ function DocumentDetail({
     globalThis.document.addEventListener('mousedown', handler);
     return () => globalThis.document.removeEventListener('mousedown', handler);
   }, [showPicker]);
+
+  // Clean up pending timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (tagBlurTimerRef.current) clearTimeout(tagBlurTimerRef.current);
+    };
+  }, []);
 
   const handleAddTag = (tagName: string) => {
     if (document && tagName.trim() && !tags.includes(tagName.trim())) {
@@ -626,7 +650,10 @@ function DocumentDetail({
               if (e.key === 'Enter') { e.preventDefault(); handleAddTag(tagInput); }
               if (e.key === 'Escape') { setTagInput(''); setShowSuggestions(false); }
             }}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            onBlur={() => {
+              if (tagBlurTimerRef.current) clearTimeout(tagBlurTimerRef.current);
+              tagBlurTimerRef.current = setTimeout(() => setShowSuggestions(false), 150);
+            }}
             placeholder="Add tag…"
             className="doc-detail__tag-input"
           />
