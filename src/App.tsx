@@ -354,10 +354,20 @@ function AppInner() {
   }, [renderError]);
 
   useEffect(() => {
-    const handler = () => setToast({ message: 'AI card removed from canvas', type: 'success' });
+    const handler = () => {
+      setToast({ message: 'AI card removed from canvas', type: 'success' });
+      if (focusState.isActive) {
+        void loadCaptures();
+        updateCaptureCounts(
+          focusState.highlightsCount,
+          focusState.notesCount,
+          Math.max(0, focusState.aiResponsesCount - 1)
+        );
+      }
+    };
     globalThis.addEventListener('ai-card-unpinned', handler);
     return () => globalThis.removeEventListener('ai-card-unpinned', handler);
-  }, []);
+  }, [focusState.isActive, loadCaptures, focusState.highlightsCount, focusState.notesCount, focusState.aiResponsesCount, updateCaptureCounts]);
 
   // Use a ref to always call the latest handleDeleteNote (avoids stale closure in event listener).
   const handleDeleteNoteRef = useRef<any>(null);
@@ -440,6 +450,7 @@ function AppInner() {
   // ─── Capture data for Focus Mode ────────────────────────────────
   const NOTE_PREFIX = '__NOTE__|';
   const [captures, setCaptures] = useState<CaptureItem[]>([]);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
 
   /** Convert a BackendAnnotation to a CaptureItem, or null if it's not a capture type */
   const annotationToCapture = useCallback(
@@ -716,6 +727,63 @@ function AppInner() {
     // AI responses: no edit support yet
   };
 
+  /** Build a synthesis prompt from all captures and send to AI */
+  const handleSynthesize = async () => {
+    if (captures.length < 3) return;
+    setIsSynthesizing(true);
+
+    // Sort by capturedAt
+    const sorted = [...captures].sort(
+      (a, b) => new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime()
+    );
+
+    const highlights = sorted.filter((c) => c.type === 'highlight');
+    const notes = sorted.filter((c) => c.type === 'note');
+    const aiResponses = sorted.filter((c) => c.type === 'ai-response');
+
+    const sections: string[] = [];
+    if (highlights.length > 0) {
+      sections.push(`## 📌 Highlights (${highlights.length})\n` +
+        highlights.map((h) => `> "${h.preview}" [p${h.pageNumber}]`).join('\n'));
+    }
+    if (notes.length > 0) {
+      sections.push(`## 📝 Notes (${notes.length})\n` +
+        notes.map((n) => `- [p${n.pageNumber}] ${n.preview}`).join('\n'));
+    }
+    if (aiResponses.length > 0) {
+      sections.push(`## 🤖 AI Q&A (${aiResponses.length})\n` +
+        aiResponses.map((a) => `**Q:** [p${a.pageNumber}]\n**A:** ${a.preview}`).join('\n\n'));
+    }
+
+    const prompt = `You are helping synthesize notes from a PDF reading session. Based on the following captures, provide a structured summary that:
+1. Identifies the main themes and key concepts
+2. Connects related highlights and notes
+3. Highlights gaps or areas needing further reading
+4. Suggests next steps or questions to explore
+
+## Document: ${currentDocument?.fileName ?? 'Unknown'}
+
+${sections.join('\n\n')}
+
+Please provide a comprehensive synthesis in Chinese.`;
+
+    // In Focus Mode: open mini AI window if closed, then send
+    if (focusState.isActive && !focusState.miniAIWindowOpen) {
+      toggleMiniAI();
+    }
+
+    try {
+      await sendMessage(prompt, 'auto', []);
+      if (focusState.isActive) {
+        toggleCaptureDrawer(); // close drawer after sending
+      }
+    } catch {
+      setToast({ message: '合成失败，请重试', type: 'error' });
+    } finally {
+      setIsSynthesizing(false);
+    }
+  };
+
   // ─── Load captures when document changes ─────────────────────────
   useEffect(() => {
     void loadCaptures();
@@ -941,6 +1009,9 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
         pageNumber: pageHint,
       });
       setPinnedMessageIds((prev) => (prev.includes(messageId) ? prev : [...prev, messageId]));
+      if (focusState.isActive) {
+        updateCaptureCounts(focusState.highlightsCount, focusState.notesCount, focusState.aiResponsesCount + 1);
+      }
       const resolvedPage = pageHint || currentPage;
       setToast({ message: `Pinned as AI card to page ${resolvedPage}`, type: 'success' });
     } catch (error) {
@@ -1456,6 +1527,8 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
           onJumpTo={jumpToPage}
           onEditCapture={handleEditCapture}
           onDeleteCapture={handleDeleteCapture}
+          onSynthesize={handleSynthesize}
+          isSynthesizing={isSynthesizing}
         />
       )}
 
