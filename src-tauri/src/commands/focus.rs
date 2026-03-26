@@ -45,3 +45,23 @@ pub async fn get_focus_session_history(
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn get_all_focus_sessions(
+    repo: State<'_, FocusRepository>,
+    document_id: String,
+) -> Result<Vec<FocusSession>, String> {
+    repo.get_all(&document_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_focus_session(
+    repo: State<'_, FocusRepository>,
+    session_id: String,
+) -> Result<(), String> {
+    repo.delete(&session_id)
+        .await
+        .map_err(|e| e.to_string())
+}

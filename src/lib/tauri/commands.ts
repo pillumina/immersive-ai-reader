@@ -453,4 +453,20 @@ export const focusCommands = {
       throw new Error(unwrapInvokeError(error));
     }
   },
+
+  getAllSessions: async (documentId: string): Promise<FocusSession[]> => {
+    try {
+      return await invoke<FocusSession[]>('get_all_focus_sessions', { documentId });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+
+  deleteSession: async (sessionId: string): Promise<void> => {
+    try {
+      await invoke('delete_focus_session', { sessionId });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
 };

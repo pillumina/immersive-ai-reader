@@ -1631,6 +1631,19 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
           onDeleteCapture={handleDeleteCapture}
           onSynthesize={handleSynthesize}
           isSynthesizing={isSynthesizing}
+          documentId={currentDocument?.id}
+          onResumeSession={async (session) => {
+            toggleCaptureDrawer();
+            // Enter Focus Mode (it will fetch last session for this doc as resumeSession)
+            await enterFocusMode(currentDocument!.id, session.last_page, false);
+            // Override conversation to the session's conversation
+            if (session.ai_conversation_id) {
+              await setConversationOverride(session.ai_conversation_id);
+            }
+            // Jump to the session's last page
+            jumpToPage(session.last_page);
+          }}
+          totalPages={totalPages}
         />
       )}
 

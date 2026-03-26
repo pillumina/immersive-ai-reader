@@ -174,4 +174,26 @@ impl FocusRepository {
         .await?;
         Ok(rows)
     }
+
+    pub async fn get_all(&self, document_id: &str) -> Result<Vec<FocusSession>> {
+        let rows: Vec<FocusSession> = sqlx::query_as(
+            r#"
+            SELECT * FROM focus_sessions
+            WHERE document_id = ?
+            ORDER BY entered_at DESC
+            "#,
+        )
+        .bind(document_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    pub async fn delete(&self, session_id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM focus_sessions WHERE session_id = ?")
+            .bind(session_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
 }

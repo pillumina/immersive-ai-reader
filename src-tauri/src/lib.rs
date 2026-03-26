@@ -100,6 +100,8 @@ pub fn run() {
             commands::focus::update_focus_session,
             commands::focus::get_last_focus_session,
             commands::focus::get_focus_session_history,
+            commands::focus::get_all_focus_sessions,
+            commands::focus::delete_focus_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
