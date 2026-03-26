@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::{Duration, Instant};
+use reqwest::Error as ReqwestError;
+
+/// Retryable error kinds for network failures.
+fn is_retryable_error(err: &ReqwestError) -> bool {
+    err.is_timeout() || err.is_connect() || err.is_request()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
@@ -110,6 +116,47 @@ impl AIClient {
         api_key: &str,
         messages: Vec<ChatMessage>,
     ) -> Result<String, anyhow::Error> {
+        const MAX_RETRIES: u32 = 3;
+        let mut attempt = 0;
+
+        loop {
+            attempt += 1;
+            let result = self._call_chat_once(provider, endpoint, model, api_key, &messages).await;
+
+            match result {
+                Ok(body) => return Ok(body),
+                Err(err) if attempt >= MAX_RETRIES => return Err(err),
+                Err(err) => {
+                    let retryable = err.downcast_ref::<ReqwestError>().map(is_retryable_error).unwrap_or(false)
+                        || Self::_is_retryable_http_error(&err);
+                    if retryable {
+                        let delay = Duration::from_secs(2u64.pow(attempt - 1));
+                        eprintln!(
+                            "[AI Client] request attempt {}/{} failed ({}), retrying in {:?}: {}",
+                            attempt, MAX_RETRIES, provider, delay, err
+                        );
+                        tokio::time::sleep(delay).await;
+                    } else {
+                        return Err(err);
+                    }
+                }
+            }
+        }
+    }
+
+    fn _is_retryable_http_error(err: &anyhow::Error) -> bool {
+        let s = err.to_string();
+        s.starts_with("HTTP 429") || s.starts_with("HTTP 500") || s.starts_with("HTTP 502") || s.starts_with("HTTP 503") || s.starts_with("HTTP 504")
+    }
+
+    async fn _call_chat_once(
+        &self,
+        provider: &str,
+        endpoint: &str,
+        model: &str,
+        api_key: &str,
+        messages: &[ChatMessage],
+    ) -> Result<String, anyhow::Error> {
         let endpoint = Self::resolve_chat_endpoint(provider, endpoint)?;
         let mut request = self.http_client
             .post(&endpoint)
@@ -119,7 +166,6 @@ impl AIClient {
                 "stream": false,
             }));
 
-        // Default to Bearer auth for OpenAI-compatible endpoints.
         request = request.header("Authorization", format!("Bearer {}", api_key));
         if provider == "anthropic" {
             request = request
@@ -157,6 +203,42 @@ impl AIClient {
         model: &str,
         api_key: &str,
         messages: Vec<ChatMessage>,
+    ) -> Result<reqwest::Response, anyhow::Error> {
+        const MAX_RETRIES: u32 = 3;
+        let mut attempt = 0;
+
+        loop {
+            attempt += 1;
+            let result = self._call_chat_stream_once(provider, endpoint, model, api_key, &messages).await;
+
+            match result {
+                Ok(response) => return Ok(response),
+                Err(err) if attempt >= MAX_RETRIES => return Err(err),
+                Err(err) => {
+                    let retryable = err.downcast_ref::<ReqwestError>().map(is_retryable_error).unwrap_or(false)
+                        || Self::_is_retryable_http_error(&err);
+                    if retryable {
+                        let delay = Duration::from_secs(2u64.pow(attempt - 1));
+                        eprintln!(
+                            "[AI Client] stream request attempt {}/{} failed ({}), retrying in {:?}: {}",
+                            attempt, MAX_RETRIES, provider, delay, err
+                        );
+                        tokio::time::sleep(delay).await;
+                    } else {
+                        return Err(err);
+                    }
+                }
+            }
+        }
+    }
+
+    async fn _call_chat_stream_once(
+        &self,
+        provider: &str,
+        endpoint: &str,
+        model: &str,
+        api_key: &str,
+        messages: &[ChatMessage],
     ) -> Result<reqwest::Response, anyhow::Error> {
         let endpoint = Self::resolve_chat_endpoint(provider, endpoint)?;
         let mut request = self.http_client

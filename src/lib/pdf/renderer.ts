@@ -55,6 +55,8 @@ interface RenderOptions {
   /** Number of pages to render eagerly on first load (default 5). Remaining pages
    *  are left as skeleton divs and rendered lazily on scroll. */
   initialPageCount?: number;
+  /** ID of the scroll container element (needed for virtual-scroll page eviction). */
+  scrollContainerId?: string;
 }
 
 async function resolveOutlinePageNumber(
@@ -266,6 +268,8 @@ export async function renderSinglePage(
  * Render PDF pages into a DOM container with progressive virtual scrolling.
  * Only initialPageCount pages are rendered eagerly; the rest stay as skeleton
  * divs and are rendered lazily via renderSinglePage when they enter the viewport.
+ * Pages that scroll far out of the visible range are evicted back to skeletons
+ * to keep the live DOM node count bounded (virtual scrolling).
  */
 interface LazyRenderState {
   pdfDoc: pdfjsLib.PDFDocumentProxy;
@@ -286,6 +290,16 @@ interface LazyRenderState {
   maxLoadedPage: number;
   /** Track skeleton page numbers that have been enqueued to avoid repeated querySelectorAll calls. */
   knownSkeletonPages: Set<number>;
+  /** Scroll container element — needed for viewport-aware page eviction. */
+  scrollContainer: HTMLElement | null;
+  /** Pages that have been evicted back to skeletons (to restore on scroll-back). */
+  evictedPages: Set<number>;
+  /** Current visible page range [min, max] — updated on scroll. */
+  visibleRange: [number, number];
+  /** Throttle scroll handler. */
+  scrollRafId: number | null;
+  /** Cleanup for scroll listener. */
+  scrollCleanup: (() => void) | null;
 }
 
 function createLazyState(
@@ -293,7 +307,8 @@ function createLazyState(
   scale: number,
   dpr: number,
   shouldCancel: () => boolean,
-  fingerprint: string
+  fingerprint: string,
+  scrollContainer: HTMLElement | null
 ): LazyRenderState {
   return {
     pdfDoc,
@@ -310,8 +325,16 @@ function createLazyState(
     LAZY_BATCH: 5,
     maxLoadedPage: 0,
     knownSkeletonPages: new Set(),
+    scrollContainer,
+    evictedPages: new Set(),
+    visibleRange: [1, 5],
+    scrollRafId: null,
+    scrollCleanup: null,
   };
 }
+
+/** Number of pages outside the visible range before a page gets evicted. */
+const EVICT_BEYOND_PAGES = 30;
 
 function enqueueLazyPages(
   container: HTMLElement,
@@ -394,9 +417,74 @@ function processRenderQueue(
 }
 
 /**
- * Set up lazy rendering via IntersectionObserver for skeleton pages.
- * Returns a cleanup function.
+ * Replace a rendered page element with a skeleton placeholder.
+ * Used during virtual-scroll eviction when pages scroll out of range.
  */
+function evictPageToSkeleton(container: HTMLElement, pageNum: number, skeletonWidth: number, skeletonHeight: number): void {
+  const pageEl = container.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNum}"]`);
+  if (!pageEl) return;
+  const skeleton = createSkeletonElement(pageNum, skeletonWidth, skeletonHeight);
+  pageEl.replaceWith(skeleton);
+}
+
+/** Estimate the visible page range based on scroll position and page heights. */
+function updateVisibleRange(state: LazyRenderState, totalPages: number): void {
+  const sc = state.scrollContainer;
+  if (!sc) return;
+  const viewportHeight = sc.clientHeight;
+
+  // Binary search for first and last page visible in viewport.
+  // We approximate using cumulative height (assumes uniform page height).
+  const pages = sc.querySelectorAll<HTMLElement>('.pdf-page, .pdf-page-skeleton');
+  if (pages.length === 0) return;
+
+  // Find first visible page by checking each page's offsetTop relative to scrollTop.
+  let minPage = totalPages;
+  let maxPage = 1;
+  for (const p of pages) {
+    const num = Number(p.dataset.pageNumber ?? p.dataset['pageNumber'] ?? 0);
+    if (!num) continue;
+    const rect = p.getBoundingClientRect();
+    const containerRect = sc.getBoundingClientRect();
+    const relTop = rect.top - containerRect.top;
+    const relBottom = rect.bottom - containerRect.top;
+    // Visible if any part is within viewport (with 1 viewport buffer)
+    if (relBottom >= -viewportHeight && relTop <= viewportHeight * 2) {
+      if (num < minPage) minPage = num;
+      if (num > maxPage) maxPage = num;
+    }
+  }
+
+  // Expand the range slightly so we don't evict pages that are barely outside.
+  state.visibleRange = [
+    Math.max(1, minPage - 5),
+    Math.min(totalPages, maxPage + 5),
+  ];
+}
+
+/**
+ * Evict rendered pages that are far from the visible range to keep DOM lean.
+ * Bounded to evicting at most 5 pages per call to avoid stuttering.
+ */
+function evictFarPages(state: LazyRenderState, totalPages: number, skeletonWidth: number, skeletonHeight: number): void {
+  if (state.evictedPages.size > totalPages * 0.5) return; // safety: don't evict more than half
+  const [minVis, maxVis] = state.visibleRange;
+  const container = state.scrollContainer?.parentElement ?? null;
+  if (!container) return;
+  let evicted = 0;
+  const MAX_EVICT_PER_CALL = 5;
+  for (const pageNum of state.renderedPages) {
+    if (evicted >= MAX_EVICT_PER_CALL) break;
+    if (pageNum < minVis - EVICT_BEYOND_PAGES || pageNum > maxVis + EVICT_BEYOND_PAGES) {
+      if (!state.evictedPages.has(pageNum)) {
+        evictPageToSkeleton(container, pageNum, skeletonWidth, skeletonHeight);
+        state.evictedPages.add(pageNum);
+        state.renderedPages.delete(pageNum);
+        evicted++;
+      }
+    }
+  }
+}
 function setupLazyRendering(
   container: HTMLElement,
   state: LazyRenderState
@@ -507,7 +595,11 @@ export async function renderPagesToContainer(
   }
 
   // Set up lazy rendering for remaining pages
-  const lazyState = createLazyState(pdfDoc, scale, dpr, shouldCancel ?? (() => false), fingerprint);
+  // Get scroll container element for virtual-scroll eviction
+  const scrollContainer = options.scrollContainerId
+    ? (document.getElementById(options.scrollContainerId) ?? null)
+    : null;
+  const lazyState = createLazyState(pdfDoc, scale, dpr, shouldCancel ?? (() => false), fingerprint, scrollContainer);
   // Mark initial pages as already rendered and update maxLoadedPage
   lazyState.maxLoadedPage = initialBatchEnd;
   for (let i = 1; i <= initialBatchEnd; i++) {
@@ -515,6 +607,22 @@ export async function renderPagesToContainer(
   }
   // setupLazyRendering returns an observer cleanup; chain it with our own cancel logic.
   const lazyObsCleanup = setupLazyRendering(container, lazyState);
+
+  // Virtual-scroll eviction: evict far-from-viewport rendered pages back to skeletons.
+  // This keeps the live DOM node count bounded regardless of document size.
+  if (scrollContainer) {
+    const scrollHandler = () => {
+      if (lazyState.shouldCancel() || lazyState.isProcessing) return;
+      if (lazyState.scrollRafId !== null) return;
+      lazyState.scrollRafId = requestAnimationFrame(() => {
+        lazyState.scrollRafId = null;
+        updateVisibleRange(lazyState, totalPages);
+        evictFarPages(lazyState, totalPages, skeletonWidth, skeletonHeight);
+      });
+    };
+    scrollContainer.addEventListener('scroll', scrollHandler, { passive: true });
+    lazyState.scrollCleanup = () => scrollContainer.removeEventListener('scroll', scrollHandler);
+  }
 
   // Predictive preload: immediately queue the next LAZY_BATCH pages after initial
   // render completes, without waiting for scroll/IntersectionObserver.
@@ -539,6 +647,14 @@ export async function renderPagesToContainer(
     if (lazyState.observer) {
       lazyState.observer.disconnect();
       lazyState.observer = null;
+    }
+    if (lazyState.scrollCleanup) {
+      lazyState.scrollCleanup();
+      lazyState.scrollCleanup = null;
+    }
+    if (lazyState.scrollRafId !== null) {
+      cancelAnimationFrame(lazyState.scrollRafId);
+      lazyState.scrollRafId = null;
     }
   };
   return { totalPages, outline, cleanup: cleanupLazy };

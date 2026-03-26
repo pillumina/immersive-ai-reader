@@ -8,7 +8,7 @@ Source of truth:
 
 ## Current Goal
 
-Focus Mode Phase 1-4 全部完成 🎉。下一步：性能优化（虚拟滚动）、Dark Mode、Debounced 自动保存。
+Focus Mode Phase 1-4 全部完成 🎉。性能优化系列完成 ✅：虚拟滚动页面回收、网络重试逻辑（指数退避）、内存泄漏修复、Dark Mode、Debounced 自动保存。下一步：生产部署可观测性（Metrics）、Obsidian 导出。
 
 ---
 

@@ -881,6 +881,7 @@ export function useCanvasRendering(
           renderPagesToContainer(file, containerEl, {
             scale: 1.25,
             shouldCancel: () => jobId !== renderJobIdRef.current,
+            scrollContainerId,
           }),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('PDF rendering timeout')), 30000)
