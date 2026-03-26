@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { AIConfig, AIProfile, AIProvider, ChatInputMode, ThemeOption } from '@/types/settings';
 import { Dialog, DialogContent } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Logo } from '@/components/ui/Logo';
 import { AI_PROVIDER_PRESETS, getPresetByProvider } from '@/constants/aiProviders';
-import { Plus, Trash2, Cpu, MessageSquare, Info, ChevronRight, Check, X, Eye, EyeOff, Palette, BarChart3 } from 'lucide-react';
-import { AIConnectivityResult, AiUsageStats, aiUsageCommands } from '@/lib/tauri';
+import { Plus, Trash2, Cpu, MessageSquare, Info, ChevronRight, Check, X, Eye, EyeOff, Palette, BarChart3, FileText } from 'lucide-react';
+import { AIConnectivityResult, AiUsageStats, aiUsageCommands, logCommands } from '@/lib/tauri';
 
-type SettingsSection = 'provider' | 'chat' | 'focus' | 'appearance' | 'stats' | 'about';
+type SettingsSection = 'provider' | 'chat' | 'focus' | 'appearance' | 'stats' | 'logs' | 'about';
 
 interface SettingsModalProps {
   open: boolean;
@@ -195,6 +195,7 @@ export function SettingsModal({
     { id: 'focus', label: 'Focus Mode', icon: <Eye size={14} /> },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={14} /> },
     { id: 'stats', label: 'Usage Stats', icon: <BarChart3 size={14} /> },
+    { id: 'logs', label: 'App Logs', icon: <FileText size={14} /> },
     { id: 'about', label: 'About', icon: <Info size={14} /> },
   ];
 
@@ -634,6 +635,11 @@ export function SettingsModal({
               <StatsSection />
             )}
 
+            {/* ── Logs ── */}
+            {section === 'logs' && (
+              <LogsSection />
+            )}
+
             {/* ── About ── */}
             {section === 'about' && (
               <div className="settings-section">
@@ -843,4 +849,137 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
+}
+
+function LogsSection() {
+  const [logs, setLogs] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState('');
+  const [logInfo, setLogInfo] = useState<{ name: string; size: string } | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const loadLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await logCommands.readLogs(500);
+      if (result.files.length > 0) {
+        const file = result.files[0];
+        setLogs(file.lines);
+        setLogInfo({
+          name: file.name,
+          size: formatFileSize(file.size_bytes),
+        });
+      } else {
+        setLogs([]);
+        setLogInfo(null);
+      }
+    } catch (e) {
+      console.error('Failed to load logs:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load on mount
+  useEffect(() => { void loadLogs(); }, [loadLogs]);
+
+  // Auto-scroll to bottom on new logs
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  const filtered = filter
+    ? logs.filter((l) => l.toLowerCase().includes(filter.toLowerCase()))
+    : logs;
+
+  const highlightLine = (line: string) => {
+    if (!filter) return line;
+    const idx = line.toLowerCase().indexOf(filter.toLowerCase());
+    if (idx === -1) return line;
+    return (
+      <>
+        {line.slice(0, idx)}
+        <mark className="log-highlight">{line.slice(idx, idx + filter.length)}</mark>
+        {line.slice(idx + filter.length)}
+      </>
+    );
+  };
+
+  const getLineClass = (line: string): string => {
+    if (line.includes('ERROR') || line.includes('error')) return 'log-line log-line--error';
+    if (line.includes('WARN') || line.includes('warn')) return 'log-line log-line--warn';
+    if (line.includes('INFO') || line.includes('info')) return 'log-line log-line--info';
+    if (line.includes('DEBUG') || line.includes('debug')) return 'log-line log-line--debug';
+    return 'log-line';
+  };
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-header" style={{ marginBottom: '16px' }}>
+        <h2 className="settings-section-header__title">App Logs</h2>
+        <p className="settings-section-header__subtitle">Runtime logs from the Rust backend</p>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 mb-3">
+        <input
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter logs…"
+          className="settings-input settings-input--sm flex-1"
+        />
+        <button
+          type="button"
+          onClick={() => { void loadLogs(); }}
+          className="settings-btn settings-btn--sm"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* Log info */}
+      {logInfo && (
+        <div className="flex items-center gap-3 mb-2 text-[11px] text-[#a8a29e]">
+          <span>{logInfo.name}</span>
+          <span>{logInfo.size}</span>
+          <span>{filtered.length} / {logs.length} lines</span>
+        </div>
+      )}
+
+      {/* Log viewer */}
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-5 h-5 rounded-full border-2 border-[#e7e5e4] border-t-[#a8a29e] animate-spin" />
+        </div>
+      )}
+
+      {!loading && logs.length === 0 && (
+        <div className="text-center py-8 text-[13px] text-[#a8a29e]">
+          No log files yet. Logs are created when the app starts.
+        </div>
+      )}
+
+      {!loading && logs.length > 0 && (
+        <div
+          ref={listRef}
+          className="log-viewer"
+        >
+          {filtered.map((line, i) => (
+            <div key={i} className={getLineClass(line)}>
+              <span className="log-line__text">{highlightLine(line)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
 }

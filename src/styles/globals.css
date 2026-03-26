@@ -2025,6 +2025,65 @@ h1, h2, h3, h4, h5, h6 {
   max-width: 120px;
 }
 
+/* Log viewer */
+.log-viewer {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  background: #0f1117;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.log-line {
+  padding: 1px 0;
+  white-space: pre;
+}
+
+.log-line--error { color: #f87171; }
+.log-line--warn { color: #fbbf24; }
+.log-line--info { color: #60a5fa; }
+.log-line--debug { color: #9ca3af; }
+
+.log-line__text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-highlight {
+  background: rgba(251, 191, 36, 0.35);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Settings button */
+.settings-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.settings-btn:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-subtle);
+}
+.settings-btn--sm {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
 /* Footer */
 .settings-footer {
   display: flex;

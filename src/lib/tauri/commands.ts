@@ -513,3 +513,25 @@ export const aiUsageCommands = {
     }
   },
 };
+
+export interface LogFile {
+  name: string;
+  path: string;
+  size_bytes: number;
+  lines: string[];
+}
+
+export interface ReadLogsResult {
+  files: LogFile[];
+  total_size_bytes: number;
+}
+
+export const logCommands = {
+  readLogs: async (maxLines?: number): Promise<ReadLogsResult> => {
+    try {
+      return await invoke<ReadLogsResult>('read_app_logs', { maxLines });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+};

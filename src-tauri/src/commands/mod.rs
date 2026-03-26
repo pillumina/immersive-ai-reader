@@ -6,3 +6,4 @@ pub mod tag;
 pub mod ai;
 pub mod focus;
 pub mod ai_usage;
+pub mod logs;

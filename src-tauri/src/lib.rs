@@ -4,11 +4,41 @@ mod models;
 mod ai;
 mod security;
 
+use std::path::PathBuf;
 use tauri::Manager;
 use database::connection::init_database;
 use database::repositories::{document_repo::DocumentRepository, annotation_repo::AnnotationRepository, conversation_repo::ConversationRepository, library_repo::LibraryRepository, tag_repo::TagRepository, focus_repo::FocusRepository, ai_usage_repo::AiUsageRepository};
 use ai::client::AIClient;
 use commands::ai::StreamRegistry;
+
+fn init_tracing(log_dir: &PathBuf) {
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+    std::fs::create_dir_all(log_dir).ok();
+
+    let (non_blocking, _guard) = tracing_appender::non_blocking(
+        tracing_appender::rolling::Builder::new()
+            .max_log_files(3)
+            .filename_prefix("app")
+            .filename_suffix("log")
+            .build(log_dir)
+            .expect("Failed to create log directory"),
+    );
+
+    // Keep the guard alive for the lifetime of the app
+    std::mem::forget(_guard);
+
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_subscriber::registry()
+        .with(filter)
+        // File output
+        .with(fmt::layer().with_writer(non_blocking).with_ansi(false))
+        // Stdout (visible in Tauri DevTools console)
+        .with(fmt::layer().with_writer(std::io::stdout))
+        .init();
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -21,6 +51,11 @@ pub fn run() {
                 .expect("Failed to get app data dir");
 
             std::fs::create_dir_all(&app_dir).expect("Failed to create app dir");
+
+            let log_dir = app_dir.join("logs");
+            init_tracing(&log_dir);
+
+            tracing::info!("App starting up, log dir: {:?}", log_dir);
 
             let db_path = app_dir.join("reader.db");
             let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
@@ -38,6 +73,8 @@ pub fn run() {
             app.manage(AiUsageRepository::new(pool.clone()));
             app.manage(AIClient::new());
             app.manage(StreamRegistry::default());
+
+            tracing::info!("Database initialized, all repositories managed");
 
             Ok(())
         })
@@ -107,6 +144,9 @@ pub fn run() {
             // AI usage commands
             commands::ai_usage::record_ai_usage,
             commands::ai_usage::get_ai_usage_stats,
+
+            // Log commands
+            commands::logs::read_app_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
