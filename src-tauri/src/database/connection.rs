@@ -143,5 +143,38 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     );
     let _ = idx_focus_session.execute(pool).await;
 
+    // Migration: create ai_usage table for AI usage metrics
+    let create_ai_usage = sqlx::query(
+        "CREATE TABLE IF NOT EXISTS ai_usage (
+            id TEXT PRIMARY KEY,
+            document_id TEXT,
+            conversation_id TEXT,
+            model TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            prompt_tokens INTEGER NOT NULL DEFAULT 0,
+            completion_tokens INTEGER NOT NULL DEFAULT 0,
+            total_tokens INTEGER NOT NULL DEFAULT 0,
+            latency_ms INTEGER NOT NULL DEFAULT 0,
+            cost_usd REAL,
+            created_at TEXT NOT NULL
+        )",
+    );
+    let _ = create_ai_usage.execute(pool).await;
+
+    let idx_ai_usage_conv = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_ai_usage_conversation_id ON ai_usage(conversation_id)",
+    );
+    let _ = idx_ai_usage_conv.execute(pool).await;
+
+    let idx_ai_usage_doc = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_ai_usage_document_id ON ai_usage(document_id)",
+    );
+    let _ = idx_ai_usage_doc.execute(pool).await;
+
+    let idx_ai_usage_created = sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_ai_usage_created_at ON ai_usage(created_at)",
+    );
+    let _ = idx_ai_usage_created.execute(pool).await;
+
     Ok(())
 }

@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Logo } from '@/components/ui/Logo';
 import { AI_PROVIDER_PRESETS, getPresetByProvider } from '@/constants/aiProviders';
-import { Plus, Trash2, Cpu, MessageSquare, Info, ChevronRight, Check, X, Eye, EyeOff, Palette } from 'lucide-react';
-import { AIConnectivityResult } from '@/lib/tauri';
+import { Plus, Trash2, Cpu, MessageSquare, Info, ChevronRight, Check, X, Eye, EyeOff, Palette, BarChart3 } from 'lucide-react';
+import { AIConnectivityResult, AiUsageStats, aiUsageCommands } from '@/lib/tauri';
 
-type SettingsSection = 'provider' | 'chat' | 'focus' | 'appearance' | 'about';
+type SettingsSection = 'provider' | 'chat' | 'focus' | 'appearance' | 'stats' | 'about';
 
 interface SettingsModalProps {
   open: boolean;
@@ -194,6 +194,7 @@ export function SettingsModal({
     { id: 'chat', label: 'Chat & Routing', icon: <MessageSquare size={14} /> },
     { id: 'focus', label: 'Focus Mode', icon: <Eye size={14} /> },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={14} /> },
+    { id: 'stats', label: 'Usage Stats', icon: <BarChart3 size={14} /> },
     { id: 'about', label: 'About', icon: <Info size={14} /> },
   ];
 
@@ -628,6 +629,11 @@ export function SettingsModal({
               </div>
             )}
 
+            {/* ── Stats ── */}
+            {section === 'stats' && (
+              <StatsSection />
+            )}
+
             {/* ── About ── */}
             {section === 'about' && (
               <div className="settings-section">
@@ -692,4 +698,149 @@ export function SettingsModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+function StatsSection() {
+  const [days, setDays] = useState(7);
+  const [stats, setStats] = useState<AiUsageStats | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    aiUsageCommands.getStats(days)
+      .then(setStats)
+      .catch((e) => console.error('Failed to load usage stats:', e))
+      .finally(() => setLoading(false));
+  }, [days]);
+
+  const s = stats;
+
+  return (
+    <div className="settings-section">
+      <div className="settings-section-header" style={{ marginBottom: '16px' }}>
+        <h2 className="settings-section-header__title">AI Usage Stats</h2>
+        <p className="settings-section-header__subtitle">Token consumption and performance over time</p>
+      </div>
+
+      {/* Time filter */}
+      <div className="flex items-center gap-2 mb-5">
+        {([7, 30, 90] as const).map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => setDays(d)}
+            className={`settings-chip ${days === d ? 'settings-chip--active' : ''}`}
+          >
+            {d}d
+          </button>
+        ))}
+      </div>
+
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-5 h-5 rounded-full border-2 border-[#e7e5e4] border-t-[#a8a29e] animate-spin" />
+        </div>
+      )}
+
+      {!loading && !s && (
+        <div className="text-center py-8 text-[13px] text-[#a8a29e]">
+          No usage data yet. Start chatting with AI to see stats.
+        </div>
+      )}
+
+      {!loading && s && s.total_requests === 0 && (
+        <div className="text-center py-8 text-[13px] text-[#a8a29e]">
+          No API calls in the last {days} days.
+        </div>
+      )}
+
+      {!loading && s && s.total_requests > 0 && (
+        <>
+          {/* Summary cards */}
+          <div className="stats-grid">
+            <div className="stats-card">
+              <span className="stats-card__value">{s.total_requests.toLocaleString()}</span>
+              <span className="stats-card__label">Requests</span>
+            </div>
+            <div className="stats-card">
+              <span className="stats-card__value">{formatTokens(s.total_tokens)}</span>
+              <span className="stats-card__label">Total Tokens</span>
+            </div>
+            <div className="stats-card">
+              <span className="stats-card__value">${s.total_cost_usd.toFixed(4)}</span>
+              <span className="stats-card__label">Est. Cost (USD)</span>
+            </div>
+            <div className="stats-card">
+              <span className="stats-card__value">{Math.round(s.avg_latency_ms)}ms</span>
+              <span className="stats-card__label">Avg Latency</span>
+            </div>
+          </div>
+
+          {/* Token breakdown */}
+          <div className="stats-breakdown">
+            <p className="stats-breakdown__title">Token Breakdown</p>
+            <div className="stats-token-bar">
+              <div
+                className="stats-token-bar__prompt"
+                style={{ width: `${s.total_tokens > 0 ? (s.total_prompt_tokens / s.total_tokens) * 100 : 0}%` }}
+              />
+              <div
+                className="stats-token-bar__completion"
+                style={{ width: `${s.total_tokens > 0 ? (s.total_completion_tokens / s.total_tokens) * 100 : 0}%` }}
+              />
+            </div>
+            <div className="flex items-center gap-4 mt-2 text-[11px] text-[#78716c]">
+              <span className="flex items-center gap-1">
+                <span className="stats-token-bar__dot stats-token-bar__dot--prompt" />
+                Prompt: {formatTokens(s.total_prompt_tokens)}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="stats-token-bar__dot stats-token-bar__dot--completion" />
+                Completion: {formatTokens(s.total_completion_tokens)}
+              </span>
+            </div>
+          </div>
+
+          {/* By model */}
+          {s.by_model.length > 0 && (
+            <div className="stats-breakdown">
+              <p className="stats-breakdown__title">By Model</p>
+              {s.by_model.map((m) => (
+                <div key={m.model} className="stats-row">
+                  <span className="stats-row__name" title={m.model}>{m.model}</span>
+                  <div className="flex items-center gap-4 text-[11px]">
+                    <span className="text-[#78716c]">{m.requests} reqs</span>
+                    <span className="text-[#a8a29e]">{formatTokens(m.total_tokens)}</span>
+                    <span className="text-[#a8a29e]">{Math.round(m.avg_latency_ms)}ms avg</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* By provider */}
+          {s.by_provider.length > 0 && (
+            <div className="stats-breakdown">
+              <p className="stats-breakdown__title">By Provider</p>
+              {s.by_provider.map((p) => (
+                <div key={p.provider} className="stats-row">
+                  <span className="stats-row__name">{p.provider}</span>
+                  <div className="flex items-center gap-4 text-[11px]">
+                    <span className="text-[#78716c]">{p.requests} reqs</span>
+                    <span className="text-[#a8a29e]">{formatTokens(p.total_tokens)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }

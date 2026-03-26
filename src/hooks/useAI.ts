@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { Message, MessageUsage } from '@/types/conversation';
-import { aiCommands, conversationCommands } from '@/lib/tauri';
+import { aiCommands, conversationCommands, aiUsageCommands } from '@/lib/tauri';
 import { AIConfig, ChatInputMode } from '@/types/settings';
 
 interface AIContext {
@@ -501,6 +501,19 @@ export function useAI(
         // Now safe to register done/error — stream has started, no early events possible
         unlistenDone = await listen<StreamDonePayload>('ai_stream_done', async (event) => {
           if (!expectedStreamId || event.payload.stream_id !== expectedStreamId) return;
+          // Record usage metrics (fire-and-forget, don't block resolve)
+          if (event.payload.total_tokens) {
+            void aiUsageCommands.record({
+              document_id: documentId,
+              conversation_id: conversationId ?? undefined,
+              model: aiConfig.model,
+              provider: aiConfig.provider,
+              prompt_tokens: event.payload.prompt_tokens ?? 0,
+              completion_tokens: event.payload.completion_tokens ?? 0,
+              total_tokens: event.payload.total_tokens ?? 0,
+              latency_ms: event.payload.latency_ms ?? 0,
+            });
+          }
           await cleanup();
           activeStreamIdRef.current = null;
           resolve({

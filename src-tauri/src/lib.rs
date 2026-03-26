@@ -6,7 +6,7 @@ mod security;
 
 use tauri::Manager;
 use database::connection::init_database;
-use database::repositories::{document_repo::DocumentRepository, annotation_repo::AnnotationRepository, conversation_repo::ConversationRepository, library_repo::LibraryRepository, tag_repo::TagRepository, focus_repo::FocusRepository};
+use database::repositories::{document_repo::DocumentRepository, annotation_repo::AnnotationRepository, conversation_repo::ConversationRepository, library_repo::LibraryRepository, tag_repo::TagRepository, focus_repo::FocusRepository, ai_usage_repo::AiUsageRepository};
 use ai::client::AIClient;
 use commands::ai::StreamRegistry;
 
@@ -35,6 +35,7 @@ pub fn run() {
             app.manage(LibraryRepository::new(pool.clone()));
             app.manage(TagRepository::new(pool.clone()));
             app.manage(FocusRepository::new(pool.clone()));
+            app.manage(AiUsageRepository::new(pool.clone()));
             app.manage(AIClient::new());
             app.manage(StreamRegistry::default());
 
@@ -102,6 +103,10 @@ pub fn run() {
             commands::focus::get_focus_session_history,
             commands::focus::get_all_focus_sessions,
             commands::focus::delete_focus_session,
+
+            // AI usage commands
+            commands::ai_usage::record_ai_usage,
+            commands::ai_usage::get_ai_usage_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

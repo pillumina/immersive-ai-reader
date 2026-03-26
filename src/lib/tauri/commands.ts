@@ -470,3 +470,46 @@ export const focusCommands = {
     }
   },
 };
+
+export interface AiUsageStats {
+  total_requests: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  total_latency_ms: number;
+  avg_latency_ms: number;
+  avg_tokens_per_request: number;
+  by_model: Array<{ model: string; requests: number; total_tokens: number; avg_latency_ms: number }>;
+  by_provider: Array<{ provider: string; requests: number; total_tokens: number }>;
+}
+
+export interface RecordAiUsageRequest {
+  document_id?: string;
+  conversation_id?: string;
+  model: string;
+  provider: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  latency_ms: number;
+  cost_usd?: number;
+}
+
+export const aiUsageCommands = {
+  record: async (req: RecordAiUsageRequest): Promise<void> => {
+    try {
+      await invoke('record_ai_usage', { req });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+
+  getStats: async (days: number): Promise<AiUsageStats> => {
+    try {
+      return await invoke<AiUsageStats>('get_ai_usage_stats', { days });
+    } catch (error) {
+      throw new Error(unwrapInvokeError(error));
+    }
+  },
+};
