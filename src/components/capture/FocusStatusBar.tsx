@@ -27,7 +27,10 @@ export function FocusStatusBar({
   onExitFocusMode,
 }: FocusStatusBarProps) {
   return (
-    <div className="flex items-center gap-3 px-4 py-2 bg-white/95 backdrop-blur-sm border-t border-[#f5f5f4] rounded-none">
+    <div
+      className="flex items-center gap-3 px-4 py-2 bg-white/95 backdrop-blur-sm border-t border-[#f5f5f4] rounded-none"
+      style={{ willChange: 'transform', transform: 'translateZ(0)' }}
+    >
       {/* Page info */}
       <div className="flex items-center gap-1 text-[11px] text-[#78716c] flex-shrink-0">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

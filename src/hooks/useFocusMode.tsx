@@ -19,6 +19,8 @@ export interface FocusModeState {
   summary80Shown: boolean;
   /** Whether 80% summary prompt is currently visible */
   summary80Visible: boolean;
+  /** Whether the first-use tooltip is visible */
+  focusTooltipVisible: boolean;
 }
 
 interface FocusModeContextValue {
@@ -34,6 +36,7 @@ interface FocusModeContextValue {
   dismissResumePrompt: () => void;
   dismissSummary80: () => void;
   acknowledgeSummary80: () => void;
+  dismissFocusTooltip: () => void;
 }
 
 const FocusModeContext = createContext<FocusModeContextValue | null>(null);
@@ -54,6 +57,7 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
     summaryTriggered: false,
     summary80Shown: false,
     summary80Visible: false,
+    focusTooltipVisible: false,
   });
 
   const enterTimeRef = useRef<Date | null>(null);
@@ -64,6 +68,15 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
     const sessionId = crypto.randomUUID();
     const enteredAt = new Date().toISOString();
     enterTimeRef.current = new Date();
+
+    // Check if this is the first time the user sees Focus Mode
+    let tooltipVisible = false;
+    try {
+      const seen = localStorage.getItem('focus_mode_tooltip_seen');
+      tooltipVisible = !seen;
+    } catch {
+      // ignore localStorage errors
+    }
 
     // Check for existing session to show resume prompt
     let existingSession: FocusSession | null = null;
@@ -90,6 +103,7 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
         summaryTriggered: false,
         summary80Shown: false,
         summary80Visible: false,
+        focusTooltipVisible: tooltipVisible,
       });
     } catch (err) {
       console.error('[FocusMode] Failed to create session:', err);
@@ -107,8 +121,18 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
         aiResponsesCount: existingSession?.ai_responses_count ?? 0,
         summary80Shown: false,
         summary80Visible: false,
+        focusTooltipVisible: tooltipVisible,
       }));
     }
+  }, []);
+
+  const dismissFocusTooltip = useCallback(() => {
+    try {
+      localStorage.setItem('focus_mode_tooltip_seen', '1');
+    } catch {
+      // ignore localStorage errors
+    }
+    setState((prev) => ({ ...prev, focusTooltipVisible: false }));
   }, []);
 
   const exitFocusMode = useCallback(
@@ -270,6 +294,7 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
         dismissResumePrompt,
         dismissSummary80,
         acknowledgeSummary80,
+        dismissFocusTooltip,
       }}
     >
       {children}

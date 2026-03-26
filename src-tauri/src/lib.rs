@@ -62,6 +62,7 @@ pub fn run() {
 
             // Conversation commands
             commands::conversation::get_conversation,
+            commands::conversation::get_conversation_with_preview,
             commands::conversation::add_message,
             commands::conversation::get_messages,
 

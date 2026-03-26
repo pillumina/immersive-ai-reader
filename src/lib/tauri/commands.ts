@@ -264,9 +264,21 @@ export const annotationCommands = {
 };
 
 // Conversation commands
+export interface BackendConversationWithPreview {
+  conversation: BackendConversation;
+  messages: BackendMessage[];
+}
+
 export const conversationCommands = {
   getOrCreate: async (documentId: string): Promise<BackendConversation> => {
     return await invoke<BackendConversation>('get_conversation', { documentId });
+  },
+
+  getConversationWithPreview: async (documentId: string, messageLimit = 4): Promise<BackendConversationWithPreview | null> => {
+    return await invoke<BackendConversationWithPreview | null>('get_conversation_with_preview', {
+      documentId,
+      messageLimit,
+    });
   },
 
   addMessage: async (request: {

@@ -111,6 +111,7 @@ function AppInner() {
     toggleCaptureDrawer,
     dismissResumePrompt,
     dismissSummary80,
+    dismissFocusTooltip,
   } = useFocusMode();
   /** Captured DOM range rect + page number from text selection before toolbar clears it */
   const noteInputCapturedRangeRef = useRef<{
@@ -259,6 +260,9 @@ function AppInner() {
     clearRoutePreferenceMemory,
     stopGeneration,
     loadHistory,
+    setConversationOverride,
+    restoreConversationOverride,
+    conversationId,
   } = useAI(
     currentDocument?.id || '',
     aiConfig,
@@ -282,6 +286,13 @@ function AppInner() {
   useEffect(() => {
     void loadDocuments();
   }, [loadDocuments]);
+
+  // ─── Auto-load AI conversation history on document change (non-Focus Mode) ──
+  useEffect(() => {
+    if (!currentDocument?.id) return;
+    if (focusState.isActive) return;
+    void loadHistory();
+  }, [currentDocument?.id, focusState.isActive, loadHistory]);
 
   useEffect(() => {
     void (async () => {
@@ -451,6 +462,8 @@ function AppInner() {
   const NOTE_PREFIX = '__NOTE__|';
   const [captures, setCaptures] = useState<CaptureItem[]>([]);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  /** Last 4 messages of the session's conversation for resume prompt preview */
+  const [conversationPreviewMessages, setConversationPreviewMessages] = useState<{ role: string; content: string }[]>([]);
 
   /** Convert a BackendAnnotation to a CaptureItem, or null if it's not a capture type */
   const annotationToCapture = useCallback(
@@ -559,6 +572,25 @@ function AppInner() {
   // ─── Focus Mode: auto-enter on document open ─────────────────
   const autoEnteredRef = useRef<Set<string>>(new Set());
 
+  // ─── Focus Mode: load conversation preview for resume prompt ──
+  useEffect(() => {
+    if (!focusState.resumeSession?.ai_conversation_id) {
+      setConversationPreviewMessages([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const msgs = await conversationCommands.getMessages(focusState.resumeSession.ai_conversation_id);
+        const lastMsgs = msgs.slice(-4).map(m => ({ role: m.role, content: m.content }));
+        setConversationPreviewMessages(lastMsgs);
+      } catch {
+        setConversationPreviewMessages([]);
+      }
+    })();
+  }, [focusState.resumeSession?.ai_conversation_id]);
+  /** The useAI conversationId at the time Focus Mode was entered — for restore on exit */
+  const focusEnteredConversationIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!uiSettings.autoEnterFocusOnDocOpen) return;
     if (!currentDocument?.id) return;
@@ -566,7 +598,7 @@ function AppInner() {
     if (autoEnteredRef.current.has(currentDocument.id)) return;
 
     autoEnteredRef.current.add(currentDocument.id);
-    void enterFocusMode(currentDocument.id, currentPage ?? 1, false);
+    void handleEnterFocusMode(false);
   }, [currentDocument?.id, uiSettings.autoEnterFocusOnDocOpen, focusState.isActive, currentPage]);
 
   // ─── Focus Mode: 80% summary trigger ─────────────────────────
@@ -624,9 +656,25 @@ function AppInner() {
   const handleResetZoom = () => setZoomLevel(1);
 
   // Escape — exit Focus Mode if active, otherwise handled by individual components.
-  const handleEscape = () => {
-    if (focusState.isActive) {
-      void exitFocusMode(currentPage ?? 1, maxScrollTopRef.current);
+  const handleExitFocusMode = async () => {
+    const sessionId = focusState.currentSessionId;
+    const convId = conversationId;
+    await exitFocusMode(currentPage ?? 1, maxScrollTopRef.current);
+    if (convId && sessionId) {
+      focusCommands.update(sessionId, { ai_conversation_id: convId }).catch(() => {});
+    }
+    await restoreConversationOverride();
+  };
+
+  const handleEnterFocusMode = async (showResumePromptOverride?: boolean) => {
+    if (!currentDocument?.id) return;
+    // Save current conversation so we can restore it on exit
+    focusEnteredConversationIdRef.current = conversationId;
+    const showPrompt = showResumePromptOverride !== undefined ? showResumePromptOverride : uiSettings.showFocusResumePrompt;
+    await enterFocusMode(currentDocument.id, currentPage ?? 1, showPrompt);
+    // If resuming a session with saved conversation, load it
+    if (focusState.resumeSession?.ai_conversation_id) {
+      await setConversationOverride(focusState.resumeSession.ai_conversation_id);
     }
   };
 
@@ -820,9 +868,9 @@ Please provide a comprehensive synthesis in Chinese.`;
     onNewNote: () => handleAddNoteSelection(),
     onToggleFocusMode: () => {
       if (focusState.isActive) {
-        void exitFocusMode(currentPage ?? 1, maxScrollTopRef.current);
-      } else if (currentDocument?.id) {
-        void enterFocusMode(currentDocument.id, currentPage ?? 1, uiSettings.showFocusResumePrompt);
+        void handleExitFocusMode();
+      } else {
+        void handleEnterFocusMode();
       }
     },
     onToggleMiniAI: toggleMiniAI,
@@ -1263,9 +1311,9 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             documentId={currentDocument?.id}
             onToggleFocusMode={() => {
               if (focusState.isActive) {
-                void exitFocusMode(currentPage ?? 1, maxScrollTopRef.current);
-              } else if (currentDocument?.id) {
-                void enterFocusMode(currentDocument.id, currentPage, uiSettings.showFocusResumePrompt);
+                void handleExitFocusMode();
+              } else {
+                void handleEnterFocusMode();
               }
             }}
             isFocusMode={focusState.isActive}
@@ -1460,12 +1508,23 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
                 <> 学习了 <span className="font-semibold text-[#1c1917]">{focusState.resumeSession.duration_minutes} 分钟</span>。</>
               )}
             </p>
+            {conversationPreviewMessages.length > 0 && (
+              <div className="bg-[#fafaf9] rounded-xl px-3 py-2 text-[11px] text-[#78716c] flex flex-col gap-1">
+                {conversationPreviewMessages.slice(-2).map((m, i) => (
+                  <p key={i} className="truncate">
+                    <span className="font-medium text-[#1c1917]">{m.role === 'user' ? '你' : 'AI'}：</span>
+                    {m.content.slice(0, 80)}{m.content.length > 80 ? '…' : ''}
+                  </p>
+                ))}
+                {conversationPreviewMessages.length > 2 && (
+                  <p className="text-[#d6d3d1]">+ {conversationPreviewMessages.length - 2} 条更早的消息</p>
+                )}
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
               <button
                 className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#78716c] hover:bg-[#f5f5f4] transition-colors"
-                onClick={() => {
-                  dismissResumePrompt();
-                }}
+                onClick={() => { dismissResumePrompt(); }}
               >
                 重新开始
               </button>
@@ -1479,6 +1538,31 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
                 }}
               >
                 继续阅读
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* First-use Focus Mode tooltip */}
+      {focusState.focusTooltipVisible && (
+        <div className="fixed left-4 bottom-4 z-[9999] bg-[#1c1917] text-white rounded-2xl shadow-2xl p-4 w-72 animate-in fade-in slide-in-from-bottom-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl flex-shrink-0 mt-0.5">🎯</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold mb-1.5">Focus Mode 使用提示</p>
+              <ul className="text-[11px] text-[#a8a29e] leading-relaxed space-y-1">
+                <li>• 选中文本自动高亮（蓝色）</li>
+                <li>• 点击气泡添加笔记或问 AI</li>
+                <li>• <kbd className="bg-white/10 px-1 py-0.5 rounded text-[10px]">Cmd+`</kbd> 打开 Mini AI 窗口</li>
+                <li>• <kbd className="bg-white/10 px-1 py-0.5 rounded text-[10px]">Cmd+Shift+B</kbd> 打开捕获抽屉</li>
+                <li>• <kbd className="bg-white/10 px-1 py-0.5 rounded text-[10px]">Esc</kbd> 退出 Focus Mode</li>
+              </ul>
+              <button
+                className="mt-2.5 text-[11px] text-[#a8a29e] hover:text-white transition-colors underline underline-offset-2"
+                onClick={() => { dismissFocusTooltip(); }}
+              >
+                知道了
               </button>
             </div>
           </div>
@@ -1532,6 +1616,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
           onStopGeneration={stopGeneration}
           onToggleMiniAI={toggleMiniAI}
           sessionDurationSecs={sessionDurationSecs}
+          inputPlaceholder={messages.length > 0 ? '继续上次对话…' : '问 AI…'}
         />
       )}
 
@@ -1559,7 +1644,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
           notesCount={focusState.notesCount}
           aiResponsesCount={focusState.aiResponsesCount}
           sessionDurationSecs={sessionDurationSecs}
-          onExitFocusMode={() => { void exitFocusMode(currentPage ?? 1, maxScrollTopRef.current); }}
+          onExitFocusMode={() => { void handleExitFocusMode(); }}
         />
       )}
     </div>

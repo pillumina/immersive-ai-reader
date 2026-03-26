@@ -905,6 +905,7 @@ export function MainCanvas({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
+          style={{ willChange: 'scroll-position' }}
         >
           {hasDocument ? (
             <div className="relative">

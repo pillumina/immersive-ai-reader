@@ -10,6 +10,8 @@ interface MiniAIWindowProps {
   onToggleMiniAI: () => void;
   /** Duration since session started (seconds) */
   sessionDurationSecs?: number;
+  /** Placeholder text for the input (e.g. "继续上次对话…" when history exists) */
+  inputPlaceholder?: string;
 }
 
 function formatDuration(secs: number): string {
@@ -52,6 +54,7 @@ export function MiniAIWindow({
   onStopGeneration,
   onToggleMiniAI,
   sessionDurationSecs = 0,
+  inputPlaceholder = '问 AI…',
 }: MiniAIWindowProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -81,7 +84,10 @@ export function MiniAIWindow({
   };
 
   return (
-    <div className="fixed right-0 top-0 bottom-0 z-[9000] flex flex-col w-80 bg-white border-l border-[#e7e5e4]/60 shadow-[-4px_0_24px_rgba(0,0,0,0.08)]">
+    <div
+      className="fixed right-0 top-0 bottom-0 z-[9000] flex flex-col w-80 bg-white border-l border-[#e7e5e4]/60 shadow-[-4px_0_24px_rgba(0,0,0,0.08)]"
+      style={{ willChange: 'transform', transform: 'translateZ(0)' }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#f5f5f4] bg-white/95 backdrop-blur-sm">
         <div className="flex items-center gap-2">
@@ -153,7 +159,7 @@ export function MiniAIWindow({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="问 AI…"
+            placeholder={inputPlaceholder}
             rows={1}
             className="flex-1 resize-none rounded-xl border border-[#e7e5e4] bg-[#fafaf9] px-3 py-2 text-[12px] text-[#1c1917] placeholder:text-[#d6d3d1] outline-none focus:border-blue-400 transition-colors"
             style={{ maxHeight: '120px' }}

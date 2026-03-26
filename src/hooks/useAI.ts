@@ -342,6 +342,9 @@ export function useAI(
   const responseCacheRef = useRef<Map<string, CachedAnswer>>(new Map());
   const lastDocumentIdRef = useRef<string>(documentId);
   const messagesRef = useRef<Message[]>([]);
+  // Used to temporarily override the conversation (e.g., for Focus Mode resume).
+  // Stores the original document conversation so it can be restored on exit.
+  const originalConversationIdRef = useRef<string | null>(null);
   // RAF-based streaming throttle: accumulate content in refs, flush to state at 60fps max.
   const streamingContentRef = useRef<string>('');
   const streamingAssistantIdRef = useRef<string | null>(null);
@@ -937,6 +940,45 @@ export function useAI(
     }
   }, [documentId]);
 
+  const loadHistoryForConversation = useCallback(async (conversationId: string) => {
+    try {
+      const msgs = await conversationCommands.getMessages(conversationId);
+      const frontendMessages: Message[] = msgs.map(m => ({
+        id: String(m.id),
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(m.timestamp),
+        status: 'sent',
+      }));
+      setMessages(frontendMessages);
+      setConversationId(conversationId);
+    } catch (err) {
+      console.error('Failed to load history for conversation:', err);
+    }
+  }, []);
+
+  /** Temporarily switch to a different conversation (e.g., Focus Mode resume).
+   *  Saves the current document conversation so it can be restored via restoreConversationOverride. */
+  const setConversationOverride = useCallback(async (conversationId: string) => {
+    // Save current so we can restore later
+    if (!originalConversationIdRef.current) {
+      originalConversationIdRef.current = conversationId;
+    }
+    await loadHistoryForConversation(conversationId);
+  }, [loadHistoryForConversation]);
+
+  /** Restore the original document conversation after Focus Mode exit. */
+  const restoreConversationOverride = useCallback(async () => {
+    const originalId = originalConversationIdRef.current;
+    originalConversationIdRef.current = null;
+    if (!originalId) {
+      // No override was active, restore via getOrCreate
+      await loadHistory();
+      return;
+    }
+    await loadHistoryForConversation(originalId);
+  }, [loadHistory, loadHistoryForConversation]);
+
   const clearHistory = useCallback(() => {
     setMessages([]);
     setConversationId(null);
@@ -983,6 +1025,7 @@ export function useAI(
 
   return {
     messages,
+    conversationId,
     isLoading,
     error,
     pendingRouteConfirmation,
@@ -995,6 +1038,9 @@ export function useAI(
     clearRoutePreferenceMemory,
     stopGeneration,
     loadHistory,
+    loadHistoryForConversation,
+    setConversationOverride,
+    restoreConversationOverride,
     clearHistory,
   };
 }

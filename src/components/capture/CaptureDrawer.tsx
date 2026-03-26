@@ -90,6 +90,7 @@ export function CaptureDrawer({
       {/* Drawer panel */}
       <div
         className={`fixed left-0 top-0 bottom-0 z-[8001] w-72 bg-white border-r border-[#e7e5e4]/60 shadow-[4px_0_24px_rgba(0,0,0,0.08)] flex flex-col transition-transform duration-200 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ willChange: 'transform', contain: 'layout style paint' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#f5f5f4]">

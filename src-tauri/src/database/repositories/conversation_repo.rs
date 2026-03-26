@@ -1,8 +1,15 @@
+use serde::Serialize;
 use sqlx::SqlitePool;
 use crate::models::conversation::{Conversation, Message};
 use anyhow::Result;
 use uuid::Uuid;
 use chrono::Utc;
+
+#[derive(Debug, Serialize)]
+pub struct ConversationWithPreview {
+    pub conversation: Conversation,
+    pub messages: Vec<Message>,
+}
 
 pub struct ConversationRepository {
     pool: SqlitePool,
@@ -80,5 +87,41 @@ impl ConversationRepository {
         .await?;
 
         Ok(messages)
+    }
+
+    /// Get conversation by document_id with the last N messages for preview.
+    pub async fn get_with_preview(&self, document_id: &str, limit: i32) -> Result<Option<ConversationWithPreview>> {
+        // First check if a conversation exists
+        let conversation = sqlx::query_as::<_, Conversation>(
+            r#"SELECT id, document_id, created_at, updated_at FROM conversations WHERE document_id = ?"#,
+        )
+        .bind(document_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let conversation = match conversation {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+
+        // Get last N messages ordered by timestamp desc (we'll reverse for display)
+        let messages = sqlx::query_as(
+            r#"
+            SELECT id, conversation_id, role, content, timestamp
+            FROM messages
+            WHERE conversation_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+            "#,
+        )
+        .bind(&conversation.id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // Reverse to get chronological order for display
+        let messages: Vec<Message> = messages.into_iter().rev().collect();
+
+        Ok(Some(ConversationWithPreview { conversation, messages }))
     }
 }

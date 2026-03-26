@@ -8,7 +8,7 @@ Source of truth:
 
 ## Current Goal
 
-Focus Mode Phase 1-3 完成，Phase 4 进行中：会话上下文恢复、Focus Session 历史、首次使用 Tooltip。
+Focus Mode Phase 1-4 完成，Focus Session 历史记录 进行中。
 
 ---
 
@@ -175,15 +175,16 @@ Focus Mode Phase 1-3 完成，Phase 4 进行中：会话上下文恢复、Focus 
 - [x] 恢复提示 UI + 判断逻辑（7 天窗口、95% 判断）
 - [x] Settings 字段接入（showResumePrompt、autoEnterFocusOnDocOpen）+ SettingsModal Focus Mode section + auto-enter effect
 - [x] 快捷键完善（`Cmd+Shift+B` 捕获抽屉、`Cmd+\`` AI 窗口）
-- [ ] 页码 + scrollTop + AI 会话上下文恢复
-- [ ] Focus Session 历史记录
-- [ ] 首次使用 Tooltip（`localStorage` 标记）
-- [ ] 动画性能优化（GPU 加速 `will-change`）
+- [x] AI 会话上下文恢复（共享 conversation，进入/退出 Focus Mode 自动切换，Resume Prompt 显示对话预览）
+- [x] 首次使用 Tooltip（`localStorage` 标记，Focus Mode 入口显示快捷键提示）
+- [x] 动画性能优化（MiniAIWindow / CaptureDrawer / FocusStatusBar / scroll-container `will-change` hints）
+- [ ] Focus Session 历史记录（历史会话面板）
 
 ---
 
 ## Changelog
 
+- 2026-03-26: Focus Mode Phase 4 complete: AI conversation history recovery (shared conversation model, setConversationOverride/restoreConversationOverride in useAI, conversationId persisted to focus_sessions on exit, resume prompt shows last 2 messages preview), first-use tooltip (localStorage flag, dismissFocusTooltip with shortcuts guide), GPU animation optimization (will-change hints on MiniAIWindow/CaptureDrawer/FocusStatusBar/scroll-container).
 - 2026-03-25: Focus Mode Phase 2 & 3 complete: L1 auto-highlight (blue, 50ms), L1 bubble button, L2 AI popover (explain/translate/new-note flows), L3 deep note editor (markdown + tag autocomplete), Mini AI Window (Cmd+`), Capture Drawer (date grouping, filter tabs), Focus Status Bar (progress/counts/duration). Phase 3 integration: scroll progress tracking, 80% summary trigger, resume session prompt, session timer, updateCaptureCounts wired.
 - 2026-03-25: Wire CaptureDrawer with live annotation data: annotationToCapture() maps DB rows to CaptureItem (note/ai-response/highlight), removeCapture() from canvas hook syncs DOM deletion, handleDeleteCapture and handleEditCapture wired.
 - 2026-03-25: Focus Mode full UI integration in App.tsx: MiniAIWindow, CaptureDrawer, FocusStatusBar, resume prompt, 80% summary prompt, Cmd+Shift+B shortcut, session duration timer, updateCaptureCounts wired for highlights and notes.
