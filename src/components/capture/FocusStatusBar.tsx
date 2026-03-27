@@ -28,11 +28,11 @@ export function FocusStatusBar({
 }: FocusStatusBarProps) {
   return (
     <div
-      className="flex items-center gap-3 px-4 py-2 bg-white/95 backdrop-blur-sm border-t border-[#f5f5f4] rounded-none"
+      className="flex items-center gap-3 px-4 py-2 bg-[var(--color-bg-raised)]/95 backdrop-blur-sm border-t border-[var(--color-bg-subtle)] rounded-none"
       style={{ willChange: 'transform', transform: 'translateZ(0)' }}
     >
       {/* Page info */}
-      <div className="flex items-center gap-1 text-[11px] text-[#78716c] flex-shrink-0">
+      <div className="flex items-center gap-1 text-[11px] text-[var(--color-text-secondary)] flex-shrink-0">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14 2 14 8 20 8" />
@@ -42,48 +42,48 @@ export function FocusStatusBar({
 
       {/* Progress bar */}
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <div className="flex-1 h-1.5 bg-[#f5f5f4] rounded-full overflow-hidden max-w-32">
+        <div className="flex-1 h-1.5 bg-[var(--color-bg-hover)] rounded-full overflow-hidden max-w-32">
           <div
-            className="h-full bg-blue-500 rounded-full transition-all duration-500"
+            className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-500"
             style={{ width: `${Math.min(maxProgress, 100)}%` }}
           />
         </div>
-        <span className="text-[11px] tabular-nums text-[#78716c] flex-shrink-0">
+        <span className="text-[11px] tabular-nums text-[var(--color-text-secondary)] flex-shrink-0">
           {Math.round(maxProgress)}%
         </span>
       </div>
 
       {/* Capture counts */}
-      <div className="hidden sm:flex items-center gap-3 text-[11px] text-[#a8a29e] flex-shrink-0">
+      <div className="hidden sm:flex items-center gap-3 text-[11px] text-[var(--color-text-muted)] flex-shrink-0">
         {highlightsCount > 0 && (
           <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-sm bg-blue-400" />
+            <span className="w-1.5 h-1.5 rounded-sm bg-[var(--color-accent)]" />
             {highlightsCount}
           </span>
         )}
         {notesCount > 0 && (
           <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-sm bg-indigo-400" />
+            <span className="w-1.5 h-1.5 rounded-sm bg-[var(--color-ai)]" />
             {notesCount}
           </span>
         )}
         {aiResponsesCount > 0 && (
           <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-sm bg-emerald-400" />
+            <span className="w-1.5 h-1.5 rounded-sm bg-[var(--color-success)]" />
             {aiResponsesCount}
           </span>
         )}
       </div>
 
       {/* Duration */}
-      <div className="text-[11px] tabular-nums text-[#a8a29e] flex-shrink-0">
+      <div className="text-[11px] tabular-nums text-[var(--color-text-muted)] flex-shrink-0">
         ⏱ {formatDuration(sessionDurationSecs)}
       </div>
 
       {/* Exit button */}
       <button
         type="button"
-        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium text-[#78716c] hover:bg-[#f5f5f4] hover:text-[#57534e] transition-colors flex-shrink-0"
+        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-colors flex-shrink-0"
         onClick={onExitFocusMode}
         title="退出 Focus Mode"
       >

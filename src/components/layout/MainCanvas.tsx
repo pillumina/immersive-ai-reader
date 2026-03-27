@@ -1102,7 +1102,7 @@ export function MainCanvas({
       {!tocOpen && hasDocument && totalPages > 0 && (
         <button
           type="button"
-          className="absolute right-5 bottom-5 z-20 flex items-center gap-1.5 rounded-full border border-[#e7e5e4] bg-white/90 px-3.5 py-2 text-[11px] font-medium text-[#78716c] shadow-lg backdrop-blur-lg transition-all duration-200 hover:bg-white hover:shadow-xl hover:scale-[1.03] active:scale-[0.97]"
+          className="absolute right-5 bottom-5 z-20 flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-raised)]/90 px-3.5 py-2 text-[11px] font-medium text-[var(--color-text-secondary)] shadow-lg backdrop-blur-lg transition-all duration-200 hover:bg-[var(--color-bg-raised)] hover:shadow-xl hover:scale-[1.03] active:scale-[0.97]"
           onClick={() => setTocOpen(true)}
           title="Open Table of Contents"
         >
@@ -1115,7 +1115,7 @@ export function MainCanvas({
       {isFocusMode && l1Bubble && (
         <button
           type="button"
-          className="l1-bubble fixed z-50 flex h-7 w-7 items-center justify-center rounded-full border border-[#e7e5e4]/80 bg-white/95 shadow-[0_2px_12px_rgba(0,0,0,0.15)] backdrop-blur-md transition-all duration-150 hover:scale-110 hover:bg-blue-50 hover:border-blue-300 active:scale-95"
+          className="l1-bubble fixed z-50 flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-border)]/80 bg-[var(--color-bg-raised)]/95 shadow-[0_2px_12px_rgba(28,25,23,0.15)] backdrop-blur-md transition-all duration-150 hover:scale-110 hover:bg-[var(--color-accent-subtle)] hover:border-[var(--color-accent-border)] active:scale-95"
           style={{ left: l1Bubble.x, top: l1Bubble.y, transform: 'translateY(-50%)' }}
           onClick={(e) => {
             e.stopPropagation();
@@ -1129,7 +1129,7 @@ export function MainCanvas({
           }}
           title="Open capture options"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-accent)]">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>

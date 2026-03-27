@@ -67,20 +67,20 @@ export function CaptureItemComponent({
   const preview = item.preview || '';
 
   return (
-    <div className="group relative rounded-xl border border-[#f5f5f4] bg-white px-3 py-2.5 transition-all duration-100 hover:border-[#e7e5e4] hover:shadow-sm">
+    <div className="group relative rounded-xl border border-[var(--color-bg-subtle)] bg-[var(--color-bg-raised)] px-3 py-2.5 transition-all duration-100 hover:border-[var(--color-border)] hover:shadow-sm">
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-sm leading-none flex-shrink-0">{config.icon}</span>
-          <span className="text-[11px] font-medium text-[#78716c]">{config.label}</span>
-          <span className="text-[10px] text-[#d6d3d1]">p{item.pageNumber}</span>
-          <span className="text-[10px] text-[#d6d3d1]">{formatTime(item.capturedAt)}</span>
+          <span className="text-[11px] font-medium text-[var(--color-text-secondary)]">{config.label}</span>
+          <span className="text-[10px] text-[var(--color-text-muted)]">p{item.pageNumber}</span>
+          <span className="text-[10px] text-[var(--color-text-muted)]">{formatTime(item.capturedAt)}</span>
         </div>
         {/* Action buttons */}
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             type="button"
-            className="flex items-center justify-center w-6 h-6 rounded-md text-[#a8a29e] hover:bg-[#f5f5f4] hover:text-[#57534e] transition-colors"
+            className="flex items-center justify-center w-6 h-6 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={() => onJumpTo(item.pageNumber)}
             title="跳转到"
           >
@@ -93,7 +93,7 @@ export function CaptureItemComponent({
           {item.type === 'note' && onEdit && (
             <button
               type="button"
-              className="flex items-center justify-center w-6 h-6 rounded-md text-[#a8a29e] hover:bg-[#f5f5f4] hover:text-[#57534e] transition-colors"
+              className="flex items-center justify-center w-6 h-6 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
               onClick={() => onEdit(item)}
               title="编辑"
             >
@@ -106,7 +106,7 @@ export function CaptureItemComponent({
           {onDelete && (
             <button
               type="button"
-              className="flex items-center justify-center w-6 h-6 rounded-md text-[#d6d3d1] hover:bg-red-50 hover:text-red-400 transition-colors"
+              className="flex items-center justify-center w-6 h-6 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-danger-subtle)] hover:text-[var(--color-danger)] transition-colors"
               onClick={() => onDelete(item.id)}
               title="删除"
             >
@@ -122,9 +122,9 @@ export function CaptureItemComponent({
       </div>
 
       {/* Content preview */}
-      <p className="mt-1.5 text-[12px] text-[#57534e] leading-relaxed line-clamp-2">
+      <p className="mt-1.5 text-[12px] text-[var(--color-text-secondary)] leading-relaxed line-clamp-2">
         {item.type === 'highlight' ? (
-          <span className="italic text-[#78716c]">「{preview}」</span>
+          <span className="italic text-[var(--color-text-secondary)]">「{preview}」</span>
         ) : (
           preview
         )}
@@ -143,7 +143,7 @@ export function CaptureItemComponent({
             </span>
           ))}
           {item.tags.length > 3 && (
-            <span className="text-[10px] text-[#a8a29e]">+{item.tags.length - 3}</span>
+            <span className="text-[10px] text-[var(--color-text-muted)]">+{item.tags.length - 3}</span>
           )}
         </div>
       )}
@@ -155,7 +155,7 @@ export function CaptureItemComponent({
             <button
               key={p}
               type="button"
-              className="text-[10px] text-blue-500 hover:underline"
+              className="text-[10px] text-[var(--color-accent)] hover:underline"
               onClick={() => onJumpTo(p)}
             >
               [ref:p{p}]

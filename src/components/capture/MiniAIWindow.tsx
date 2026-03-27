@@ -30,8 +30,8 @@ function ChatBubble({ message }: { message: Message }) {
       <div
         className={`max-w-[85%] rounded-2xl px-3 py-2 text-[12px] leading-relaxed ${
           isUser
-            ? 'bg-blue-500 text-white rounded-br-sm'
-            : 'bg-[#f5f5f4] text-[#1c1917] rounded-bl-sm'
+            ? 'bg-[var(--color-accent)] text-white rounded-br-sm'
+            : 'bg-[var(--color-bg-hover)] text-[var(--color-text)] rounded-bl-sm'
         } ${isStreaming ? 'animate-pulse' : ''}`}
       >
         {isUser ? (
@@ -85,24 +85,24 @@ export function MiniAIWindow({
 
   return (
     <div
-      className="fixed right-0 top-0 bottom-0 z-[9000] flex flex-col w-80 bg-white border-l border-[#e7e5e4]/60 shadow-[-4px_0_24px_rgba(0,0,0,0.08)]"
+      className="fixed right-0 top-0 bottom-0 z-[9000] flex flex-col w-80 bg-[var(--color-bg-raised)] border-l border-[var(--color-border)]/60 shadow-[-4px_0_24px_rgba(28,25,23,0.08)]"
       style={{ willChange: 'transform', transform: 'translateZ(0)' }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#f5f5f4] bg-white/95 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-bg-subtle)] bg-[var(--color-bg-raised)]/95 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-          <span className="text-[11px] font-medium text-[#78716c]">Focus AI</span>
+          <div className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-pulse" />
+          <span className="text-[11px] font-medium text-[var(--color-text-secondary)]">Focus AI</span>
         </div>
         <div className="flex items-center gap-2">
           {sessionDurationSecs > 0 && (
-            <span className="text-[10px] font-mono text-[#a8a29e] tabular-nums">
+            <span className="text-[10px] font-mono text-[var(--color-text-muted)] tabular-nums">
               {formatDuration(sessionDurationSecs)}
             </span>
           )}
           <button
             type="button"
-            className="flex items-center justify-center w-6 h-6 rounded-md text-[#a8a29e] hover:bg-[#f5f5f4] hover:text-[#78716c] transition-colors"
+            className="flex items-center justify-center w-6 h-6 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={onToggleMiniAI}
             title="关闭 mini AI (Cmd+`)"
           >
@@ -126,7 +126,7 @@ export function MiniAIWindow({
         {messages.length === 0 && !isLoading && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <div className="text-2xl mb-2">🤖</div>
-            <p className="text-[12px] text-[#a8a29e] leading-relaxed">
+            <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">
               选中文本后点击气泡按钮，<br />或直接输入问题
             </p>
           </div>
@@ -138,11 +138,11 @@ export function MiniAIWindow({
 
         {isLoading && messages[messages.length - 1]?.role === 'user' && (
           <div className="flex justify-start">
-            <div className="bg-[#f5f5f4] rounded-2xl rounded-bl-sm px-3 py-2">
+            <div className="bg-[var(--color-bg-hover)] rounded-2xl rounded-bl-sm px-3 py-2">
               <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#a8a29e] animate-bounce" />
-                <div className="w-1.5 h-1.5 rounded-full bg-[#a8a29e] animate-bounce [animation-delay:150ms]" />
-                <div className="w-1.5 h-1.5 rounded-full bg-[#a8a29e] animate-bounce [animation-delay:300ms]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-text-muted)] animate-pulse" />
+                <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-text-muted)] animate-pulse [animation-delay:150ms]" />
+                <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-text-muted)] animate-pulse [animation-delay:300ms]" />
               </div>
             </div>
           </div>
@@ -152,7 +152,7 @@ export function MiniAIWindow({
       </div>
 
       {/* Input area */}
-      <div className="px-3 pb-3 pt-2 border-t border-[#f5f5f4]">
+      <div className="px-3 pb-3 pt-2 border-t border-[var(--color-bg-subtle)]">
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}
@@ -161,13 +161,13 @@ export function MiniAIWindow({
             onKeyDown={handleKeyDown}
             placeholder={inputPlaceholder}
             rows={1}
-            className="flex-1 resize-none rounded-xl border border-[#e7e5e4] bg-[#fafaf9] px-3 py-2 text-[12px] text-[#1c1917] placeholder:text-[#d6d3d1] outline-none focus:border-blue-400 transition-colors"
+            className="flex-1 resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-accent)] transition-colors"
             style={{ maxHeight: '120px' }}
           />
           {isLoading ? (
             <button
               type="button"
-              className="flex items-center justify-center w-8 h-8 rounded-xl bg-[#f5f5f4] text-[#78716c] hover:bg-[#e7e5e4] transition-colors flex-shrink-0"
+              className="flex items-center justify-center w-8 h-8 rounded-xl bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)] transition-colors flex-shrink-0"
               onClick={onStopGeneration}
               title="停止生成"
             >
@@ -178,7 +178,7 @@ export function MiniAIWindow({
           ) : (
             <button
               type="button"
-              className="flex items-center justify-center w-8 h-8 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center justify-center w-8 h-8 rounded-xl bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
               onClick={handleSend}
               disabled={!input.trim()}
               title="发送"
@@ -191,7 +191,7 @@ export function MiniAIWindow({
           )}
         </div>
         <div className="mt-1 text-center">
-          <span className="text-[9px] text-[#d6d3d1]">Enter 发送 · Shift+Enter 换行</span>
+          <span className="text-[9px] text-[var(--color-text-muted)]">Enter 发送 · Shift+Enter 换行</span>
         </div>
       </div>
     </div>

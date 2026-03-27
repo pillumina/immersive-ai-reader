@@ -97,24 +97,24 @@ function SessionCard({
   const totalCap = session.highlights_count + session.notes_count + session.ai_responses_count;
 
   return (
-    <div className={`flex flex-col gap-2 p-3 rounded-xl border ${isCurrentSession ? 'border-blue-200 bg-blue-50/50' : 'border-[#f5f5f4] bg-white hover:border-[#e7e5e4]'}`}>
+    <div className={`flex flex-col gap-2 p-3 rounded-xl border ${isCurrentSession ? 'border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)]' : 'border-[var(--color-bg-subtle)] bg-[var(--color-bg-raised)] hover:border-[var(--color-border)]'}`}>
       {/* Header row */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[11px] text-[#78716c]">
+        <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-secondary)]">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
           <span>{date}</span>
-          <span className="text-[#d6d3d1]">{time}</span>
+          <span className="text-[var(--color-text-muted)]">{time}</span>
           {isCurrentSession && (
-            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 text-[10px] font-medium">当前</span>
+            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-[var(--color-accent-subtle)] text-[var(--color-accent)] text-[10px] font-medium">当前</span>
           )}
         </div>
         <button
           type="button"
           onClick={() => onDelete(session.session_id)}
-          className="flex items-center justify-center w-6 h-6 rounded-lg text-[#d6d3d1] hover:bg-red-50 hover:text-red-400 transition-colors"
+          className="flex items-center justify-center w-6 h-6 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-danger-subtle)] hover:text-[var(--color-danger)] transition-colors"
           title="删除会话"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -127,7 +127,7 @@ function SessionCard({
       </div>
 
       {/* Stats row */}
-      <div className="flex items-center gap-3 text-[11px] text-[#a8a29e]">
+      <div className="flex items-center gap-3 text-[11px] text-[var(--color-text-muted)]">
         {/* Duration */}
         {session.duration_minutes != null && (
           <span className="flex items-center gap-1">
@@ -168,22 +168,22 @@ function SessionCard({
 
       {/* Capture detail dots */}
       {(session.highlights_count > 0 || session.notes_count > 0 || session.ai_responses_count > 0) && (
-        <div className="flex items-center gap-2 text-[10px] text-[#a8a29e]">
+        <div className="flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
           {session.highlights_count > 0 && (
             <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-sm bg-blue-400" />
+              <span className="w-1.5 h-1.5 rounded-sm bg-[var(--color-accent)]" />
               {session.highlights_count}
             </span>
           )}
           {session.notes_count > 0 && (
             <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-sm bg-indigo-400" />
+              <span className="w-1.5 h-1.5 rounded-sm bg-[var(--color-ai)]" />
               {session.notes_count}
             </span>
           )}
           {session.ai_responses_count > 0 && (
             <span className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-sm bg-emerald-400" />
+              <span className="w-1.5 h-1.5 rounded-sm bg-[var(--color-success)]" />
               {session.ai_responses_count}
             </span>
           )}
@@ -195,7 +195,7 @@ function SessionCard({
         <button
           type="button"
           onClick={() => onResume(session)}
-          className="w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-medium bg-[#f5f5f4] text-[#57534e] hover:bg-[#e7e5e4] hover:text-[#1c1917] transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-medium bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)] transition-colors"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <polygon points="5 3 19 12 5 21 5 3" />
@@ -291,21 +291,21 @@ export function CaptureDrawer({
 
       {/* Drawer panel */}
       <div
-        className={`fixed left-0 top-0 bottom-0 z-[8001] w-72 bg-white border-r border-[#e7e5e4]/60 shadow-[4px_0_24px_rgba(0,0,0,0.08)] flex flex-col transition-transform duration-200 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed left-0 top-0 bottom-0 z-[8001] w-72 bg-[var(--color-bg-raised)] border-r border-[var(--color-border)]/60 shadow-[4px_0_24px_rgba(28,25,23,0.08)] flex flex-col transition-transform duration-200 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{ willChange: 'transform', contain: 'layout style paint' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#f5f5f4]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-bg-subtle)]">
           <div className="flex items-center gap-2">
             <span className="text-sm">📋</span>
-            <span className="text-[13px] font-semibold text-[#1c1917]">捕获记录</span>
+            <span className="text-[13px] font-semibold text-[var(--color-text)]">捕获记录</span>
             {!isSessionsTab && (
-              <span className="text-[11px] text-[#a8a29e]">({captures.length})</span>
+              <span className="text-[11px] text-[var(--color-text-muted)]">({captures.length})</span>
             )}
           </div>
           <button
             type="button"
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-[#a8a29e] hover:bg-[#f5f5f4] hover:text-[#78716c] transition-colors"
+            className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={onClose}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -317,12 +317,12 @@ export function CaptureDrawer({
 
         {/* Synthesize button (hidden on sessions tab) */}
         {!isSessionsTab && (
-          <div className="px-4 py-3 border-b border-[#f5f5f4]">
+          <div className="px-4 py-3 border-b border-[var(--color-bg-subtle)]">
             {isSynthesizing ? (
               <button
                 type="button"
                 disabled
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-400 text-white text-[12px] font-semibold py-2 px-4 opacity-70 cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-[var(--color-accent)]/40 text-white text-[12px] font-semibold py-2 px-4 opacity-70 cursor-not-allowed"
               >
                 <div className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
                 AI 合成中…
@@ -333,8 +333,8 @@ export function CaptureDrawer({
                 disabled={!canSynthesize}
                 className={`w-full rounded-xl text-[12px] font-semibold py-2 px-4 transition-all ${
                   canSynthesize
-                    ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm'
-                    : 'bg-[#f5f5f4] text-[#a8a29e] cursor-not-allowed'
+                    ? 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] shadow-sm'
+                    : 'bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] cursor-not-allowed'
                 }`}
                 onClick={onSynthesize}
                 title={canSynthesize ? `基于 ${captures.length} 条捕获` : '需要至少 3 条捕获'}
@@ -347,15 +347,15 @@ export function CaptureDrawer({
         )}
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 px-4 py-2 border-b border-[#f5f5f4]">
+        <div className="flex items-center gap-1 px-4 py-2 border-b border-[var(--color-bg-subtle)]">
           {!isSessionsTab && TABS.map((tab) => (
             <button
               key={tab.key}
               type="button"
               className={`rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors ${
                 activeTab === tab.key
-                  ? 'bg-[#f5f5f4] text-[#1c1917]'
-                  : 'text-[#a8a29e] hover:bg-[#fafaf9]'
+                  ? 'bg-[var(--color-bg-hover)] text-[var(--color-text)]'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg)]'
               }`}
               onClick={() => setActiveTab(tab.key)}
             >
@@ -370,8 +370,8 @@ export function CaptureDrawer({
             type="button"
             className={`rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors flex items-center gap-1 ${
               isSessionsTab
-                ? 'bg-[#f5f5f4] text-[#1c1917]'
-                : 'text-[#a8a29e] hover:bg-[#fafaf9]'
+                ? 'bg-[var(--color-bg-hover)] text-[var(--color-text)]'
+                : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg)]'
             }`}
             onClick={() => setActiveTab('sessions')}
           >
@@ -395,25 +395,25 @@ export function CaptureDrawer({
               {!documentId ? (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4">
                   <div className="text-3xl mb-3">📖</div>
-                  <p className="text-[12px] text-[#a8a29e] leading-relaxed">
+                  <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">
                     打开文档后查看阅读历史。
                   </p>
                 </div>
               ) : sessionsLoading ? (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                  <div className="w-5 h-5 rounded-full border-2 border-[#e7e5e4] border-t-[#a8a29e] animate-spin mb-3" />
-                  <p className="text-[12px] text-[#a8a29e]">加载中…</p>
+                  <div className="w-5 h-5 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-text-muted)] animate-spin mb-3" />
+                  <p className="text-[12px] text-[var(--color-text-muted)]">加载中…</p>
                 </div>
               ) : sessions.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4">
                   <div className="text-3xl mb-3">📭</div>
-                  <p className="text-[12px] text-[#a8a29e] leading-relaxed">
+                  <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">
                     还没有任何阅读会话。
                   </p>
                 </div>
               ) : (
                 <>
-                  <p className="text-[11px] text-[#a8a29e] px-1">
+                  <p className="text-[11px] text-[var(--color-text-muted)] px-1">
                     共 {sessions.length} 个会话
                   </p>
                   {sessions.map((session) => (
@@ -435,7 +435,7 @@ export function CaptureDrawer({
           {!isSessionsTab && filtered.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
               <div className="text-3xl mb-3">📭</div>
-              <p className="text-[12px] text-[#a8a29e] leading-relaxed">
+              <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">
                 {activeTab === 'all'
                   ? '还没有任何捕获。\nFocus Mode 下选中文本即可开始。'
                   : `暂无${TABS.find((t) => t.key === activeTab)?.label}。`}
@@ -447,8 +447,8 @@ export function CaptureDrawer({
             const [date, time] = dateTime.split(' ');
             return (
               <div key={dateTime} className="flex flex-col gap-1">
-                <div className="text-[10px] font-medium text-[#a8a29e] px-1 sticky top-0 bg-white py-0.5">
-                  {date} <span className="text-[#d6d3d1]">{time}</span>
+                <div className="text-[10px] font-medium text-[var(--color-text-muted)] px-1 sticky top-0 bg-[var(--color-bg-raised)] py-0.5">
+                  {date} <span className="text-[var(--color-text-muted)]">{time}</span>
                 </div>
                 {items.map((item) => (
                   <CaptureItemComponent

@@ -1526,7 +1526,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
                 重新开始
               </button>
               <button
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors"
                 onClick={() => {
                   if (focusState.resumeSession?.last_page) {
                     jumpToPage(focusState.resumeSession.last_page);
@@ -1588,7 +1588,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
                 稍后
               </button>
               <button
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors"
                 onClick={() => {
                   setShowFocus80Prompt(false);
                   dismissSummary80();
