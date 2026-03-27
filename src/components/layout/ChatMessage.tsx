@@ -88,7 +88,7 @@ function renderAssistantContent(content: string, isStreaming: boolean, onJumpToC
                 const page = Number(href.split('/').pop() || '0');
                 return (
                   <button
-                    className="mx-0.5 inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-700 hover:bg-sky-100"
+                    className="mx-0.5 inline-flex items-center rounded-md border border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)] px-1.5 py-0.5 text-[11px] text-[var(--color-accent-text)] hover:bg-[var(--color-accent-border)]"
                     onClick={() => page > 0 && onJumpToCitation(page)}
                     title={page > 0 ? `Jump to page ${page}` : 'Citation'}
                   >
@@ -97,7 +97,7 @@ function renderAssistantContent(content: string, isStreaming: boolean, onJumpToC
                 );
               }
               return (
-                <a href={href} target="_blank" rel="noreferrer" className="text-sky-700 underline">
+                <a href={href} target="_blank" rel="noreferrer" className="text-[var(--color-accent-text)] underline">
                   {children}
                 </a>
               );
@@ -167,10 +167,10 @@ export const ChatMessage = memo(function ChatMessageWip({
   }, []);
 
   const bubbleClass = msg.role === 'user'
-    ? 'bg-[#c2410c] text-white rounded-br-md'
+    ? 'bg-[var(--color-accent)] text-white rounded-br-md'
     : msg.status === 'error'
-      ? 'bg-rose-50 border border-rose-200 text-rose-700 rounded-bl-md'
-      : 'bg-white border border-[#e7e5e4] text-[#1c1917] rounded-bl-md';
+      ? 'bg-[var(--color-danger-subtle)] border border-[var(--color-danger)]/20 text-[var(--color-danger)] rounded-bl-md'
+      : 'bg-[var(--color-bg-raised)] border border-[var(--color-border)] text-[var(--color-text)] rounded-bl-md';
 
   return (
     <div

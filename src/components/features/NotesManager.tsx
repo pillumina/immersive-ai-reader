@@ -146,34 +146,34 @@ ${note.content}
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       {/* Search & Filter Bar */}
-      <div className="px-3 py-2.5 border-b border-[#e7e5e4]/60 flex items-center gap-2">
+      <div className="px-3 py-2.5 border-b border-[var(--color-border)]/60 flex items-center gap-2">
         <div className="flex-1 relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a8a29e]" />
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search notes..."
-            className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-[#e7e5e4] bg-[#fafaf9] text-[12px] text-[#1c1917] placeholder:text-[#a8a29e] focus:outline-none focus:ring-1 focus:ring-[#c2410c]/30 focus:border-[#c2410c]/40 transition-all"
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] text-[12px] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]/30 focus:border-[var(--color-accent)]/40 transition-all"
           />
         </div>
         <div className="relative shrink-0">
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'page' | 'date')}
-            className="appearance-none pl-2.5 pr-6 py-1.5 rounded-lg border border-[#e7e5e4] bg-white text-[11px] text-[#78716c] focus:outline-none focus:ring-1 focus:ring-[#c2410c]/30 cursor-pointer"
+            className="appearance-none pl-2.5 pr-6 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-raised)] text-[11px] text-[var(--color-text-secondary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]/30 cursor-pointer"
           >
             <option value="date">Newest</option>
             <option value="page">By page</option>
           </select>
-          <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[#a8a29e] pointer-events-none" />
+          <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] pointer-events-none" />
         </div>
       </div>
 
       {/* Notes List */}
       <div className="flex-1 overflow-y-auto">
         {filteredNotes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-[#a8a29e]">
+          <div className="flex flex-col items-center justify-center py-12 text-[var(--color-text-muted)]">
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-2 opacity-50">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
@@ -188,26 +188,26 @@ ${note.content}
             {filteredNotes.map((note) => (
               <div
                 key={note.id}
-                className="group rounded-xl border border-[#e7e5e4]/80 bg-white p-3 hover:border-[#d6d3d1] hover:shadow-sm transition-all"
+                className="group rounded-xl border border-[var(--color-border)]/80 bg-[var(--color-bg-raised)] p-3 hover:border-[var(--color-border-subtle)] hover:shadow-sm transition-all"
               >
                 {/* Note Header */}
                 <div className="flex items-center justify-between mb-1.5">
                   <button
                     onClick={() => onJumpToPage(note.pageNumber)}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#fff7ed] text-[11px] font-medium text-[#9a3412] hover:bg-[#fed7aa] transition-colors"
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--color-accent-subtle)] text-[11px] font-medium text-[var(--color-accent-hover)] hover:bg-[var(--color-accent-border)] transition-colors"
                   >
                     <span>P.{note.pageNumber}</span>
                     <ExternalLink size={10} />
                   </button>
-                  <span className="text-[10px] text-[#a8a29e]">
+                  <span className="text-[10px] text-[var(--color-text-muted)]">
                     {new Date(note.createdAt).toLocaleDateString()}
                   </span>
                 </div>
 
                 {/* Selected Text Quote */}
                 {note.selectedText && (
-                  <div className="mb-2 pl-2.5 border-l-2 border-[#fed7aa]">
-                    <p className="text-[11px] text-[#78716c] italic leading-snug line-clamp-2">{note.selectedText}</p>
+                  <div className="mb-2 pl-2.5 border-l-2 border-[var(--color-accent-border)]">
+                    <p className="text-[11px] text-[var(--color-text-secondary)] italic leading-snug line-clamp-2">{note.selectedText}</p>
                   </div>
                 )}
 
@@ -217,28 +217,28 @@ ${note.content}
                     <textarea
                       value={editContent}
                       onChange={(e) => setEditContent(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-[#e7e5e4] bg-[#fafaf9] text-[12px] text-[#1c1917] resize-none focus:outline-none focus:ring-1 focus:ring-[#c2410c]/30"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] text-[12px] text-[var(--color-text)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]/30"
                       rows={3}
                       autoFocus
                     />
                     <div className="flex gap-1.5 justify-end">
-                      <button onClick={handleCancelEdit} className="px-2.5 py-1 rounded-md text-[11px] text-[#78716c] hover:bg-[#f5f5f4] transition-colors">Cancel</button>
-                      <button onClick={handleSaveEdit} className="px-2.5 py-1 rounded-md text-[11px] font-medium text-white bg-[#c2410c] hover:bg-[#9a3412] transition-colors">Save</button>
+                      <button onClick={handleCancelEdit} className="px-2.5 py-1 rounded-md text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] transition-colors">Cancel</button>
+                      <button onClick={handleSaveEdit} className="px-2.5 py-1 rounded-md text-[11px] font-medium text-white bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] transition-colors">Save</button>
                     </div>
                   </div>
                 ) : (
                   <div
-                    className="text-[12px] text-[#1c1917] leading-relaxed mb-2"
+                    className="text-[12px] text-[var(--color-text)] leading-relaxed mb-2"
                     dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(note.content) }}
                   />
                 )}
 
                 {/* Action Buttons */}
                 {editingId !== note.id && (
-                  <div className="flex items-center gap-1 pt-1.5 border-t border-[#f5f5f4]">
+                  <div className="flex items-center gap-1 pt-1.5 border-t border-[var(--color-bg-subtle)]">
                     <button
                       onClick={() => handleStartEdit(note)}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] text-[#a8a29e] hover:text-[#78716c] hover:bg-[#f5f5f4] transition-colors"
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] transition-colors"
                     >
                       <Edit3 size={11} />
                       Edit
@@ -246,7 +246,7 @@ ${note.content}
                     <button
                       onClick={() => handleDelete(note.id)}
                       disabled={deletingId === note.id}
-                      className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] text-[#a8a29e] hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
+                      className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-subtle)] transition-colors disabled:opacity-50"
                     >
                       <Trash2 size={11} />
                       {deletingId === note.id ? 'Deleting…' : 'Delete'}
@@ -260,14 +260,14 @@ ${note.content}
       </div>
 
       {/* Footer */}
-      <div className="px-3 py-2 border-t border-[#e7e5e4]/60 flex items-center justify-between">
-        <span className="text-[10px] text-[#a8a29e]">
+      <div className="px-3 py-2 border-t border-[var(--color-border)]/60 flex items-center justify-between">
+        <span className="text-[10px] text-[var(--color-text-muted)]">
           {filteredNotes.length === notes.length ? `${notes.length} notes` : `${filteredNotes.length} / ${notes.length}`}
         </span>
         <button
           onClick={handleExport}
           disabled={filteredNotes.length === 0}
-          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-[#78716c] border border-[#e7e5e4] hover:bg-[#f5f5f4] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-[var(--color-text-secondary)] border border-[var(--color-border)] hover:bg-[var(--color-bg-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           <Download size={11} />
           Export

@@ -743,18 +743,18 @@ function StatsSection() {
 
       {loading && (
         <div className="flex items-center justify-center py-8">
-          <div className="w-5 h-5 rounded-full border-2 border-[#e7e5e4] border-t-[#a8a29e] animate-spin" />
+          <div className="w-5 h-5 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-text-muted)] animate-spin" />
         </div>
       )}
 
       {!loading && !s && (
-        <div className="text-center py-8 text-[13px] text-[#a8a29e]">
+        <div className="text-center py-8 text-[13px] text-[var(--color-text-muted)]">
           No usage data yet. Start chatting with AI to see stats.
         </div>
       )}
 
       {!loading && s && s.total_requests === 0 && (
-        <div className="text-center py-8 text-[13px] text-[#a8a29e]">
+        <div className="text-center py-8 text-[13px] text-[var(--color-text-muted)]">
           No API calls in the last {days} days.
         </div>
       )}
@@ -794,7 +794,7 @@ function StatsSection() {
                 style={{ width: `${s.total_tokens > 0 ? (s.total_completion_tokens / s.total_tokens) * 100 : 0}%` }}
               />
             </div>
-            <div className="flex items-center gap-4 mt-2 text-[11px] text-[#78716c]">
+            <div className="flex items-center gap-4 mt-2 text-[11px] text-[var(--color-text-secondary)]">
               <span className="flex items-center gap-1">
                 <span className="stats-token-bar__dot stats-token-bar__dot--prompt" />
                 Prompt: {formatTokens(s.total_prompt_tokens)}
@@ -814,9 +814,9 @@ function StatsSection() {
                 <div key={m.model} className="stats-row">
                   <span className="stats-row__name" title={m.model}>{m.model}</span>
                   <div className="flex items-center gap-4 text-[11px]">
-                    <span className="text-[#78716c]">{m.requests} reqs</span>
-                    <span className="text-[#a8a29e]">{formatTokens(m.total_tokens)}</span>
-                    <span className="text-[#a8a29e]">{Math.round(m.avg_latency_ms)}ms avg</span>
+                    <span className="text-[var(--color-text-secondary)]">{m.requests} reqs</span>
+                    <span className="text-[var(--color-text-muted)]">{formatTokens(m.total_tokens)}</span>
+                    <span className="text-[var(--color-text-muted)]">{Math.round(m.avg_latency_ms)}ms avg</span>
                   </div>
                 </div>
               ))}
@@ -831,8 +831,8 @@ function StatsSection() {
                 <div key={p.provider} className="stats-row">
                   <span className="stats-row__name">{p.provider}</span>
                   <div className="flex items-center gap-4 text-[11px]">
-                    <span className="text-[#78716c]">{p.requests} reqs</span>
-                    <span className="text-[#a8a29e]">{formatTokens(p.total_tokens)}</span>
+                    <span className="text-[var(--color-text-secondary)]">{p.requests} reqs</span>
+                    <span className="text-[var(--color-text-muted)]">{formatTokens(p.total_tokens)}</span>
                   </div>
                 </div>
               ))}
@@ -941,7 +941,7 @@ function LogsSection() {
 
       {/* Log info */}
       {logInfo && (
-        <div className="flex items-center gap-3 mb-2 text-[11px] text-[#a8a29e]">
+        <div className="flex items-center gap-3 mb-2 text-[11px] text-[var(--color-text-muted)]">
           <span>{logInfo.name}</span>
           <span>{logInfo.size}</span>
           <span>{filtered.length} / {logs.length} lines</span>
@@ -951,12 +951,12 @@ function LogsSection() {
       {/* Log viewer */}
       {loading && (
         <div className="flex items-center justify-center py-8">
-          <div className="w-5 h-5 rounded-full border-2 border-[#e7e5e4] border-t-[#a8a29e] animate-spin" />
+          <div className="w-5 h-5 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-text-muted)] animate-spin" />
         </div>
       )}
 
       {!loading && logs.length === 0 && (
-        <div className="text-center py-8 text-[13px] text-[#a8a29e]">
+        <div className="text-center py-8 text-[13px] text-[var(--color-text-muted)]">
           No log files yet. Logs are created when the app starts.
         </div>
       )}

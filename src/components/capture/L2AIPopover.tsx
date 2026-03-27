@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { Brain, Languages, MessageSquare, StickyNote } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 
 /** Position relative to viewport (fixed coordinates) */
 export interface L2PopoverPosition {
@@ -24,15 +25,15 @@ interface L2AIPopoverProps {
 interface L2Option {
   key: string;
   label: string;
-  icon: string;
+  icon: ReactNode;
   shortcut: string;
 }
 
 const OPTIONS: L2Option[] = [
-  { key: 'explain', label: '让 AI 解释', icon: '🤖', shortcut: '1' },
-  { key: 'translate', label: '让 AI 翻译', icon: '🌐', shortcut: '2' },
-  { key: 'add-to-session', label: '加入 AI 会话', icon: '💬', shortcut: '3' },
-  { key: 'new-note', label: '新建笔记', icon: '📝', shortcut: '4' },
+  { key: 'explain', label: '让 AI 解释', icon: Brain, shortcut: '1' },
+  { key: 'translate', label: '让 AI 翻译', icon: Languages, shortcut: '2' },
+  { key: 'add-to-session', label: '加入 AI 会话', icon: MessageSquare, shortcut: '3' },
+  { key: 'new-note', label: '新建笔记', icon: StickyNote, shortcut: '4' },
 ];
 
 /** Debounce window after popover appears (ms) — prevents accidental double-clicks */
@@ -166,7 +167,7 @@ export function L2AIPopover({
       ref={popoverRef}
       role="menu"
       aria-label="AI capture options"
-      className="l2-popover fixed z-[9999] flex flex-col rounded-xl border border-[#e7e5e4]/80 bg-white/98 shadow-[0_8px_32px_rgba(0,0,0,0.16),0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-md"
+      className="l2-popover fixed z-[9999] flex flex-col rounded-xl border border-[var(--color-border)]/80 bg-[var(--color-bg-raised)]/98 shadow-[0_8px_32px_rgba(28,25,23,0.16),0_2px_8px_rgba(28,25,23,0.08)] backdrop-blur-md"
       style={{
         left,
         top,
@@ -183,14 +184,14 @@ export function L2AIPopover({
           key={option.key}
           type="button"
           role="menuitem"
-          className="l2-option flex items-center gap-3 px-3 py-2.5 text-left text-[13px] text-[#1c1917] transition-all duration-75 hover:bg-blue-50 hover:text-blue-600 active:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="l2-option flex items-center gap-3 px-3 py-2.5 text-left text-[13px] text-[var(--color-text)] transition-all duration-75 hover:bg-[var(--color-accent-subtle)] hover:text-[var(--color-accent)] active:bg-[var(--color-accent-border)] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ height: 36 }}
           onClick={() => handleOptionClick(option.key)}
           title={`${option.label} (${option.shortcut})`}
         >
-          <span className="text-base leading-none">{option.icon}</span>
+          <span className="text-base leading-none"><option.icon size={16} /></span>
           <span className="flex-1 font-medium">{option.label}</span>
-          <span className="text-[10px] font-mono text-[#a8a29e]">{option.shortcut}</span>
+          <span className="text-[10px] font-mono text-[var(--color-text-muted)]">{option.shortcut}</span>
         </button>
       ))}
 

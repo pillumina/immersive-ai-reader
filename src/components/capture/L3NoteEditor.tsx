@@ -167,12 +167,12 @@ export function L3NoteEditor({
     <div className="fixed inset-0 z-[9998] flex items-start justify-center pt-[10vh] bg-black/20 backdrop-blur-sm animate-in fade-in duration-200">
       <div
         ref={containerRef}
-        className="relative w-full max-w-2xl mx-4 bg-white rounded-2xl shadow-[0_16px_64px_rgba(0,0,0,0.2),0_4px_16px_rgba(0,0,0,0.1)] border border-[#e7e5e4]/60 flex flex-col overflow-hidden animate-in slide-in-from-top-4 duration-200"
+        className="relative w-full max-w-2xl mx-4 bg-[var(--color-bg-raised)] rounded-2xl shadow-[0_16px_64px_rgba(28,25,23,0.2),0_4px_16px_rgba(28,25,23,0.1)] border border-[var(--color-border)]/60 flex flex-col overflow-hidden animate-in slide-in-from-top-4 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#f5f5f4]">
-          <div className="flex items-center gap-2 text-xs text-[#a8a29e]">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-bg-subtle)]">
+          <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
             {pageNumber && (
               <>
                 <span>第 {pageNumber} 页</span>
@@ -183,7 +183,7 @@ export function L3NoteEditor({
           </div>
           <button
             type="button"
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-[#a8a29e] hover:bg-[#f5f5f4] hover:text-[#78716c] transition-colors"
+            className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={() => {
               if (dirty) { setShowDiscardConfirm(true); return; }
               onClose();
@@ -201,16 +201,16 @@ export function L3NoteEditor({
         <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
           {/* Quote block */}
           {quoteText && (
-            <div className="rounded-xl bg-[#f5f5f4] border-l-4 border-blue-300 px-4 py-3">
-              <div className="text-[11px] font-medium text-[#a8a29e] uppercase tracking-wider mb-1.5">引用原文</div>
-              <p className="text-[13px] text-[#57534e] italic leading-relaxed line-clamp-4">{quoteText}</p>
+            <div className="rounded-xl bg-[var(--color-bg-hover)] border-l-4 border-[var(--color-accent)] px-4 py-3">
+              <div className="text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider mb-1.5">引用原文</div>
+              <p className="text-[13px] text-[var(--color-text-secondary)] italic leading-relaxed line-clamp-4">{quoteText}</p>
             </div>
           )}
 
           {/* Tags input */}
           <div>
-            <div className="text-[11px] font-medium text-[#a8a29e] uppercase tracking-wider mb-2">标签</div>
-            <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#e7e5e4] px-3 py-2 bg-white min-h-[40px]">
+            <div className="text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider mb-2">标签</div>
+            <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[var(--color-border)] px-3 py-2 bg-[var(--color-bg-raised)] min-h-[40px]">
               {tags.map((tag) => (
                 <span
                   key={tag.name}
@@ -241,15 +241,15 @@ export function L3NoteEditor({
                     if (e.key === 'Escape') { setTagInput(''); setSuggestions([]); }
                   }}
                   placeholder="添加标签（回车确认）"
-                  className="w-full text-[13px] text-[#1c1917] placeholder:text-[#d6d3d1] outline-none bg-transparent"
+                  className="w-full text-[13px] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] outline-none bg-transparent"
                 />
                 {suggestions.length > 0 && (
-                  <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-xl border border-[#e7e5e4] shadow-lg z-10 py-1">
+                  <div className="absolute top-full left-0 mt-1 w-48 bg-[var(--color-bg-raised)] rounded-xl border border-[var(--color-border)] shadow-lg z-10 py-1">
                     {suggestions.slice(0, 5).map((s) => (
                       <button
                         key={s.id}
                         type="button"
-                        className="w-full text-left px-3 py-2 text-[13px] text-[#1c1917] hover:bg-[#f5f5f4] flex items-center gap-2"
+                        className="w-full text-left px-3 py-2 text-[13px] text-[var(--color-text)] hover:bg-[var(--color-bg-hover)] flex items-center gap-2"
                         onClick={() => handleTagAdd(s.name, s.color)}
                       >
                         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
@@ -265,10 +265,10 @@ export function L3NoteEditor({
           {/* Note content */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <div className="text-[11px] font-medium text-[#a8a29e] uppercase tracking-wider">笔记</div>
+              <div className="text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wider">笔记</div>
               <button
                 type="button"
-                className="text-[11px] text-[#a8a29e] hover:text-blue-500 transition-colors"
+                className="text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors"
                 onClick={() => setShowPreview((p) => !p)}
               >
                 {showPreview ? '编辑' : '预览'}
@@ -276,9 +276,9 @@ export function L3NoteEditor({
             </div>
             {showPreview ? (
               <div
-                className="min-h-[160px] rounded-xl border border-[#e7e5e4] px-4 py-3 text-[13px] text-[#1c1917] leading-relaxed prose prose-sm prose-stone"
+                className="min-h-[160px] rounded-xl border border-[var(--color-border)] px-4 py-3 text-[13px] text-[var(--color-text)] leading-relaxed prose prose-sm prose-stone"
                 dangerouslySetInnerHTML={{
-                  __html: simpleMarkdownToHtml(noteContent) || '<p class="text-[#d6d3d1]">无内容</p>',
+                  __html: simpleMarkdownToHtml(noteContent) || '<p class="text-[var(--color-text-muted)]">无内容</p>',
                 }}
               />
             ) : (
@@ -287,18 +287,18 @@ export function L3NoteEditor({
                 value={noteContent}
                 onChange={(e) => { setNoteContent(e.target.value); setDirty(true); }}
                 placeholder="写下你的笔记... 支持 Markdown：`**加粗**`、`code`、> 引用"
-                className="min-h-[160px] rounded-xl border border-[#e7e5e4] px-4 py-3 text-[13px] text-[#1c1917] placeholder:text-[#d6d3d1] leading-relaxed resize-none outline-none focus:border-blue-400 transition-colors"
+                className="min-h-[160px] rounded-xl border border-[var(--color-border)] px-4 py-3 text-[13px] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] leading-relaxed resize-none outline-none focus:border-[var(--color-accent)] transition-colors"
               />
             )}
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-3 border-t border-[#f5f5f4]">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--color-bg-subtle)]">
           {annotationId && (
             <button
               type="button"
-              className="text-xs text-red-400 hover:text-red-600 transition-colors"
+              className="text-xs text-[var(--color-danger)] hover:text-[var(--color-danger)]/80 transition-colors"
               onClick={async () => {
                 try {
                   const { annotationCommands: ac } = await import('@/lib/tauri/commands');
@@ -314,7 +314,7 @@ export function L3NoteEditor({
           <div className="flex items-center gap-2 ml-auto">
             <button
               type="button"
-              className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#78716c] hover:bg-[#f5f5f4] transition-colors"
+              className="px-4 py-2 rounded-xl text-[13px] font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] transition-colors"
               onClick={() => {
                 if (dirty) { setShowDiscardConfirm(true); return; }
                 onClose();
@@ -324,7 +324,7 @@ export function L3NoteEditor({
             </button>
             <button
               type="button"
-              className="px-5 py-2 rounded-xl text-[13px] font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="px-5 py-2 rounded-xl text-[13px] font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               onClick={handleSave}
               disabled={saving || !noteContent.trim()}
             >
@@ -335,20 +335,20 @@ export function L3NoteEditor({
 
         {/* Discard confirmation overlay */}
         {showDiscardConfirm && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/90 rounded-2xl z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg-raised)]/90 rounded-2xl z-10">
             <div className="text-center p-6">
-              <p className="text-sm font-medium text-[#1c1917] mb-4">有未保存的内容，确定放弃？</p>
+              <p className="text-sm font-medium text-[var(--color-text)] mb-4">有未保存的内容，确定放弃？</p>
               <div className="flex gap-2 justify-center">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#78716c] hover:bg-[#f5f5f4] transition-colors"
+                  className="px-4 py-2 rounded-xl text-[13px] font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] transition-colors"
                   onClick={() => setShowDiscardConfirm(false)}
                 >
                   继续编辑
                 </button>
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-xl text-[13px] font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
+                  className="px-4 py-2 rounded-xl text-[13px] font-semibold bg-[var(--color-danger)] text-white hover:bg-[var(--color-danger)]/80 transition-colors"
                   onClick={onClose}
                 >
                   放弃

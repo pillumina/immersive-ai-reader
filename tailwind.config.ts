@@ -98,13 +98,14 @@ export default {
         '75':  '75ms',
         '150': '150ms',
         '200': '200ms',
+        '280': '280ms',
         '300': '300ms',
       },
 
       // ─── Custom Easing ────────────────────────────────────────
       transitionTimingFunction: {
         'spring':  'cubic-bezier(0.16, 1, 0.3, 1)',
-        'bounce':  'cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'out-quint': 'cubic-bezier(0.22, 1, 0.36, 1)',
       },
     },
   },

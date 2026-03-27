@@ -70,16 +70,16 @@ export function Sidebar({
   );
 
   return (
-    <aside className="w-[260px] border-r border-[#e7e5e4] bg-white flex flex-col select-none overflow-hidden">
+    <aside className="w-[260px] border-r border-[var(--color-border)] bg-[var(--color-bg-raised)] flex flex-col select-none overflow-hidden">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-[#f5f5f4]">
+      <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-[var(--color-bg-subtle)]">
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-[#c2410c] flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-[var(--color-accent)] flex items-center justify-center shrink-0">
             <Logo size={16} variant="dark" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-[13px] font-semibold text-[#1c1917] leading-tight truncate">Immersive Reader</h1>
-            <p className="text-[10px] text-[#78716c] leading-none">Document + AI</p>
+            <h1 className="text-[13px] font-semibold text-[var(--color-text)] leading-tight truncate">Immersive Reader</h1>
+            <p className="text-[10px] text-[var(--color-text-secondary)] leading-none">Document + AI</p>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -87,7 +87,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={onToggleSidebar}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-[#78716c] hover:bg-[#f5f5f4] hover:text-[#1c1917] transition-colors"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-colors"
               title="Hide sidebar"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -98,7 +98,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#78716c] hover:bg-[#f5f5f4] hover:text-[#1c1917] transition-colors"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-colors"
             title="Settings"
           >
             <Settings size={15} />
@@ -107,14 +107,14 @@ export function Sidebar({
       </div>
 
       {/* Tab bar */}
-      <div className="px-4 pt-2 pb-0 flex items-center gap-1 border-b border-[#f5f5f4]">
+      <div className="px-4 pt-2 pb-0 flex items-center gap-1 border-b border-[var(--color-bg-subtle)]">
         <button
           type="button"
           onClick={() => setActiveTab('library')}
           className={`flex items-center gap-1.5 px-3 pb-2.5 text-[12px] font-medium border-b-2 transition-colors -mb-px ${
             activeTab === 'library'
-              ? 'border-[#c2410c] text-[#c2410c]'
-              : 'border-transparent text-[#78716c] hover:text-[#1c1917]'
+              ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+              : 'border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
           }`}
         >
           <Library size={13} />
@@ -128,8 +128,8 @@ export function Sidebar({
           onClick={() => setActiveTab('pages')}
           className={`flex items-center gap-1.5 px-3 pb-2.5 text-[12px] font-medium border-b-2 transition-colors -mb-px ${
             activeTab === 'pages'
-              ? 'border-[#c2410c] text-[#c2410c]'
-              : 'border-transparent text-[#78716c] hover:text-[#1c1917]'
+              ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+              : 'border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'
           }`}
         >
           <Columns size={13} />
@@ -141,13 +141,13 @@ export function Sidebar({
       {activeTab === 'library' && (
         <div className="px-4 pt-3 pb-2">
           <div className="relative flex items-center">
-            <Search size={13} className="absolute left-2.5 text-[#a8a29e] pointer-events-none" />
+            <Search size={13} className="absolute left-2.5 text-[var(--color-text-muted)] pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search documents…"
-              className="w-full h-7 pl-7 pr-3 text-[12px] bg-[#fafaf9] border border-[#e7e5e4] rounded-lg placeholder:text-[#a8a29e] focus:outline-none focus:border-[#c2410c] focus:bg-white transition-colors"
+              className="w-full h-7 pl-7 pr-3 text-[12px] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-lg placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] focus:bg-[var(--color-bg-raised)] transition-colors"
             />
           </div>
         </div>
@@ -160,8 +160,8 @@ export function Sidebar({
             {filteredDocs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center px-5">
                 {/* Illustration */}
-                <div className="w-16 h-16 rounded-2xl bg-[#f5f5f4] flex items-center justify-center mb-4">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <div className="w-16 h-16 rounded-2xl bg-[var(--color-bg-hover)] flex items-center justify-center mb-4">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
                     <polyline points="14 2 14 8 20 8"/>
                     <line x1="12" y1="12" x2="12" y2="18"/>
@@ -170,28 +170,28 @@ export function Sidebar({
                 </div>
                 {searchQuery ? (
                   <>
-                    <p className="text-[13px] font-semibold text-[#78716c]">No results found</p>
-                    <p className="text-[11px] text-[#a8a29e] mt-1 leading-relaxed">
+                    <p className="text-[13px] font-semibold text-[var(--color-text-secondary)]">No results found</p>
+                    <p className="text-[11px] text-[var(--color-text-muted)] mt-1 leading-relaxed">
                       No documents match &ldquo;{searchQuery}&rdquo;
                     </p>
                     <button
                       type="button"
                       onClick={() => setSearchQuery('')}
-                      className="mt-3 text-[11px] text-[#c2410c] font-medium hover:underline"
+                      className="mt-3 text-[11px] text-[var(--color-accent)] font-medium hover:underline"
                     >
                       Clear search
                     </button>
                   </>
                 ) : (
                   <>
-                    <p className="text-[13px] font-semibold text-[#78716c]">Your library is empty</p>
-                    <p className="text-[11px] text-[#a8a29e] mt-1 leading-relaxed max-w-[180px]">
+                    <p className="text-[13px] font-semibold text-[var(--color-text-secondary)]">Your library is empty</p>
+                    <p className="text-[11px] text-[var(--color-text-muted)] mt-1 leading-relaxed max-w-[180px]">
                       Upload a PDF to start reading and annotating with AI assistance
                     </p>
                     <button
                       type="button"
                       onClick={onUpload}
-                      className="mt-4 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#c2410c] text-white text-[12px] font-semibold hover:bg-[#9a3412] transition-colors shadow-sm"
+                      className="mt-4 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--color-accent)] text-white text-[12px] font-semibold hover:bg-[var(--color-accent-hover)] transition-colors shadow-sm"
                     >
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -207,13 +207,13 @@ export function Sidebar({
               <>
                 {/* Library header stats */}
                 <div className="px-2 py-2 flex items-center justify-between">
-                  <span className="text-[11px] text-[#a8a29e]">
+                  <span className="text-[11px] text-[var(--color-text-muted)]">
                     {filteredDocs.length} document{filteredDocs.length !== 1 ? 's' : ''}
                   </span>
                   <button
                     type="button"
                     onClick={onUpload}
-                    className="text-[11px] text-[#c2410c] font-medium hover:text-[#9a3412] transition-colors"
+                    className="text-[11px] text-[var(--color-accent)] font-medium hover:text-[var(--color-accent-hover)] transition-colors"
                   >
                     + Add
                   </button>
@@ -221,7 +221,7 @@ export function Sidebar({
 
                 {sortedGroups.map((group) => (
                   <div key={group} className="mb-3">
-                    <p className="text-[10px] font-semibold text-[#a8a29e] uppercase tracking-wider px-2 mb-1">
+                    <p className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider px-2 mb-1">
                       {group}
                     </p>
                     {(grouped[group] || []).map((doc) => {
@@ -231,19 +231,19 @@ export function Sidebar({
                           key={doc.id}
                           className={`group flex items-center gap-2 rounded-lg px-2 py-2 mb-0.5 cursor-pointer transition-all duration-100 ${
                             isActive
-                              ? 'bg-[#fef2f2]'
-                              : 'hover:bg-[#fafaf9]'
+                              ? 'bg-[var(--color-danger-subtle)]'
+                              : 'hover:bg-[var(--color-bg)]'
                           }`}
                           onClick={() => onSelectDocument(doc.id)}
                       >
-                        <div className={`shrink-0 rounded ${isActive ? 'text-[#c2410c]' : 'text-[#a8a29e] group-hover:text-[#78716c]'} transition-colors`}>
+                        <div className={`shrink-0 rounded ${isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)]'} transition-colors`}>
                           <FileText size={13} />
                         </div>
-                        <span className={`flex-1 truncate text-[12px] leading-tight ${isActive ? 'font-semibold text-[#c2410c]' : 'text-[#1c1917] font-medium'}`}>
+                        <span className={`flex-1 truncate text-[12px] leading-tight ${isActive ? 'font-semibold text-[var(--color-accent)]' : 'text-[var(--color-text)] font-medium'}`}>
                           {doc.fileName}
                         </span>
                         {doc.pageCount > 0 && (
-                          <span className="text-[10px] text-[#a8a29e] tabular-nums shrink-0">
+                          <span className="text-[10px] text-[var(--color-text-muted)] tabular-nums shrink-0">
                             {doc.pageCount}p
                           </span>
                         )}
@@ -253,14 +253,14 @@ export function Sidebar({
                             title="Relink file"
                             onClick={(e) => { e.stopPropagation(); onRelinkDocument(doc.id); }}
                           >
-                            <Link size={11} className="text-[#a8a29e]" />
+                            <Link size={11} className="text-[var(--color-text-muted)]" />
                           </button>
                           <button
-                            className="rounded p-0.5 hover:bg-rose-50 transition-colors"
+                            className="rounded p-0.5 hover:bg-[var(--color-danger-subtle)] transition-colors"
                             title="Delete"
                             onClick={(e) => { e.stopPropagation(); onDeleteDocument(doc.id); }}
                           >
-                            <Trash2 size={11} className="text-[#a8a29e] group-hover:text-rose-400" />
+                            <Trash2 size={11} className="text-[var(--color-text-muted)] group-hover:text-[var(--color-danger)]" />
                           </button>
                         </div>
                       </div>
@@ -277,23 +277,23 @@ export function Sidebar({
           <div className="px-3 py-3">
             {totalPages === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-[#f5f5f4] flex items-center justify-center mb-3">
-                  <Columns size={20} className="text-[#a8a29e]" />
+                <div className="w-12 h-12 rounded-2xl bg-[var(--color-bg-hover)] flex items-center justify-center mb-3">
+                  <Columns size={20} className="text-[var(--color-text-muted)]" />
                 </div>
-                <p className="text-[12px] text-[#78716c] font-medium">No pages available</p>
-                <p className="text-[11px] text-[#a8a29e] mt-1">Open a document to see pages</p>
+                <p className="text-[12px] text-[var(--color-text-secondary)] font-medium">No pages available</p>
+                <p className="text-[11px] text-[var(--color-text-muted)] mt-1">Open a document to see pages</p>
               </div>
             ) : (
               <div>
                 {/* Page count + loading hint */}
                 <div className="flex items-center justify-between mb-3 px-1">
-                  <span className="text-[10px] text-[#a8a29e]">
+                  <span className="text-[10px] text-[var(--color-text-muted)]">
                     {thumbnailsLoading ? 'Rendering…' : `${totalPages} pages`}
                   </span>
                   {thumbnailsLoading && (
                     <div className="flex items-center gap-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#c2410c] animate-pulse" />
-                      <span className="text-[10px] text-[#c2410c]">Loading</span>
+                      <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] animate-pulse" />
+                      <span className="text-[10px] text-[var(--color-accent)]">Loading</span>
                     </div>
                   )}
                 </div>
@@ -311,12 +311,12 @@ export function Sidebar({
                         onClick={() => onJumpToPage?.(page)}
                         className={`group flex flex-col items-center rounded-xl transition-all duration-100 p-1.5 pb-2 ${
                           isActive
-                            ? 'bg-[#fef2f2] ring-2 ring-[#c2410c]/30'
-                            : 'hover:bg-[#fafaf9]'
+                            ? 'bg-[var(--color-danger-subtle)] ring-2 ring-[var(--color-accent)]/30'
+                            : 'hover:bg-[var(--color-bg)]'
                         }`}
                       >
                         {/* Thumbnail image */}
-                        <div className="relative w-full rounded-lg overflow-hidden bg-[#f5f5f4] shadow-sm transition-shadow">
+                        <div className="relative w-full rounded-lg overflow-hidden bg-[var(--color-bg-hover)] shadow-sm transition-shadow">
                           {thumb ? (
                             <img
                               src={thumb}
@@ -327,7 +327,7 @@ export function Sidebar({
                           ) : (
                             /* Skeleton placeholder */
                             <div
-                              className="w-full bg-[#f5f5f4] animate-pulse"
+                              className="w-full bg-[var(--color-bg-hover)] animate-pulse"
                               style={{ paddingTop: `${(792 / 612) * 100}%` }} // letter aspect ratio
                             />
                           )}
@@ -337,7 +337,7 @@ export function Sidebar({
                           </div>
                           {/* Active indicator */}
                           {isActive && (
-                            <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 rounded-full bg-[#c2410c]" />
+                            <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]" />
                           )}
                         </div>
                       </button>
@@ -351,8 +351,8 @@ export function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-2.5 border-t border-[#f5f5f4]">
-        <p className="text-[10px] text-[#a8a29e]">Immersive Reader · v1.0</p>
+      <div className="px-4 py-2.5 border-t border-[var(--color-bg-subtle)]">
+        <p className="text-[10px] text-[var(--color-text-muted)]">Immersive Reader · v1.0</p>
       </div>
     </aside>
   );

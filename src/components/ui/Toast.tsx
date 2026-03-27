@@ -15,9 +15,9 @@ const icons = {
 };
 
 const colors = {
-  success: 'from-emerald-600 to-emerald-700 ring-emerald-500/20',
-  error: 'from-rose-600 to-rose-700 ring-rose-500/20',
-  info: 'from-slate-700 to-slate-800 ring-slate-500/20',
+  success: 'from-[#0d9488] to-[#0f766e] ring-[#0d9488]/30',
+  error: 'from-[#dc2626] to-[#b91c1c] ring-[#dc2626]/30',
+  info: 'from-[#78716c] to-[#57534e] ring-[#78716c]/30',
 };
 
 export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
@@ -46,7 +46,7 @@ export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
 
   return (
     <div
-      className={`fixed top-5 right-5 z-50 flex max-w-[400px] items-center gap-2.5 rounded-2xl bg-gradient-to-br ${colors[type]} px-4 py-3 text-white shadow-2xl ring-1 ring-inset transition-all duration-280 ${
+      className={`fixed top-4 right-4 z-50 flex max-w-[min(400px,calc(100vw-32px))] items-center gap-2.5 rounded-2xl bg-gradient-to-br ${colors[type]} px-4 py-3 text-white shadow-2xl ring-1 ring-inset transition-all duration-300 ${
         visible && !exiting
           ? 'translate-y-0 opacity-100 scale-100'
           : '-translate-y-3 opacity-0 scale-95'

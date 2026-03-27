@@ -1277,11 +1277,11 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
 
           {/* Collapsed sidebar strip */}
           {!focusState.isActive && !sidebarOpen && (
-            <div className="w-11 border-r border-[#e7e5e4] bg-white flex flex-col items-center py-3 gap-1 shrink-0">
+            <div className="w-11 border-r border-[var(--color-border)] bg-[var(--color-bg-raised)] flex flex-col items-center py-3 gap-1 shrink-0">
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-[#78716c] hover:bg-[#f5f5f4] hover:text-[#1c1917] transition-colors"
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-colors"
                 title="Show sidebar"
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1426,12 +1426,12 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
 
       {noteInputOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
-          <div className="bg-white rounded-2xl shadow-2xl border border-[#e7e5e4] p-5 w-[360px] flex flex-col gap-3 animate-in fade-in zoom-in-95">
-            <p className="text-sm font-semibold text-[#1c1917]">Add Note</p>
+          <div className="bg-[var(--color-bg-raised)] rounded-2xl shadow-2xl border border-[var(--color-border)] p-5 w-[min(360px,calc(100vw-32px))] flex flex-col gap-3 animate-in fade-in zoom-in-95">
+            <p className="text-sm font-semibold text-[var(--color-text)]">Add Note</p>
             <input
               ref={noteInputRef}
               autoFocus
-              className="w-full px-3 py-2 rounded-xl border border-[#e7e5e4] text-sm text-[#1c1917] bg-[#fafaf9] focus:outline-none focus:border-[#c2410c] focus:ring-1 focus:ring-[#c2410c]/30 transition-colors"
+              className="w-full px-3 py-2 rounded-xl border border-[var(--color-border)] text-sm text-[var(--color-text)] bg-[var(--color-bg)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]/30 transition-colors"
               placeholder="Your note..."
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -1442,13 +1442,13 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             />
             <div className="flex gap-2 justify-end">
               <button
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#78716c] hover:bg-[#f5f5f4] transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] transition-colors"
                 onClick={() => setNoteInputOpen(false)}
               >
                 Cancel
               </button>
               <button
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#c2410c] text-white hover:bg-[#9a3412] transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors"
                 onClick={() => handleNoteInputSubmit(noteInputRef.current?.value ?? '')}
               >
                 Add
@@ -1493,34 +1493,34 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       {/* Resume session prompt */}
       {focusState.resumePromptVisible && focusState.resumeSession && (
         <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/20">
-          <div className="bg-white rounded-2xl shadow-2xl border border-[#e7e5e4] p-5 w-[360px] flex flex-col gap-3 animate-in fade-in zoom-in-95">
+          <div className="bg-[var(--color-bg-raised)] rounded-2xl shadow-2xl border border-[var(--color-border)] p-5 w-[min(360px,calc(100vw-32px))] flex flex-col gap-3 animate-in fade-in zoom-in-95">
             <div className="flex items-center gap-2">
               <span className="text-lg">📖</span>
-              <p className="text-sm font-semibold text-[#1c1917]">继续上次阅读</p>
+              <p className="text-sm font-semibold text-[var(--color-text)]">继续上次阅读</p>
             </div>
-            <p className="text-[13px] text-[#78716c] leading-relaxed">
-              上次阅读到第 <span className="font-semibold text-[#1c1917]">p{focusState.resumeSession.last_page}</span>，
-              进度 <span className="font-semibold text-[#1c1917]">{Math.round(focusState.resumeSession.max_read_percentage ?? 0)}%</span>。
+            <p className="text-[13px] text-[var(--color-text-secondary)] leading-relaxed">
+              上次阅读到第 <span className="font-semibold text-[var(--color-text)]">p{focusState.resumeSession.last_page}</span>，
+              进度 <span className="font-semibold text-[var(--color-text)]">{Math.round(focusState.resumeSession.max_read_percentage ?? 0)}%</span>。
               {focusState.resumeSession.duration_minutes && (
-                <> 学习了 <span className="font-semibold text-[#1c1917]">{focusState.resumeSession.duration_minutes} 分钟</span>。</>
+                <> 学习了 <span className="font-semibold text-[var(--color-text)]">{focusState.resumeSession.duration_minutes} 分钟</span>。</>
               )}
             </p>
             {conversationPreviewMessages.length > 0 && (
-              <div className="bg-[#fafaf9] rounded-xl px-3 py-2 text-[11px] text-[#78716c] flex flex-col gap-1">
+              <div className="bg-[var(--color-bg)] rounded-xl px-3 py-2 text-[11px] text-[var(--color-text-secondary)] flex flex-col gap-1">
                 {conversationPreviewMessages.slice(-2).map((m, i) => (
                   <p key={i} className="truncate">
-                    <span className="font-medium text-[#1c1917]">{m.role === 'user' ? '你' : 'AI'}：</span>
+                    <span className="font-medium text-[var(--color-text)]">{m.role === 'user' ? '你' : 'AI'}：</span>
                     {m.content.slice(0, 80)}{m.content.length > 80 ? '…' : ''}
                   </p>
                 ))}
                 {conversationPreviewMessages.length > 2 && (
-                  <p className="text-[#d6d3d1]">+ {conversationPreviewMessages.length - 2} 条更早的消息</p>
+                  <p className="text-[var(--color-border-subtle)]">+ {conversationPreviewMessages.length - 2} 条更早的消息</p>
                 )}
               </div>
             )}
             <div className="flex gap-2 justify-end">
               <button
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#78716c] hover:bg-[#f5f5f4] transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] transition-colors"
                 onClick={() => { dismissResumePrompt(); }}
               >
                 重新开始
@@ -1548,7 +1548,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             <span className="text-2xl flex-shrink-0 mt-0.5">🎯</span>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold mb-1.5">Focus Mode 使用提示</p>
-              <ul className="text-[11px] text-[#a8a29e] leading-relaxed space-y-1">
+              <ul className="text-[11px] text-[var(--color-text-muted)] leading-relaxed space-y-1">
                 <li>• 选中文本自动高亮（蓝色）</li>
                 <li>• 点击气泡添加笔记或问 AI</li>
                 <li>• <kbd className="bg-white/10 px-1 py-0.5 rounded text-[10px]">Cmd+`</kbd> 打开 Mini AI 窗口</li>
@@ -1556,7 +1556,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
                 <li>• <kbd className="bg-white/10 px-1 py-0.5 rounded text-[10px]">Esc</kbd> 退出 Focus Mode</li>
               </ul>
               <button
-                className="mt-2.5 text-[11px] text-[#a8a29e] hover:text-white transition-colors underline underline-offset-2"
+                className="mt-2.5 text-[11px] text-[var(--color-text-muted)] hover:text-white transition-colors underline underline-offset-2"
                 onClick={() => { dismissFocusTooltip(); }}
               >
                 知道了
@@ -1569,17 +1569,17 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       {/* 80% summary prompt */}
       {showFocus80Prompt && (
         <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/20">
-          <div className="bg-white rounded-2xl shadow-2xl border border-[#e7e5e4] p-5 w-[360px] flex flex-col gap-3 animate-in fade-in zoom-in-95">
+          <div className="bg-[var(--color-bg-raised)] rounded-2xl shadow-2xl border border-[var(--color-border)] p-5 w-[min(360px,calc(100vw-32px))] flex flex-col gap-3 animate-in fade-in zoom-in-95">
             <div className="flex items-center gap-2">
               <span className="text-lg">🎯</span>
-              <p className="text-sm font-semibold text-[#1c1917]">阅读进度达到 80%</p>
+              <p className="text-sm font-semibold text-[var(--color-text)]">阅读进度达到 80%</p>
             </div>
-            <p className="text-[13px] text-[#78716c] leading-relaxed">
+            <p className="text-[13px] text-[var(--color-text-secondary)] leading-relaxed">
               不错！你已经阅读了大部分内容。要不要生成一份总结来巩固所学？
             </p>
             <div className="flex gap-2 justify-end">
               <button
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#78716c] hover:bg-[#f5f5f4] transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] transition-colors"
                 onClick={() => {
                   setShowFocus80Prompt(false);
                   dismissSummary80();
