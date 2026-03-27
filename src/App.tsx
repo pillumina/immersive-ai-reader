@@ -22,7 +22,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useCanvasRendering } from '@/hooks/useCanvasRendering';
 import { FocusModeProvider, useFocusMode } from '@/hooks/useFocusMode';
 import { AIConfig } from '@/types/settings';
-import { aiCommands, annotationCommands, tagCommands } from '@/lib/tauri';
+import { aiCommands, annotationCommands, tagCommands, focusCommands, conversationCommands } from '@/lib/tauri';
 import { PDFDocument } from '@/types/document';
 import { extractTextFromPageRanges, findChapterForPage, buildChapterList, ChapterInfo } from '@/lib/pdf/parser';
 import { ChapterSelector } from '@/components/features/ChapterSelector';
@@ -378,7 +378,7 @@ function AppInner() {
     };
     globalThis.addEventListener('ai-card-unpinned', handler);
     return () => globalThis.removeEventListener('ai-card-unpinned', handler);
-  }, [focusState.isActive, loadCaptures, focusState.highlightsCount, focusState.notesCount, focusState.aiResponsesCount, updateCaptureCounts]);
+  }, [focusState.isActive, focusState.highlightsCount, focusState.notesCount, focusState.aiResponsesCount, updateCaptureCounts]);
 
   // Use a ref to always call the latest handleDeleteNote (avoids stale closure in event listener).
   const handleDeleteNoteRef = useRef<any>(null);
@@ -574,14 +574,15 @@ function AppInner() {
 
   // ─── Focus Mode: load conversation preview for resume prompt ──
   useEffect(() => {
-    if (!focusState.resumeSession?.ai_conversation_id) {
+    const resumeSessionId = focusState.resumeSession?.ai_conversation_id;
+    if (!resumeSessionId) {
       setConversationPreviewMessages([]);
       return;
     }
     void (async () => {
       try {
-        const msgs = await conversationCommands.getMessages(focusState.resumeSession.ai_conversation_id);
-        const lastMsgs = msgs.slice(-4).map(m => ({ role: m.role, content: m.content }));
+        const msgs = await conversationCommands.getMessages(resumeSessionId);
+        const lastMsgs = msgs.slice(-4).map((m: { role: string; content: string }) => ({ role: m.role, content: m.content }));
         setConversationPreviewMessages(lastMsgs);
       } catch {
         setConversationPreviewMessages([]);
@@ -656,6 +657,12 @@ function AppInner() {
   const handleResetZoom = () => setZoomLevel(1);
 
   // Escape — exit Focus Mode if active, otherwise handled by individual components.
+  const handleEscape = () => {
+    if (focusState.isActive) {
+      void handleExitFocusMode();
+    }
+  };
+
   const handleExitFocusMode = async () => {
     const sessionId = focusState.currentSessionId;
     const convId = conversationId;
@@ -688,15 +695,6 @@ function AppInner() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to highlight selection';
       setToast({ message, type: 'info' });
-    }
-  };
-
-  /** L1 auto-highlight in Focus Mode — uses blue instead of yellow */
-  const handleHighlightSelectionFocus = async () => {
-    try {
-      await highlightSelection('rgba(59, 130, 246, 0.2)');
-    } catch {
-      // Silent fail for auto-highlight; user can still use the toolbar
     }
   };
 
@@ -1320,7 +1318,6 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             onOpenL2Popover={(position, text, page) => {
               setL2Popover({ position, text, page });
             }}
-            onHighlightSelectionFocus={handleHighlightSelectionFocus}
             comparePageSignal={comparePageSignal}
             comparePaneCommand={comparePaneCommand}
             onSplitModeChange={setSplitActive}
@@ -1482,7 +1479,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
 
       {l3Editor?.type === 'new' && (
         <L3NoteEditor
-          selectedText={l3Editor.selectedText}
+          quoteText={l3Editor.selectedText}
           pageNumber={l3Editor.pageNumber}
           onClose={() => setL3Editor(null)}
           onAddNote={async (content, position, targetPage, capturedText) => {

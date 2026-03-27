@@ -423,7 +423,7 @@ export const focusCommands = {
   create: async (documentId: string, sessionId: string, enteredAt: string, lastPage: number): Promise<FocusSession> => {
     try {
       return await invoke<FocusSession>('create_focus_session', {
-        request: { document_id: documentId, session_id: sessionId, entered_at: enteredAt, last_page: lastPage },
+        req: { document_id: documentId, session_id: sessionId, entered_at: enteredAt, last_page: lastPage },
       });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
@@ -432,7 +432,7 @@ export const focusCommands = {
 
   update: async (sessionId: string, updates: FocusSessionUpdate): Promise<void> => {
     try {
-      await invoke('update_focus_session', { sessionId, updates });
+      await invoke('update_focus_session', { session_id: sessionId, updates });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }
@@ -440,7 +440,7 @@ export const focusCommands = {
 
   getLast: async (documentId: string): Promise<FocusSession | null> => {
     try {
-      return await invoke<FocusSession | null>('get_last_focus_session', { documentId });
+      return await invoke<FocusSession | null>('get_last_focus_session', { document_id: documentId });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }
@@ -448,7 +448,7 @@ export const focusCommands = {
 
   getHistory: async (documentId: string, limit: number = 10): Promise<FocusSession[]> => {
     try {
-      return await invoke<FocusSession[]>('get_focus_session_history', { documentId, limit });
+      return await invoke<FocusSession[]>('get_focus_session_history', { document_id: documentId, limit });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }
@@ -456,7 +456,7 @@ export const focusCommands = {
 
   getAllSessions: async (documentId: string): Promise<FocusSession[]> => {
     try {
-      return await invoke<FocusSession[]>('get_all_focus_sessions', { documentId });
+      return await invoke<FocusSession[]>('get_all_focus_sessions', { document_id: documentId });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }
@@ -464,7 +464,7 @@ export const focusCommands = {
 
   deleteSession: async (sessionId: string): Promise<void> => {
     try {
-      await invoke('delete_focus_session', { sessionId });
+      await invoke('delete_focus_session', { session_id: sessionId });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }

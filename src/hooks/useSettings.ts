@@ -11,9 +11,9 @@ const UISettingsSchema = z.object({
   showChatPerfHints: z.boolean(),
   chatInputModeDefault: z.enum(['auto', 'chat', 'doc']),
   rememberRoutePreferenceAcrossSessions: z.boolean(),
-  theme: z.enum(['light', 'dark', 'warm-dark', 'sepia']).optional(),
-  showFocusResumePrompt: z.boolean().optional(),
-  autoEnterFocusOnDocOpen: z.boolean().optional(),
+  theme: z.enum(['light', 'dark', 'warm-dark', 'sepia']).default('light'),
+  showFocusResumePrompt: z.boolean(),
+  autoEnterFocusOnDocOpen: z.boolean().default(false),
 });
 
 const StoredProfileSchema = z.object({
@@ -119,7 +119,7 @@ export function useSettings() {
     const payload: StoredSettings = {
       activeProfileId: nextActiveProfileId,
       profiles: nextProfiles.map(profileToStored),
-      ui: nextUiSettings,
+      ui: nextUiSettings as { theme: 'light' | 'dark' | 'warm-dark' | 'sepia'; showFocusResumePrompt: boolean; autoEnterFocusOnDocOpen: boolean; } & Omit<UISettings, 'theme' | 'autoEnterFocusOnDocOpen'>,
     };
     localStorage.setItem(SETTINGS_PROFILES_KEY, JSON.stringify(payload));
   }, [uiSettings]);

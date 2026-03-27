@@ -59,8 +59,8 @@ impl AiUsageRepository {
                 COALESCE(SUM(prompt_tokens), 0) as total_prompt,
                 COALESCE(SUM(completion_tokens), 0) as total_completion,
                 COALESCE(SUM(total_tokens), 0) as total_all,
-                COALESCE(SUM(cost_usd), 0) as total_cost,
-                COALESCE(SUM(latency_ms), 0) as total_latency
+                COALESCE(SUM(CAST(cost_usd AS REAL)), 0.0) as total_cost,
+                COALESCE(SUM(CAST(latency_ms AS INTEGER)), 0) as total_latency
             FROM ai_usage
             WHERE created_at >= ?
             "#,
@@ -93,7 +93,7 @@ impl AiUsageRepository {
                 model,
                 COUNT(*) as requests,
                 COALESCE(SUM(total_tokens), 0) as total_tokens,
-                COALESCE(AVG(latency_ms), 0.0) as avg_latency_ms
+                COALESCE(AVG(CAST(latency_ms AS REAL)), 0.0) as avg_latency_ms
             FROM ai_usage
             WHERE created_at >= ?
             GROUP BY model

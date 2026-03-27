@@ -57,6 +57,9 @@ interface RenderOptions {
   initialPageCount?: number;
   /** ID of the scroll container element (needed for virtual-scroll page eviction). */
   scrollContainerId?: string;
+  /** Called after each lazy batch of pages finishes rendering into the DOM.
+   *  Allows the caller (e.g. useCanvasRendering) to re-apply highlights. */
+  onBatchRendered?: () => void;
 }
 
 async function resolveOutlinePageNumber(
@@ -300,6 +303,8 @@ interface LazyRenderState {
   scrollRafId: number | null;
   /** Cleanup for scroll listener. */
   scrollCleanup: (() => void) | null;
+  /** Callback fired after each lazy batch finishes rendering into the DOM. */
+  onBatchRendered?: () => void;
 }
 
 function createLazyState(
@@ -308,7 +313,8 @@ function createLazyState(
   dpr: number,
   shouldCancel: () => boolean,
   fingerprint: string,
-  scrollContainer: HTMLElement | null
+  scrollContainer: HTMLElement | null,
+  onBatchRendered?: () => void,
 ): LazyRenderState {
   return {
     pdfDoc,
@@ -330,6 +336,7 @@ function createLazyState(
     visibleRange: [1, 5],
     scrollRafId: null,
     scrollCleanup: null,
+    onBatchRendered,
   };
 }
 
@@ -407,6 +414,8 @@ function processRenderQueue(
       }
     });
     state.maxLoadedPage = newMaxLoaded;
+    // Notify caller so it can re-apply highlights on newly rendered pages.
+    state.onBatchRendered?.();
     // Keep processing if more queued and not cancelled
     if (!state.shouldCancel()) {
       processRenderQueue(container, state);
@@ -487,7 +496,7 @@ function evictFarPages(state: LazyRenderState, totalPages: number, skeletonWidth
 }
 function setupLazyRendering(
   container: HTMLElement,
-  state: LazyRenderState
+  state: LazyRenderState,
 ): () => void {
   // Seed the queue with all unrendered skeletons
   enqueueLazyPages(container, state);
@@ -599,7 +608,7 @@ export async function renderPagesToContainer(
   const scrollContainer = options.scrollContainerId
     ? (document.getElementById(options.scrollContainerId) ?? null)
     : null;
-  const lazyState = createLazyState(pdfDoc, scale, dpr, shouldCancel ?? (() => false), fingerprint, scrollContainer);
+  const lazyState = createLazyState(pdfDoc, scale, dpr, shouldCancel ?? (() => false), fingerprint, scrollContainer, options.onBatchRendered);
   // Mark initial pages as already rendered and update maxLoadedPage
   lazyState.maxLoadedPage = initialBatchEnd;
   for (let i = 1; i <= initialBatchEnd; i++) {

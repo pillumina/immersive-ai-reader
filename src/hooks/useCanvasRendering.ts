@@ -21,6 +21,8 @@ export function useCanvasRendering(
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tagCacheRef = useRef<Map<string, Tag[]>>(new Map());
   const tagChipRenderersRef = useRef<Map<string, (tags: Tag[]) => void>>(new Map());
+  /** Debounces onBatchRendered calls so rapid lazy renders don't spam loadStoredHighlights. */
+  const batchRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(0);
@@ -882,6 +884,15 @@ export function useCanvasRendering(
             scale: 1.25,
             shouldCancel: () => jobId !== renderJobIdRef.current,
             scrollContainerId,
+            // Re-apply highlights after each lazy batch renders so newly visible
+            // pages also show their highlights (including correctly hiding deleted ones).
+            onBatchRendered: () => {
+              // Debounce: coalesce rapid batch completions into a single reload after 100ms.
+              if (batchRenderTimerRef.current) clearTimeout(batchRenderTimerRef.current);
+              batchRenderTimerRef.current = setTimeout(() => {
+                void loadStoredHighlights(pdfDocument.id);
+              }, 100);
+            },
           }),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('PDF rendering timeout')), 30000)
@@ -917,6 +928,7 @@ export function useCanvasRendering(
     return () => {
       lazyCleanupRef.current?.();
       lazyCleanupRef.current = null;
+      if (batchRenderTimerRef.current) { clearTimeout(batchRenderTimerRef.current); batchRenderTimerRef.current = null; }
     };
   }, [containerId, pdfDocument]);
 

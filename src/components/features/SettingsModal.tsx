@@ -110,9 +110,8 @@ export function SettingsModal({
   const activeProfile = profiles.find((p) => p.id === activeProfileId) ?? null;
 
   const [section, setSection] = useState<SettingsSection>('provider');
-  // Local state for instant theme selection feedback (no re-render lag from props)
-  const [selectedTheme, setSelectedTheme] = useState<ThemeOption | undefined>(currentTheme);
-  useEffect(() => { setSelectedTheme(currentTheme); }, [currentTheme]);
+  // ── Appearance ──
+  const activeTheme = currentTheme ?? 'light';
 
   const [profileName, setProfileName] = useState('Default');
   const [provider, setProvider] = useState<AIProvider>('zhipu');
@@ -529,8 +528,8 @@ export function SettingsModal({
                     {/* Warm Light */}
                     <button
                       type="button"
-                      onClick={() => { setSelectedTheme('light'); onChangeTheme('light'); }}
-                      className={`theme-card ${(selectedTheme ?? 'light') === 'light' ? 'theme-card--active' : ''}`}
+                      onClick={() => onChangeTheme('light')}
+                      className={`theme-card ${activeTheme === 'light' ? 'theme-card--active' : ''}`}
                     >
                       <div className="theme-card__preview theme-card__preview--light">
                         <div className="theme-card__bar" style={{ background: '#ffffff', border: '1px solid #e7e5e4' }}>
@@ -546,7 +545,7 @@ export function SettingsModal({
                         <span className="theme-card__label">Warm Light</span>
                         <span className="theme-card__desc">Default · All-day reading</span>
                       </div>
-                      {(selectedTheme ?? 'light') === 'light' && (
+                      {activeTheme === 'light' && (
                         <Check size={12} className="theme-card__check" />
                       )}
                     </button>
@@ -554,8 +553,8 @@ export function SettingsModal({
                     {/* Sepia */}
                     <button
                       type="button"
-                      onClick={() => { setSelectedTheme('sepia'); onChangeTheme('sepia'); }}
-                      className={`theme-card ${selectedTheme === 'sepia' ? 'theme-card--active' : ''}`}
+                      onClick={() => onChangeTheme('sepia')}
+                      className={`theme-card ${activeTheme === 'sepia' ? 'theme-card--active' : ''}`}
                     >
                       <div className="theme-card__preview theme-card__preview--sepia">
                         <div className="theme-card__bar" style={{ background: '#fdfaf4', border: '1px solid #d4c5b2' }}>
@@ -571,7 +570,7 @@ export function SettingsModal({
                         <span className="theme-card__label">Sepia</span>
                         <span className="theme-card__desc">Paper feel · Long reading</span>
                       </div>
-                      {selectedTheme === 'sepia' && (
+                      {activeTheme === 'sepia' && (
                         <Check size={12} className="theme-card__check" />
                       )}
                     </button>
@@ -579,8 +578,8 @@ export function SettingsModal({
                     {/* Dark */}
                     <button
                       type="button"
-                      onClick={() => { setSelectedTheme('dark'); onChangeTheme('dark'); }}
-                      className={`theme-card ${selectedTheme === 'dark' ? 'theme-card--active' : ''}`}
+                      onClick={() => onChangeTheme('dark')}
+                      className={`theme-card ${activeTheme === 'dark' ? 'theme-card--active' : ''}`}
                     >
                       <div className="theme-card__preview theme-card__preview--dark">
                         <div className="theme-card__bar" style={{ background: '#232326', border: '1px solid #3f3f46' }}>
@@ -596,7 +595,7 @@ export function SettingsModal({
                         <span className="theme-card__label">Midnight</span>
                         <span className="theme-card__desc">Night mode · Low light</span>
                       </div>
-                      {selectedTheme === 'dark' && (
+                      {activeTheme === 'dark' && (
                         <Check size={12} className="theme-card__check" />
                       )}
                     </button>
@@ -604,8 +603,8 @@ export function SettingsModal({
                     {/* Warm Dark */}
                     <button
                       type="button"
-                      onClick={() => { setSelectedTheme('warm-dark'); onChangeTheme('warm-dark'); }}
-                      className={`theme-card ${selectedTheme === 'warm-dark' ? 'theme-card--active' : ''}`}
+                      onClick={() => onChangeTheme('warm-dark')}
+                      className={`theme-card ${activeTheme === 'warm-dark' ? 'theme-card--active' : ''}`}
                     >
                       <div className="theme-card__preview theme-card__preview--warm-dark">
                         <div className="theme-card__bar" style={{ background: '#272220', border: '1px solid #3d3835' }}>
@@ -621,7 +620,7 @@ export function SettingsModal({
                         <span className="theme-card__label">Warm Night</span>
                         <span className="theme-card__desc">Evening · Easy on eyes</span>
                       </div>
-                      {selectedTheme === 'warm-dark' && (
+                      {activeTheme === 'warm-dark' && (
                         <Check size={12} className="theme-card__check" />
                       )}
                     </button>

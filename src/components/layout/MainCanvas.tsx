@@ -30,8 +30,6 @@ interface MainCanvasProps {
   isFocusMode: boolean;
   /** Called when L1 "+" bubble is clicked — opens L2 AI popover */
   onOpenL2Popover?: (position: { x: number; y: number }, text: string, page?: number) => void;
-  /** L1 auto-highlight in Focus Mode — uses blue instead of yellow */
-  onHighlightSelectionFocus?: () => void;
   comparePageSignal?: number | null;
   comparePaneCommand?: {
     page: number;
@@ -61,7 +59,6 @@ export function MainCanvas({
   onToggleFocusMode,
   isFocusMode,
   onOpenL2Popover,
-  onHighlightSelectionFocus,
   comparePageSignal,
   comparePaneCommand,
   onSplitModeChange,
@@ -85,7 +82,6 @@ export function MainCanvas({
   // L1 bubble state (Focus Mode auto-highlight + "+" button)
   type L1Bubble = { x: number; y: number; text: string; page?: number };
   const [l1Bubble, setL1Bubble] = useState<L1Bubble | null>(null);
-  const l1BubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const l1BubbleHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textHandleRef = useRef<{ x: number; y: number; page?: number; text: string } | null>(null);
   const compareStageRef = useRef<HTMLElement | null>(null);
@@ -168,90 +164,78 @@ export function MainCanvas({
     containerEl.querySelectorAll('.pdf-search-highlight').forEach((el) => el.remove());
   };
 
-  // Monitor text selection to show floating drag handle.
-  // In Focus Mode: auto-highlights after 50ms and shows L1 "+" bubble.
+  // Monitor text selection to show the L1 "+" bubble in Focus Mode.
+  // Uses pointerdown/mouseup/pointerup to detect selection vs. click gestures.
   useEffect(() => {
-    // Clean up L1 bubble timers
-    const cleanup = () => {
-      if (l1BubbleTimerRef.current) { clearTimeout(l1BubbleTimerRef.current); l1BubbleTimerRef.current = null; }
+    if (!isFocusMode) return;
+
+    let pointerDownAt: { x: number; y: number } | null = null;
+    let isDragging = false;
+
+    const onPointerDown = (e: PointerEvent) => {
+      pointerDownAt = { x: e.clientX, y: e.clientY };
+      isDragging = false;
+      // Dismiss bubble on any pointer press (unless it's a selection drag)
+      if (l1BubbleHideTimerRef.current) { clearTimeout(l1BubbleHideTimerRef.current); l1BubbleHideTimerRef.current = null; }
+      setL1Bubble(null);
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (pointerDownAt) {
+        const dx = e.clientX - pointerDownAt.x;
+        const dy = e.clientY - pointerDownAt.y;
+        if (dx * dx + dy * dy > 25) isDragging = true; // moved > 5px
+      }
+    };
+
+    const onMouseUp = () => {
+      if (isDragging) {
+        const sel = globalThis.getSelection?.();
+        if (sel && !sel.isCollapsed && sel.toString().trim().length >= 2) {
+          const range = sel.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            const pageEl = range.commonAncestorContainer instanceof Node
+              ? (range.commonAncestorContainer as Node).ownerDocument
+                  ?.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+                  ?.closest('.pdf-page') as HTMLElement | null
+              : null;
+            if (pageEl) {
+              const page = Number(pageEl.dataset.pageNumber || '0') || undefined;
+              const bubbleX = rect.right + 8;
+              const bubbleY = rect.top + rect.height / 2;
+              setL1Bubble({ x: bubbleX, y: bubbleY, text: sel.toString().trim(), page });
+              l1BubbleHideTimerRef.current = setTimeout(() => setL1Bubble(null), 3000);
+            }
+          }
+        }
+      }
+      pointerDownAt = null;
+      isDragging = false;
+    };
+
+    const onPointerUp = () => {
+      pointerDownAt = null;
+      isDragging = false;
+    };
+
+    const doc = globalThis.document as Document | null;
+    if (!doc) return;
+
+    const target = doc as unknown as EventTarget;
+    target.addEventListener('pointerdown', onPointerDown as unknown as EventListener, { passive: true });
+    target.addEventListener('pointermove', onPointerMove as unknown as EventListener, { passive: true });
+    doc.addEventListener('mouseup', onMouseUp);
+    target.addEventListener('pointerup', onPointerUp as unknown as EventListener);
+
+    return () => {
+      target.removeEventListener('pointerdown', onPointerDown as unknown as EventListener);
+      target.removeEventListener('pointermove', onPointerMove as unknown as EventListener);
+      doc.removeEventListener('mouseup', onMouseUp);
+      target.removeEventListener('pointerup', onPointerUp as unknown as EventListener);
       if (l1BubbleHideTimerRef.current) { clearTimeout(l1BubbleHideTimerRef.current); l1BubbleHideTimerRef.current = null; }
     };
-
-    const update = () => {
-      // Dismiss any existing L1 bubble immediately on new selection
-      cleanup();
-      setL1Bubble(null);
-
-      const sel = globalThis.getSelection?.();
-      if (!sel || sel.isCollapsed || !sel.toString().trim()) {
-        textHandleRef.current = null;
-        forceTextToolbarUpdate((n) => n + 1);
-        return;
-      }
-      try {
-        const range = sel.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        if (rect.width === 0 && rect.height === 0) {
-          textHandleRef.current = null;
-          forceTextToolbarUpdate((n) => n + 1);
-          return;
-        }
-        // Find page element
-        const pageEl = range.commonAncestorContainer instanceof Node
-          ? (range.commonAncestorContainer as Node).ownerDocument
-              ?.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-              ?.closest('.pdf-page') as HTMLElement | null
-          : null;
-        if (!pageEl) {
-          textHandleRef.current = null;
-          forceTextToolbarUpdate((n) => n + 1);
-          return;
-        }
-        const page = Number(pageEl.dataset.pageNumber || '0') || undefined;
-        const selectedText = sel.toString().trim();
-        if (!selectedText || selectedText.length < 2) {
-          textHandleRef.current = null;
-          forceTextToolbarUpdate((n) => n + 1);
-          return;
-        }
-        const toolbarX = Math.max(8, rect.left + rect.width / 2);
-        const toolbarY = Math.max(8, rect.top - 44);
-        textHandleRef.current = { x: toolbarX, y: toolbarY, page, text: selectedText };
-        forceTextToolbarUpdate((n) => n + 1);
-
-        // In Focus Mode: auto-highlight after 50ms + show L1 bubble
-        if (isFocusMode) {
-          l1BubbleTimerRef.current = setTimeout(() => {
-            // Trigger L1 auto-highlight with blue color
-            onHighlightSelectionFocus?.();
-            // Show "+" bubble at the selection position
-            const updatedSel = globalThis.getSelection?.();
-            if (updatedSel && !updatedSel.isCollapsed) {
-              const updatedRange = updatedSel.getRangeAt(0);
-              const updatedRect = updatedRange.getBoundingClientRect();
-              if (updatedRect.width > 0 && updatedRect.height > 0) {
-                const bubbleX = updatedRect.right + 8;
-                const bubbleY = updatedRect.top + updatedRect.height / 2;
-                setL1Bubble({ x: bubbleX, y: bubbleY, text: selectedText, page });
-                // Auto-hide after 2 seconds
-                l1BubbleHideTimerRef.current = setTimeout(() => {
-                  setL1Bubble(null);
-                }, 2000);
-              }
-            }
-          }, 50);
-        }
-      } catch {
-        textHandleRef.current = null;
-        forceTextToolbarUpdate((n) => n + 1);
-      }
-    };
-    globalThis.addEventListener('mouseup', update);
-    return () => {
-      globalThis.removeEventListener('mouseup', update);
-      cleanup();
-    };
-  }, [isFocusMode, onHighlightSelectionFocus]);
+  }, [isFocusMode]);
 
   // Hide L1 bubble on scroll in Focus Mode.
   useEffect(() => {
@@ -1135,10 +1119,13 @@ export function MainCanvas({
           style={{ left: l1Bubble.x, top: l1Bubble.y, transform: 'translateY(-50%)' }}
           onClick={(e) => {
             e.stopPropagation();
-            // Dismiss bubble and open L2 popover
+            // Dismiss bubble and open L2 popover — capture values before clearing state
+            const pos = { x: l1Bubble.x, y: l1Bubble.y };
+            const text = l1Bubble.text;
+            const page = l1Bubble.page;
             if (l1BubbleHideTimerRef.current) { clearTimeout(l1BubbleHideTimerRef.current); l1BubbleHideTimerRef.current = null; }
             setL1Bubble(null);
-            onOpenL2Popover?.({ x: l1Bubble.x, y: l1Bubble.y }, l1Bubble.text, l1Bubble.page);
+            onOpenL2Popover?.(pos, text, page);
           }}
           title="Open capture options"
         >

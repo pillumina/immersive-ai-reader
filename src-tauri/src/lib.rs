@@ -11,33 +11,42 @@ use database::repositories::{document_repo::DocumentRepository, annotation_repo:
 use ai::client::AIClient;
 use commands::ai::StreamRegistry;
 
+/// Guards the tracing worker thread so it stays alive for the entire app lifecycle.
+/// Dropping this will terminate the async logging worker and lose buffered log entries.
+struct LogGuard(tracing_appender::non_blocking::WorkerGuard);
+
+static LOG_GUARD: std::sync::OnceLock<LogGuard> = std::sync::OnceLock::new();
+
 fn init_tracing(log_dir: &PathBuf) {
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
     std::fs::create_dir_all(log_dir).ok();
 
-    let (non_blocking, _guard) = tracing_appender::non_blocking(
-        tracing_appender::rolling::Builder::new()
-            .max_log_files(3)
-            .filename_prefix("app")
-            .filename_suffix("log")
-            .build(log_dir)
-            .expect("Failed to create log directory"),
-    );
+    // Only initialize once per process
+    let _ = LOG_GUARD.get_or_init(|| {
+        let (non_blocking, guard) = tracing_appender::non_blocking(
+            tracing_appender::rolling::Builder::new()
+                .max_log_files(3)
+                .filename_prefix("app")
+                .filename_suffix("log")
+                .build(log_dir)
+                .expect("Failed to create log directory"),
+        );
 
-    // Keep the guard alive for the lifetime of the app
-    std::mem::forget(_guard);
+        let filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("info"));
 
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+        tracing_subscriber::registry()
+            .with(filter)
+            // File output (no ANSI codes — plain text log files)
+            .with(fmt::layer().with_writer(non_blocking).with_ansi(false))
+            // Stdout (visible in Tauri DevTools console)
+            .with(fmt::layer().with_writer(std::io::stdout))
+            .try_init()
+            .ok(); // OK if already initialized (e.g. by a plugin)
 
-    tracing_subscriber::registry()
-        .with(filter)
-        // File output
-        .with(fmt::layer().with_writer(non_blocking).with_ansi(false))
-        // Stdout (visible in Tauri DevTools console)
-        .with(fmt::layer().with_writer(std::io::stdout))
-        .init();
+        LogGuard(guard)
+    });
 }
 
 pub fn run() {
