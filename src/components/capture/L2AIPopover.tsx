@@ -1,5 +1,5 @@
 import { Brain, Languages, MessageSquare, StickyNote } from 'lucide-react';
-import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useCallback, memo, type ReactNode } from 'react';
 
 /** Position relative to viewport (fixed coordinates) */
 export interface L2PopoverPosition {
@@ -41,7 +41,7 @@ const DEBOUNCE_MS = 300;
 /** Auto-close timeout (ms) */
 const AUTO_CLOSE_MS = 10_000;
 
-export function L2AIPopover({
+export const L2AIPopover = memo(function L2AIPopover({
   position,
   text,
   page,
@@ -209,4 +209,4 @@ export function L2AIPopover({
       `}</style>
     </div>
   );
-}
+});

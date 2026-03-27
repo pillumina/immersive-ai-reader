@@ -1,3 +1,4 @@
+import { memo } from 'react';
 interface FocusStatusBarProps {
   currentPage: number;
   totalPages: number;
@@ -16,7 +17,7 @@ function formatDuration(secs: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function FocusStatusBar({
+export const FocusStatusBar = memo(function FocusStatusBar({
   currentPage,
   totalPages,
   maxProgress,
@@ -96,4 +97,4 @@ export function FocusStatusBar({
       </button>
     </div>
   );
-}
+});

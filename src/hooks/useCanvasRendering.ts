@@ -431,6 +431,7 @@ export function useCanvasRendering(
         let lastLeft = 0;
         let lastTop = 0;
         let didDrag = false;
+        const pendingDragRafRef = { current: 0 };
 
         const onPointerMove = (evt: PointerEvent) => {
           if (!dragging) return;
@@ -441,13 +442,17 @@ export function useCanvasRendering(
             hasActivatedDrag = true;
             card.classList.add('is-dragging');
           }
+          if (!hasActivatedDrag) return;
           const containerRect = containerEl.getBoundingClientRect();
           const maxLeft = Math.max(containerRect.width - card.offsetWidth - 8, 8);
           const maxTop = Math.max(containerRect.height - card.offsetHeight - 8, 8);
           lastLeft = Math.min(Math.max(startLeft + dx, 8), maxLeft);
           lastTop = Math.min(Math.max(startTop + dy, 8), maxTop);
-          card.style.left = `${lastLeft}px`;
-          card.style.top = `${lastTop}px`;
+          // Batch DOM writes via RAF to avoid layout thrashing at 60fps
+          pendingDragRafRef.current = requestAnimationFrame(() => {
+            card.style.left = `${lastLeft}px`;
+            card.style.top = `${lastTop}px`;
+          });
         };
 
         const stopDrag = () => {
@@ -455,6 +460,7 @@ export function useCanvasRendering(
           card.classList.remove('is-dragging');
           globalThis.removeEventListener('pointermove', onPointerMove);
           globalThis.removeEventListener('pointerup', onPointerUp);
+          if (pendingDragRafRef.current) cancelAnimationFrame(pendingDragRafRef.current);
         };
 
         const onPointerUp = async () => {
@@ -658,6 +664,7 @@ export function useCanvasRendering(
       });
 
       // Whole-card drag — activates after real movement
+      const pendingNoteDragRafRef = { current: 0 };
       const dragHandlers = { onMove: (_ev: PointerEvent) => {}, onUp: () => {} };
       card.addEventListener('pointerdown', (e: PointerEvent) => {
         if (e.button !== 0) return;
@@ -677,8 +684,11 @@ export function useCanvasRendering(
             card.classList.add('is-dragging');
           }
           if (!moved) return;
-          card.style.left = `${Math.max(origLeft + dx, 0)}px`;
-          card.style.top = `${Math.max(origTop + dy, 0)}px`;
+          if (pendingNoteDragRafRef.current) cancelAnimationFrame(pendingNoteDragRafRef.current);
+          pendingNoteDragRafRef.current = requestAnimationFrame(() => {
+            card.style.left = `${Math.max(origLeft + dx, 0)}px`;
+            card.style.top = `${Math.max(origTop + dy, 0)}px`;
+          });
           // Update connector line if attached to selected text
           (card as HTMLElement & { _updateConnector?: () => void })._updateConnector?.();
         };
@@ -687,6 +697,7 @@ export function useCanvasRendering(
           card.classList.remove('is-dragging');
           globalThis.document?.removeEventListener('pointermove', dragHandlers.onMove);
           globalThis.document?.removeEventListener('pointerup', dragHandlers.onUp);
+          if (pendingNoteDragRafRef.current) cancelAnimationFrame(pendingNoteDragRafRef.current);
         };
 
         dragHandlers.onUp = async () => {

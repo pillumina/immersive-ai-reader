@@ -450,11 +450,11 @@ function updateVisibleRange(state: LazyRenderState, totalPages: number): void {
   // Find first visible page by checking each page's offsetTop relative to scrollTop.
   let minPage = totalPages;
   let maxPage = 1;
+  const containerRect = sc.getBoundingClientRect();
   for (const p of pages) {
     const num = Number(p.dataset.pageNumber ?? p.dataset['pageNumber'] ?? 0);
     if (!num) continue;
     const rect = p.getBoundingClientRect();
-    const containerRect = sc.getBoundingClientRect();
     const relTop = rect.top - containerRect.top;
     const relBottom = rect.bottom - containerRect.top;
     // Visible if any part is within viewport (with 1 viewport buffer)

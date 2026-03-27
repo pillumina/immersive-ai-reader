@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { Search, Trash2, ExternalLink, Download, Edit3, ChevronDown } from 'lucide-react';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
 
@@ -24,7 +24,7 @@ interface NotesManagerProps {
 
 const NOTE_PREFIX = '__NOTE__|';
 
-export function NotesManager({
+export const NotesManager = memo(function NotesManager({
   annotations,
   onJumpToPage,
   onDeleteNote,
@@ -275,4 +275,4 @@ ${note.content}
       </div>
     </div>
   );
-}
+});

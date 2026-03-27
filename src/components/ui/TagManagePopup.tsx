@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { Plus, X, Tag } from 'lucide-react';
 import { Tag as TagType, TAG_PRESET_COLORS, PRESET_TAGS, DEFAULT_TAG_COLOR } from '@/types/annotation';
 import { tagCommands } from '@/lib/tauri';
@@ -97,7 +97,7 @@ interface TagManagePopupProps {
   onTagsChanged: (tags: TagType[]) => void;
 }
 
-export function TagManagePopup({ annotationId, onClose, onTagsChanged }: TagManagePopupProps) {
+export const TagManagePopup = memo(function TagManagePopup({ annotationId, onClose, onTagsChanged }: TagManagePopupProps) {
   const [tags, setTags] = useState<TagType[]>([]);
   const [search, setSearch] = useState('');
   const [allTags, setAllTags] = useState<TagType[]>([]);
@@ -346,4 +346,4 @@ export function TagManagePopup({ annotationId, onClose, onTagsChanged }: TagMana
     </>,
     document.body
   );
-}
+});

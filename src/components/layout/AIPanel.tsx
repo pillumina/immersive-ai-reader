@@ -11,7 +11,7 @@ export const aiCardDragState = {
     | null,
   isDragging: false,
 };
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { Loader2, Square, Send, MessageSquare, StickyNote } from 'lucide-react';
 import { Message } from '@/types/conversation';
 import { Logo } from '@/components/ui/Logo';
@@ -60,7 +60,7 @@ defaultInputMode: ChatInputMode;
   onCollapse?: (collapsed: boolean) => void;
 }
 
-export function AIPanel({
+export const AIPanel = memo(function AIPanel({
   messages,
   isLoading,
   onSendMessage,
@@ -538,4 +538,4 @@ export function AIPanel({
       )}
     </>
   );
-}
+});

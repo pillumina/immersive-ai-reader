@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { tagCommands } from '@/lib/tauri/commands';
 import type { BackendTag } from '@/lib/tauri/commands';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
@@ -32,7 +32,7 @@ interface TagInput {
 
 const NOTE_PREFIX = '__NOTE__|';
 
-export function L3NoteEditor({
+export const L3NoteEditor = memo(function L3NoteEditor({
   annotationId,
   quoteText,
   existingNoteText,
@@ -362,4 +362,4 @@ export function L3NoteEditor({
       </div>
     </div>
   );
-}
+});

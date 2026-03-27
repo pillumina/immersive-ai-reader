@@ -1,5 +1,6 @@
 import { X, Library } from 'lucide-react';
 import { Logo } from '@/components/ui/Logo';
+import { memo } from 'react';
 
 export interface AppTab {
   id: string; // 'library' | `doc-${docId}`
@@ -17,7 +18,7 @@ interface TopBarProps {
   sidebarOpen: boolean;
 }
 
-export function TopBar({ tabs, activeTabId, onSelectTab, onCloseTab, onToggleSidebar, sidebarOpen }: TopBarProps) {
+export const TopBar = memo(function TopBar({ tabs, activeTabId, onSelectTab, onCloseTab, onToggleSidebar, sidebarOpen }: TopBarProps) {
   return (
     <header className="topbar">
       {/* Left: sidebar toggle + app logo */}
@@ -79,4 +80,4 @@ export function TopBar({ tabs, activeTabId, onSelectTab, onCloseTab, onToggleSid
       </div>
     </header>
   );
-}
+});

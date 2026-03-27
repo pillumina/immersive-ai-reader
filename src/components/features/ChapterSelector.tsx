@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo } from 'react';
 import { ChapterInfo } from '@/lib/pdf/parser';
 
 interface ChapterSelectorProps {
@@ -9,7 +9,7 @@ interface ChapterSelectorProps {
   onCancel: () => void;
 }
 
-export function ChapterSelector({
+export const ChapterSelector = memo(function ChapterSelector({
   chapters,
   currentChapter,
   totalPages,
@@ -227,4 +227,4 @@ export function ChapterSelector({
       </div>
     </div>
   );
-}
+});

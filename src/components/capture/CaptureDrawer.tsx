@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, memo } from 'react';
 import { CaptureItemComponent, type CaptureItem, type CaptureType } from './CaptureItem';
 import { focusCommands, type FocusSession } from '@/lib/tauri/commands';
 
@@ -207,7 +207,7 @@ function SessionCard({
   );
 }
 
-export function CaptureDrawer({
+export const CaptureDrawer = memo(function CaptureDrawer({
   captures,
   isOpen,
   onClose,
@@ -467,4 +467,4 @@ export function CaptureDrawer({
       </div>
     </>
   );
-}
+});

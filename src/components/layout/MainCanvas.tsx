@@ -1,5 +1,5 @@
 import { ZoomIn, ZoomOut, X, StickyNote, MessageCircleQuestion, Highlighter, Copy } from 'lucide-react';
-import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PdfOutlineItem } from '@/lib/pdf/renderer';
 import { aiCardDragState } from '@/components/layout/AIPanel';
@@ -40,7 +40,7 @@ interface MainCanvasProps {
   pdfFileBlob?: Blob | null;
 }
 
-export function MainCanvas({
+export const MainCanvas = memo(function MainCanvas({
   zoomLevel,
   onZoomIn,
   onZoomOut,
@@ -1308,4 +1308,4 @@ export function MainCanvas({
       )}
     </main>
   );
-}
+});

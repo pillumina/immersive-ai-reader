@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import type { Message } from '@/types/conversation';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
 
@@ -47,7 +47,7 @@ function ChatBubble({ message }: { message: Message }) {
   );
 }
 
-export function MiniAIWindow({
+export const MiniAIWindow = memo(function MiniAIWindow({
   messages,
   isLoading,
   onSendMessage,
@@ -196,4 +196,4 @@ export function MiniAIWindow({
       </div>
     </div>
   );
-}
+});

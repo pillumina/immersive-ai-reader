@@ -600,7 +600,7 @@ function AppInner() {
 
     autoEnteredRef.current.add(currentDocument.id);
     void handleEnterFocusMode(false);
-  }, [currentDocument?.id, uiSettings.autoEnterFocusOnDocOpen, focusState.isActive, currentPage]);
+  }, [currentDocument?.id, uiSettings.autoEnterFocusOnDocOpen, focusState.isActive]);
 
   // ─── Focus Mode: 80% summary trigger ─────────────────────────
   const handleUpload = useCallback(async () => {

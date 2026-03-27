@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 interface ToastProps {
@@ -29,7 +29,7 @@ const styles: Record<ToastProps['type'], { bg: string; ring: string }> = {
   },
 };
 
-export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
+export const Toast = memo(function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
   const [visible, setVisible] = useState(false);
   const [exiting, setExiting] = useState(false);
 
@@ -80,4 +80,4 @@ export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
       </button>
     </div>
   );
-}
+});

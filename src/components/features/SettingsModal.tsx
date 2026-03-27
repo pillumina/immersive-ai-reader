@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, memo } from 'react';
 import { AIConfig, AIProfile, AIProvider, ChatInputMode, ThemeOption } from '@/types/settings';
 import { Dialog, DialogContent } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
@@ -79,7 +79,7 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function SettingsModal({
+export const SettingsModal = memo(function SettingsModal({
   open,
   onClose,
   profiles,
@@ -703,7 +703,7 @@ export function SettingsModal({
       </DialogContent>
     </Dialog>
   );
-}
+});
 
 function StatsSection() {
   const [days, setDays] = useState(7);

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { Settings, Trash2, Link, FileText, Library, Columns, Search } from 'lucide-react';
 import { PDFDocument } from '@/types/document';
 import { Logo } from '@/components/ui/Logo';
@@ -22,7 +22,7 @@ interface SidebarProps {
 
 type TabId = 'library' | 'pages';
 
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   onUpload,
   onOpenSettings,
   onToggleSidebar,
@@ -356,4 +356,4 @@ export function Sidebar({
       </div>
     </aside>
   );
-}
+});

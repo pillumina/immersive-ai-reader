@@ -1,3 +1,4 @@
+import { memo } from 'react';
 export type CaptureType = 'note' | 'highlight' | 'ai-response';
 
 interface BaseCaptureItem {
@@ -57,7 +58,7 @@ function formatTime(iso: string): string {
   }
 }
 
-export function CaptureItemComponent({
+export const CaptureItemComponent = memo(function CaptureItemComponent({
   item,
   onJumpTo,
   onEdit,
@@ -165,4 +166,4 @@ export function CaptureItemComponent({
       )}
     </div>
   );
-}
+});
