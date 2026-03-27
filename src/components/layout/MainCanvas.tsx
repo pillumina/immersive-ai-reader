@@ -717,22 +717,22 @@ export function MainCanvas({
   }, [outline, compareTocQuery]);
 
   return (
-    <main className="flex-1 min-w-0 overflow-hidden flex flex-col bg-[#fafaf9] relative">
-      {/* Toolbar – glassmorphism + compact spacing */}
-      <div className="h-11 border-b border-[#e7e5e4]/60 bg-white/80 backdrop-blur-xl flex items-center justify-between px-3 gap-2 select-none">
+    <main className="flex-1 min-w-0 overflow-hidden flex flex-col bg-[var(--color-bg)] relative">
+      {/* Toolbar — compact spacing */}
+      <div className="h-11 border-b border-[var(--color-border)]/60 bg-[var(--color-bg-raised)]/80 backdrop-blur-xl flex items-center justify-between px-3 gap-2 select-none">
         <div className="flex items-center gap-1.5">
           <button type="button" className="toolbar-icon-btn" onClick={onZoomOut} title="Zoom out">
             <ZoomOut size={15} />
           </button>
-          <span className="min-w-[38px] text-center text-[12px] font-medium tabular-nums text-[#78716c]">{Math.round(zoomLevel * 100)}%</span>
+          <span className="min-w-[38px] text-center text-[12px] font-medium tabular-nums text-[var(--color-text-secondary)]">{Math.round(zoomLevel * 100)}%</span>
           <button type="button" className="toolbar-icon-btn" onClick={onZoomIn} title="Zoom in">
             <ZoomIn size={15} />
           </button>
           {totalPages > 0 && (
             <>
-              <span className="mx-1 h-4 w-px bg-[#e7e5e4]" />
-              <span className="text-[12px] tabular-nums text-[#78716c]">
-                {currentPage}<span className="mx-0.5 text-[#e7e5e4]">/</span>{totalPages}
+              <span className="mx-1 h-4 w-px bg-[var(--color-border)]" />
+              <span className="text-[12px] tabular-nums text-[var(--color-text-secondary)]">
+                {currentPage}<span className="mx-0.5 text-[var(--color-border)]">/</span>{totalPages}
               </span>
             </>
           )}
@@ -771,8 +771,8 @@ export function MainCanvas({
             </button>
           )}
           {searchOpen && (
-            <div className="flex items-center gap-1 border border-[#e7e5e4] rounded-lg px-2 py-1 bg-white shadow-sm min-w-[220px]">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <div className="flex items-center gap-1 border border-[var(--color-border)] rounded-lg px-2 py-1 bg-[var(--color-bg-raised)] shadow-sm min-w-[220px]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input
                 autoFocus
                 type="text"
@@ -799,18 +799,18 @@ export function MainCanvas({
                   }
                 }}
                 placeholder="Search…"
-                className="border-none outline-none text-[12px] text-[#444] bg-transparent w-24 placeholder:text-[#c4bdb9]"
+                className="border-none outline-none text-[12px] text-[var(--color-text)] bg-transparent w-24 placeholder:text-[var(--color-text-muted)]"
               />
               {searchLoading ? (
-                <span className="text-[10px] text-[#a8a29e]">…</span>
+                <span className="text-[10px] text-[var(--color-text-muted)]">…</span>
               ) : searchError ? (
-                <span className="text-[10px] text-[#ef4444]">error</span>
+                <span className="text-[10px] text-[var(--color-danger)]">error</span>
               ) : searchResultPages.length > 0 ? (
-                <span className="text-[10px] text-[#0d9488] font-medium whitespace-nowrap">
+                <span className="text-[10px] text-[var(--color-success)] font-medium whitespace-nowrap">
                   {searchCurrentIndex + 1}/{searchResultPages.length}
                 </span>
               ) : searchQuery && !searchLoading ? (
-                <span className="text-[10px] text-[#a8a29e]">no match</span>
+                <span className="text-[10px] text-[var(--color-text-muted)]">no match</span>
               ) : null}
               {searchResultPages.length > 0 && (
                 <>
@@ -818,7 +818,7 @@ export function MainCanvas({
                     type="button"
                     onClick={() => void goToPrevSearchResult()}
                     title="Previous (↑)"
-                    className="text-[#a8a29e] hover:text-[#0d9488] transition-colors leading-none px-0.5"
+                    className="text-[var(--color-text-muted)] hover:text-[var(--color-success)] transition-colors leading-none px-0.5"
                   >
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="18 15 12 9 6 15"/></svg>
                   </button>
@@ -826,7 +826,7 @@ export function MainCanvas({
                     type="button"
                     onClick={() => void goToNextSearchResult()}
                     title="Next (↓)"
-                    className="text-[#a8a29e] hover:text-[#0d9488] transition-colors leading-none px-0.5"
+                    className="text-[var(--color-text-muted)] hover:text-[var(--color-success)] transition-colors leading-none px-0.5"
                   >
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
                   </button>
@@ -835,7 +835,7 @@ export function MainCanvas({
               <button
                 type="button"
                 onClick={() => { setSearchOpen(false); setSearchQuery(''); setSearchResultPages([]); }}
-                className="text-[#a8a29e] hover:text-[#78716c] transition-colors leading-none ml-auto"
+                className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors leading-none ml-auto"
               >
                 ×
               </button>
@@ -857,11 +857,11 @@ export function MainCanvas({
       {/* Reading progress stats — outside scroll container so it stays visible while scrolling */}
       {hasDocument && totalPages > 0 && (
         <div className="flex items-center justify-between mb-1 px-1 flex-shrink-0">
-          <span className="text-[10px] text-[#a8a29e] tabular-nums">
+          <span className="text-[10px] text-[var(--color-text-muted)] tabular-nums">
             第 {currentPage} / {totalPages} 页
           </span>
           <span
-            className="text-[10px] text-[#a8a29e] cursor-pointer hover:text-[#78716c] transition-colors"
+            className="text-[10px] text-[var(--color-text-muted)] cursor-pointer hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={(e) => {
               const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
               if (!scrollEl) return;
@@ -896,7 +896,7 @@ export function MainCanvas({
               {/* Visual progress bar — thin indicator */}
               {totalPages > 0 && (
                 <div
-                  className="mx-1 mb-2 h-[3px] bg-[#e7e5e4] rounded-full overflow-hidden cursor-pointer"
+                  className="mx-1 mb-2 h-[3px] bg-[var(--color-border)] rounded-full overflow-hidden cursor-pointer"
                   onClick={(e) => {
                     const scrollEl = globalThis.document?.getElementById('pdf-scroll-container');
                     if (!scrollEl) return;
@@ -909,55 +909,55 @@ export function MainCanvas({
                   title={`第 ${currentPage} / ${totalPages} 页 — 点击跳转`}
                 >
                   <div
-                    className="h-full bg-[#0d9488] rounded-full transition-all duration-200"
+                    className="h-full bg-[var(--color-success)] rounded-full transition-all duration-200"
                     style={{ width: `${(currentPage / totalPages) * 100}%` }}
                   />
                 </div>
               )}
               <div id="pdf-pages-container" className="pdf-pages-container" />
               {isLoading && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/90 shadow-md border border-[#e7e5e4] backdrop-blur-sm animate-in fade-in slide-in-from-top-2">
-                  <div className="w-3.5 h-3.5 rounded-full bg-[#c2410c] animate-pulse" />
-                  <p className="text-[11px] text-[#78716c] font-medium whitespace-nowrap">Rendering…</p>
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--color-bg-raised)]/90 shadow-md border border-[var(--color-border)] backdrop-blur-sm animate-in fade-in slide-in-from-top-2">
+                  <div className="w-3.5 h-3.5 rounded-full bg-[var(--color-accent)] animate-pulse" />
+                  <p className="text-[11px] text-[var(--color-text-secondary)] font-medium whitespace-nowrap">Rendering…</p>
                 </div>
               )}
             </div>
           ) : isLoading ? (
             <div className="h-full flex flex-col items-center justify-center gap-4 animate-in fade-in">
               <div className="loading-pulse" />
-              <p className="text-[13px] text-[#78716c] font-medium">Processing PDF…</p>
+              <p className="text-[13px] text-[var(--color-text-secondary)] font-medium">Processing PDF…</p>
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center gap-3">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#fafaf9] to-[#e7e5e4] flex items-center justify-center">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <div className="w-16 h-16 rounded-2xl bg-[var(--color-bg-hover)] flex items-center justify-center">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
               </div>
-              <p className="text-[13px] text-[#a8a29e]">Upload a PDF to get started</p>
+              <p className="text-[13px] text-[var(--color-text-muted)]">Upload a PDF to get started</p>
             </div>
           )}
         </div>
 
         {splitMode && hasDocument && totalPages > 0 && (
-          <aside className="relative w-[45%] min-w-[340px] max-w-[55%] border-l border-[#e7e5e4] bg-[#fafaf9] flex flex-col">
-            <div className="border-b border-[#e7e5e4] bg-white/90">
+          <aside className="relative w-[45%] min-w-[340px] max-w-[55%] border-l border-[var(--color-border)] bg-[var(--color-bg)] flex flex-col">
+            <div className="border-b border-[var(--color-border)] bg-[var(--color-bg-raised)]/90">
               {/* Row 1: Task context */}
               <div className="flex h-8 items-center justify-between px-3">
                 <div className="flex items-center gap-2">
                   <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none ${
                     splitReason === 'evidence'
-                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                      ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-hover)] border border-[var(--color-accent-border)]'
                       : splitReason === 'reference'
-                        ? 'bg-sky-50 text-sky-700 border border-sky-200'
-                        : 'bg-slate-50 text-slate-600 border border-slate-200'
+                        ? 'bg-[var(--color-ai-subtle)] text-[var(--color-ai-text)] border border-[var(--color-ai-border)]'
+                        : 'bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
                   }`}>
                     {splitReason === 'evidence' ? 'Evidence Check' : splitReason === 'reference' ? 'AI Reference' : 'Compare'}
                   </span>
-                  <span className="text-[11px] text-[#78716c]">page {comparePage} / {totalPages}</span>
+                  <span className="text-[11px] text-[var(--color-text-secondary)]">page {comparePage} / {totalPages}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    className={`rounded-md px-1.5 py-0.5 text-[10px] transition-colors ${compareFollowCitation ? 'bg-[#c2410c]/10 text-[#c2410c]' : 'text-[#a8a29e] hover:text-[#78716c]'}`}
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] transition-colors ${compareFollowCitation ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}`}
                     onClick={() => setCompareFollowCitation((v) => !v)}
                     title={compareFollowCitation ? 'Auto-follow: syncs with main view scroll & citation clicks' : 'Manual navigation only'}
                   >
@@ -965,7 +965,7 @@ export function MainCanvas({
                   </button>
                   <button
                     type="button"
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e7e5e4] bg-white text-[#78716c] transition-all hover:bg-[#FEF2F2] hover:border-[#FECACA] hover:text-[#DC2626] active:scale-95"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-raised)] text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-danger-subtle)] hover:border-[var(--color-danger)] hover:text-[var(--color-danger)] active:scale-95"
                     onClick={() => setSplitMode(false)}
                     title="Close reference pane (back to AI chat)"
                   >
@@ -974,7 +974,7 @@ export function MainCanvas({
                 </div>
               </div>
               {/* Row 2: Navigation controls */}
-              <div className="flex h-8 items-center gap-1 border-t border-[#fafaf9] px-3">
+              <div className="flex h-8 items-center gap-1 border-t border-[var(--color-bg-subtle)] px-3">
                 <button type="button" className="ref-pane-btn" onClick={() => {
                   if (compareHistoryIndex <= 0) return;
                   const prevIdx = compareHistoryIndex - 1;
@@ -987,22 +987,22 @@ export function MainCanvas({
                   setCompareHistoryIndex(nextIdx);
                   navigateComparePage(compareHistory[nextIdx], { recordHistory: false });
                 }} disabled={compareHistoryIndex < 0 || compareHistoryIndex >= compareHistory.length - 1} title="Forward">→</button>
-                <span className="mx-0.5 text-[#e7e5e4]">|</span>
+                <span className="mx-0.5 text-[var(--color-border)]">|</span>
                 <button type="button" className="ref-pane-btn" onClick={() => navigateComparePage(comparePage - 1)} disabled={comparePage <= 1}>Prev</button>
                 <input
                   value={comparePageInput}
                   onChange={(e) => setComparePageInput(e.target.value)}
                   onBlur={handleComparePageSubmit}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleComparePageSubmit(); }}
-                  className="h-6 w-12 rounded border border-[#e7e5e4] px-1.5 text-center text-[11px] text-[#78716c] outline-none focus:border-[#c2410c]"
+                  className="h-6 w-12 rounded border border-[var(--color-border)] px-1.5 text-center text-[11px] text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-accent)]"
                 />
                 <button type="button" className="ref-pane-btn" onClick={() => navigateComparePage(comparePage + 1)} disabled={comparePage >= totalPages}>Next</button>
                 <button type="button" className="ref-pane-btn" onClick={() => navigateComparePage(currentPage)}>Sync</button>
-                <span className="mx-0.5 text-[#e7e5e4]">|</span>
+                <span className="mx-0.5 text-[var(--color-border)]">|</span>
                 <button type="button" className="ref-pane-btn" onClick={() => setCompareZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(2))))}>−</button>
-                <span className="min-w-[32px] text-center text-[10px] text-[#78716c]">{Math.round(compareZoom * 100)}%</span>
+                <span className="min-w-[32px] text-center text-[10px] text-[var(--color-text-secondary)]">{Math.round(compareZoom * 100)}%</span>
                 <button type="button" className="ref-pane-btn" onClick={() => setCompareZoom((z) => Math.min(2.5, Number((z + 0.1).toFixed(2))))}>+</button>
-                <span className="mx-0.5 text-[#e7e5e4]">|</span>
+                <span className="mx-0.5 text-[var(--color-border)]">|</span>
                 <button type="button" className="ref-pane-btn" onClick={() => setCompareTocOpen((v) => !v)}>
                   {compareTocOpen ? 'Hide TOC' : 'TOC'}
                 </button>
@@ -1012,12 +1012,12 @@ export function MainCanvas({
               <div id="pdf-compare-container" className="pdf-compare-container" />
             </div>
             {compareTocOpen && (
-              <aside className="absolute right-0 top-11 bottom-0 w-[260px] border-l border-[#e7e5e4] bg-white/98 backdrop-blur z-10 overflow-auto">
-                <div className="sticky top-0 border-b border-[#fafaf9] bg-white px-3 py-2">
+              <aside className="absolute right-0 top-11 bottom-0 w-[260px] border-l border-[var(--color-border)] bg-[var(--color-bg-raised)]/98 backdrop-blur z-10 overflow-auto">
+                <div className="sticky top-0 border-b border-[var(--color-bg-subtle)] bg-[var(--color-bg-raised)] px-3 py-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold text-[#78716c]">Compare TOC</h4>
+                    <h4 className="text-xs font-semibold text-[var(--color-text-secondary)]">Compare TOC</h4>
                     <button
-                      className="text-[11px] text-[#78716c] hover:text-[#1c1917]"
+                      className="text-[11px] text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
                       onClick={() => setCompareTocOpen(false)}
                     >
                       Close
@@ -1026,19 +1026,19 @@ export function MainCanvas({
                   <input
                     value={compareTocQuery}
                     onChange={(e) => setCompareTocQuery(e.target.value)}
-                    className="mt-2 w-full rounded-md border border-[#e7e5e4] px-2 py-1 text-[11px] text-[#78716c] outline-none focus:border-[#c2410c]"
+                    className="mt-2 w-full rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-accent)]"
                     placeholder="Search in TOC..."
                   />
                 </div>
                 <div className="p-2">
                   {filteredCompareOutline.length === 0 && (
-                    <p className="px-2 py-3 text-[11px] text-[#a8a29e]">No matched entries</p>
+                    <p className="px-2 py-3 text-[11px] text-[var(--color-text-muted)]">No matched entries</p>
                   )}
                   {filteredCompareOutline.map((item) => (
                     <button
                       key={`compare-${item.id}`}
                       className={`w-full text-left rounded px-2 py-1.5 text-xs transition-colors ${
-                        item.id === compareActiveOutlineId ? 'bg-[#f5f3ff] text-[#7c3aed]' : 'hover:bg-[#fafaf9] text-[#78716c]'
+                        item.id === compareActiveOutlineId ? 'bg-[var(--color-ai-subtle)] text-[var(--color-ai-text)]' : 'hover:bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)]'
                       }`}
                       style={{ paddingLeft: `${8 + item.level * 12}px` }}
                       disabled={!item.pageNumber}
@@ -1049,7 +1049,7 @@ export function MainCanvas({
                       }}
                     >
                       <span>{item.title}</span>
-                      {item.pageNumber && <span className="ml-1 text-[10px] text-[#a8a29e]">p.{item.pageNumber}</span>}
+                      {item.pageNumber && <span className="ml-1 text-[10px] text-[var(--color-text-muted)]">p.{item.pageNumber}</span>}
                     </button>
                   ))}
                 </div>
@@ -1060,10 +1060,10 @@ export function MainCanvas({
       </div>
 
       {tocOpen && hasDocument && totalPages > 0 && (
-        <aside className="absolute right-0 top-11 bottom-0 w-[280px] bg-white/[0.97] border-l border-[#e7e5e4]/60 shadow-2xl backdrop-blur-xl z-20 flex flex-col animate-in slide-in-from-right">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#fafaf9]">
-            <h3 className="text-[13px] font-semibold text-[#1c1917]">Contents</h3>
-            <button className="text-[11px] text-[#a8a29e] hover:text-[#78716c] transition-colors" onClick={() => setTocOpen(false)}>
+        <aside className="absolute right-0 top-11 bottom-0 w-[280px] bg-[var(--color-bg-raised)]/[0.97] border-l border-[var(--color-border)]/60 shadow-2xl backdrop-blur-xl z-20 flex flex-col animate-in slide-in-from-right">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--color-bg-subtle)]">
+            <h3 className="text-[13px] font-semibold text-[var(--color-text)]">Contents</h3>
+            <button className="text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" onClick={() => setTocOpen(false)}>
               Close
             </button>
           </div>
@@ -1071,28 +1071,28 @@ export function MainCanvas({
             <input
               value={tocQuery}
               onChange={(e) => setTocQuery(e.target.value)}
-              className="w-full rounded-lg border border-[#e7e5e4] bg-[#fafaf9] px-2.5 py-1.5 text-[12px] text-[#78716c] outline-none focus:border-[#c2410c] focus:ring-2 focus:ring-[#c2410c]/10 transition-all placeholder:text-[#a8a29e]"
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-hover)] px-2.5 py-1.5 text-[12px] text-[var(--color-text-secondary)] outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)]/10 transition-all placeholder:text-[var(--color-text-muted)]"
               placeholder="Search…"
             />
           </div>
           <div className="flex-1 overflow-y-auto px-2 py-1">
             {filteredOutline.length === 0 && (
-              <p className="px-2 py-4 text-center text-[11px] text-[#a8a29e]">No matching entries</p>
+              <p className="px-2 py-4 text-center text-[11px] text-[var(--color-text-muted)]">No matching entries</p>
             )}
             {filteredOutline.map((item) => (
               <button
                 key={item.id}
                 className={`w-full text-left rounded-lg px-2 py-1.5 text-[12px] leading-snug transition-all duration-100 ${
                   item.id === activeOutlineId
-                    ? 'bg-[#FEF2F2] text-[#c2410c] font-medium'
-                    : 'text-[#78716c] hover:bg-[#fafaf9]'
+                    ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] font-medium'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)]'
                 }`}
                 style={{ paddingLeft: `${8 + item.level * 12}px` }}
                 disabled={!item.pageNumber}
                 onClick={() => { if (item.pageNumber) onJumpToPage(item.pageNumber); }}
               >
                 <span>{item.title}</span>
-                {item.pageNumber && <span className="ml-1.5 text-[10px] tabular-nums text-[#a8a29e]">p{item.pageNumber}</span>}
+                {item.pageNumber && <span className="ml-1.5 text-[10px] tabular-nums text-[var(--color-text-muted)]">p{item.pageNumber}</span>}
               </button>
             ))}
           </div>
@@ -1154,7 +1154,7 @@ export function MainCanvas({
           {/* Toolbar */}
           <div
             data-text-toolbar
-            className="text-action-toolbar fixed z-40 flex items-center gap-0.5 rounded-xl border border-[#e7e5e4]/80 bg-white/95 shadow-[0_4px_20px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.08)] px-1 py-1 backdrop-blur-md"
+            className="text-action-toolbar fixed z-40 flex items-center gap-0.5 rounded-xl border border-[var(--color-border)]/80 bg-[var(--color-bg-raised)]/95 shadow-[0_4px_20px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.08)] px-1 py-1 backdrop-blur-md"
             style={{ left: textHandleRef.current.x, top: textHandleRef.current.y, transform: 'translateX(-50%)' }}
             onMouseDown={(e) => e.stopPropagation()}
           >

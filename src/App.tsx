@@ -1543,7 +1543,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
 
       {/* First-use Focus Mode tooltip */}
       {focusState.focusTooltipVisible && (
-        <div className="fixed left-4 bottom-4 z-[9999] bg-[#1c1917] text-white rounded-2xl shadow-2xl p-4 w-72 animate-in fade-in slide-in-from-bottom-4">
+        <div className="fixed left-4 bottom-4 z-[9999] bg-[var(--color-text)] text-[var(--color-text-inverse)] rounded-2xl shadow-2xl p-4 w-72 animate-in fade-in slide-in-from-bottom-4">
           <div className="flex items-start gap-3">
             <span className="text-2xl flex-shrink-0 mt-0.5">🎯</span>
             <div className="flex-1 min-w-0">

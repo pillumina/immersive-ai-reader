@@ -243,11 +243,11 @@ export function AIPanel({
     <>
       {/* Collapsed Strip */}
       {isCollapsed ? (
-        <div className="w-[48px] border-l border-[#e7e5e4]/60 bg-gradient-to-b from-[#fafaf9] to-[#fafaf9] flex flex-col items-center py-4 gap-3">
+        <div className="w-[48px] border-l border-[var(--color-border)]/60 bg-[var(--color-bg)] flex flex-col items-center py-4 gap-3">
           <button
             type="button"
             onClick={() => onCollapse?.(false)}
-            className="w-9 h-9 rounded-xl bg-[#c2410c] text-white flex items-center justify-center shadow-sm hover:bg-[#9a3412] transition-colors"
+            className="w-9 h-9 rounded-xl bg-[var(--color-accent)] text-white flex items-center justify-center shadow-sm hover:bg-[var(--color-accent-hover)] transition-colors"
             title="Expand AI Panel"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -259,7 +259,7 @@ export function AIPanel({
             <button
               type="button"
               onClick={onSummarize}
-              className="w-9 h-9 rounded-lg bg-white border border-[#e7e5e4] flex items-center justify-center text-[#78716c] hover:bg-[#fff7ed] hover:border-[#fed7aa] hover:text-[#c2410c] transition-colors"
+              className="w-9 h-9 rounded-lg bg-[var(--color-bg-raised)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-accent-subtle)] hover:border-[var(--color-accent-border)] hover:text-[var(--color-accent)] transition-colors"
               title="Summarize"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
@@ -267,7 +267,7 @@ export function AIPanel({
             <button
               type="button"
               onClick={onExportNotes}
-              className="w-9 h-9 rounded-lg bg-white border border-[#e7e5e4] flex items-center justify-center text-[#78716c] hover:bg-[#fff7ed] hover:border-[#fed7aa] hover:text-[#c2410c] transition-colors"
+              className="w-9 h-9 rounded-lg bg-[var(--color-bg-raised)] border border-[var(--color-border)] flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-accent-subtle)] hover:border-[var(--color-accent-border)] hover:text-[var(--color-accent)] transition-colors"
               title="Export Notes"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -276,7 +276,7 @@ export function AIPanel({
         </div>
       ) : (
       <aside
-        className={`relative border-l border-[#e7e5e4]/60 bg-gradient-to-b from-[#fafaf9] to-[#fafaf9] flex flex-col select-none ${isDragOverPanel ? 'ring-2 ring-[#c2410c] ring-inset bg-[#fff7ed]/30' : ''}`}
+        className={`relative border-l border-[var(--color-border)]/60 bg-[var(--color-bg)] flex flex-col select-none ${isDragOverPanel ? 'ring-2 ring-[var(--color-accent)] ring-inset bg-[var(--color-accent-subtle)]/30' : ''}`}
         style={{ width }}
         onPointerEnter={() => setIsDragOverPanel(true)}
         onPointerLeave={() => setIsDragOverPanel(false)}
@@ -285,7 +285,7 @@ export function AIPanel({
         <button
           type="button"
           onClick={() => onCollapse?.(true)}
-          className="absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-6 h-6 rounded-full bg-white border border-[#e7e5e4] shadow-sm flex items-center justify-center text-[#78716c] hover:text-[#c2410c] hover:border-[#fed7aa] transition-colors"
+          className="absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-6 h-6 rounded-full bg-[var(--color-bg-raised)] border border-[var(--color-border)] shadow-sm flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent-border)] transition-colors"
           title="Collapse AI Panel"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -295,7 +295,7 @@ export function AIPanel({
 
       {/* Resize Handle */}
       <div
-        className={`absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-20 group-hover:bg-[#c2410c]/30 transition-colors ${isResizing ? 'bg-[#c2410c]/50' : ''}`}
+        className={`absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-20 group-hover:bg-[var(--color-accent)]/30 transition-colors ${isResizing ? 'bg-[var(--color-accent)]/50' : ''}`}
         onPointerDown={(e) => {
           e.preventDefault();
           setIsResizing(true);
@@ -328,14 +328,14 @@ export function AIPanel({
       />
 
       {/* Tab Bar */}
-      <div className="flex items-center border-b border-[#e7e5e4]/60 px-1">
+      <div className="flex items-center border-b border-[var(--color-border)]/60 px-1">
         <button
           type="button"
           onClick={() => setNotesView(false)}
           className={`flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 transition-colors ${
             !notesView
-              ? 'border-[#c2410c] text-[#c2410c]'
-              : 'border-transparent text-[#a8a29e] hover:text-[#78716c]'
+              ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+              : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
           }`}
         >
           <MessageSquare size={13} />
@@ -346,8 +346,8 @@ export function AIPanel({
           onClick={() => setNotesView(true)}
           className={`flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-medium border-b-2 transition-colors ${
             notesView
-              ? 'border-[#c2410c] text-[#c2410c]'
-              : 'border-transparent text-[#a8a29e] hover:text-[#78716c]'
+              ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+              : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
           }`}
           title="Note Management"
         >
@@ -367,13 +367,13 @@ export function AIPanel({
       ) : (
         <>
         {/* Header */}
-        <div className="px-4 pt-4 pb-3 border-b border-[#e7e5e4]/60">
+        <div className="px-4 pt-4 pb-3 border-b border-[var(--color-border)]/60">
           <div className="flex items-center gap-2.5 mb-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#c2410c] to-[#9a3412] flex items-center justify-center shrink-0 shadow-sm">
+            <div className="w-7 h-7 rounded-lg bg-[var(--color-accent)] flex items-center justify-center shrink-0 shadow-sm">
               <Logo size={14} variant="dark" />
             </div>
             <div className="flex-1 min-w-0 flex items-center gap-2">
-              <h2 className="text-[13px] font-semibold text-[#1c1917] leading-tight">AI Assistant</h2>
+              <h2 className="text-[13px] font-semibold text-[var(--color-text)] leading-tight">AI Assistant</h2>
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -403,10 +403,10 @@ export function AIPanel({
       >
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center pt-10 text-center px-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#fafaf9] to-[#e7e5e4] flex items-center justify-center mb-3">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a8a29e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <div className="w-12 h-12 rounded-2xl bg-[var(--color-bg-hover)] flex items-center justify-center mb-3">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
-            <p className="text-[13px] text-[#a8a29e] font-medium mb-4">Ask about your document</p>
+            <p className="text-[13px] text-[var(--color-text-muted)] font-medium mb-4">Ask about your document</p>
             <div className="flex flex-col gap-2 w-full">
               {[
                 'What is this document about?',
@@ -424,7 +424,7 @@ export function AIPanel({
                       inputEl.focus();
                     }
                   }}
-                  className="text-left text-[12px] px-3 py-2 rounded-xl border border-[#e7e5e4] bg-[#fafaf9] text-[#78716c] hover:border-[#c2410c]/40 hover:text-[#9a3412] hover:bg-[#fff7ed] transition-colors duration-150"
+                  className="text-left text-[12px] px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent-hover)] hover:bg-[var(--color-accent-subtle)] transition-colors duration-150"
                 >
                   {q}
                 </button>
@@ -440,14 +440,14 @@ export function AIPanel({
       </div>
 
       {/* Input area */}
-      <div className="px-3 py-3 border-t border-[#e7e5e4]/60 bg-white/60 backdrop-blur-lg">
+      <div className="px-3 py-3 border-t border-[var(--color-border)]/60 bg-[var(--color-bg-raised)]/60 backdrop-blur-lg">
         {/* Attachment chips */}
         {attachments.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-1.5">
             {attachments.map((a) => (
               <div
                 key={a.id}
-                className="inline-flex items-center gap-1 rounded-full bg-[#fff7ed] border border-[#fed7aa] px-2 py-1 text-[11px] text-[#9a3412] max-w-[300px] group"
+                className="inline-flex items-center gap-1 rounded-full bg-[var(--color-accent-subtle)] border border-[var(--color-accent-border)] px-2 py-1 text-[11px] text-[var(--color-accent-hover)] max-w-[300px] group"
               >
                 <span className="shrink-0 font-medium text-[10px]">
                   {a.type === 'text' ? '📝' : '📌'}{a.page ? ` P.${a.page}` : ''}
@@ -455,7 +455,7 @@ export function AIPanel({
                 <span className="truncate flex-1" title={a.content}>{a.content.slice(0, 120)}{a.content.length > 120 ? '…' : ''}</span>
                 <button
                   type="button"
-                  className="shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-[#c2410c] hover:bg-[#fed7aa] transition-colors opacity-0 group-hover:opacity-100"
+                  className="shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-[var(--color-accent)] hover:bg-[var(--color-accent-border)] transition-colors opacity-0 group-hover:opacity-100"
                   onClick={() => onRemoveAttachment(a.id)}
                   title="Remove attachment"
                 >
@@ -480,14 +480,14 @@ export function AIPanel({
           </div>
         )}
         {isLoading && (
-          <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-[#fafaf9] px-3 py-1.5 text-[11px] text-[#78716c]">
+          <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-[var(--color-bg-hover)] px-3 py-1.5 text-[11px] text-[var(--color-text-secondary)]">
             <span className="inline-flex items-center gap-1.5">
               <Loader2 size={11} className="animate-spin" />
               Generating…
             </span>
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-[#e7e5e4] bg-white px-2 py-0.5 text-[10px] font-medium text-[#78716c] hover:bg-[#fafaf9] transition-colors active:scale-95"
+              className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-raised)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] transition-colors active:scale-95"
               onClick={onStopGeneration}
             >
               <Square size={9} />
@@ -497,15 +497,15 @@ export function AIPanel({
         )}
         <div className="flex items-center gap-1.5">
           {/* Mode selector */}
-          <div className="flex items-center rounded-lg border border-[#e7e5e4] bg-[#fafaf9] p-0.5">
+          <div className="flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-hover)] p-0.5">
             {(['auto', 'chat', 'doc'] as ChatInputMode[]).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 className={`rounded-md px-2 py-1 text-[10px] font-medium capitalize transition-all duration-100 ${
                   inputMode === mode
-                    ? 'bg-[#c2410c] text-white shadow-sm'
-                    : 'text-[#78716c] hover:text-[#78716c]'
+                    ? 'bg-[var(--color-accent)] text-white shadow-sm'
+                    : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-secondary)]'
                 }`}
                 onClick={() => setInputMode(mode)}
                 disabled={isLoading}
@@ -526,7 +526,7 @@ export function AIPanel({
             type="button"
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#c2410c] text-white shadow-sm transition-all duration-150 hover:bg-[#9a3412] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.93]"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent)] text-white shadow-sm transition-all duration-150 hover:bg-[var(--color-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.93]"
           >
             {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
           </button>

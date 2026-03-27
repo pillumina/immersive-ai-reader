@@ -14,10 +14,19 @@ const icons = {
   info: Info,
 };
 
-const colors = {
-  success: 'from-[#0d9488] to-[#0f766e] ring-[#0d9488]/30',
-  error: 'from-[#dc2626] to-[#b91c1c] ring-[#dc2626]/30',
-  info: 'from-[#78716c] to-[#57534e] ring-[#78716c]/30',
+const styles: Record<ToastProps['type'], { bg: string; ring: string }> = {
+  success: {
+    bg: 'linear-gradient(135deg, var(--color-success), #0f766e)',
+    ring: 'var(--color-success)',
+  },
+  error: {
+    bg: 'linear-gradient(135deg, var(--color-danger), #b91c1c)',
+    ring: 'var(--color-danger)',
+  },
+  info: {
+    bg: 'linear-gradient(135deg, var(--color-text-secondary), #57534e)',
+    ring: 'var(--color-text-secondary)',
+  },
 };
 
 export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
@@ -43,15 +52,21 @@ export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
   }, [exiting, onClose]);
 
   const Icon = icons[type];
+  const { bg, ring } = styles[type];
 
   return (
     <div
-      className={`fixed top-4 right-4 z-50 flex max-w-[min(400px,calc(100vw-32px))] items-center gap-2.5 rounded-2xl bg-gradient-to-br ${colors[type]} px-4 py-3 text-white shadow-2xl ring-1 ring-inset transition-all duration-300 ${
+      className={`fixed top-4 right-4 z-50 flex max-w-[min(400px,calc(100vw-32px))] items-center gap-2.5 rounded-2xl px-4 py-3 text-white shadow-2xl ring-1 ring-inset transition-all duration-300 ${
         visible && !exiting
           ? 'translate-y-0 opacity-100 scale-100'
           : '-translate-y-3 opacity-0 scale-95'
       }`}
-      style={{ transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)' }}
+      style={{
+        backgroundImage: bg,
+        transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
+        // @ts-expect-error CSS custom property in ring
+        '--tw-ring-color': ring,
+      }}
     >
       <Icon size={16} className="shrink-0 opacity-90" />
       <span className="text-[13px] leading-snug font-medium">{message}</span>

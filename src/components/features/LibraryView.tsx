@@ -94,21 +94,21 @@ function LibraryList({
   return (
     <div className="library-list-panel">
       {/* Panel header with branding */}
-      <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-[#f5f5f4]">
+      <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-[var(--color-bg-subtle)]">
         <div className="flex items-center gap-2.5 flex-1 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-[#c2410c] flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-[var(--color-accent)] flex items-center justify-center shrink-0">
             <Logo size={16} variant="dark" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-[13px] font-semibold text-[#1c1917] leading-tight truncate">Immersive Reader</h1>
-            <p className="text-[10px] text-[#78716c] leading-none">Document + AI</p>
+            <h1 className="text-[13px] font-semibold text-[var(--color-text)] leading-tight truncate">Immersive Reader</h1>
+            <p className="text-[10px] text-[var(--color-text-secondary)] leading-none">Document + AI</p>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={onOpenSettings}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#78716c] hover:bg-[#f5f5f4] hover:text-[#1c1917] transition-colors"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-colors"
             title="Settings"
           >
             <Settings size={15} />
@@ -165,7 +165,7 @@ function LibraryList({
           onClick={() => onSelectLibrary(null)}
           className={`library-item ${selectedLibraryId === null ? 'library-item--active' : ''}`}
         >
-          <span className="library-item__dot" style={{ background: '#78716c' }} />
+          <span className="library-item__dot" style={{ background: 'var(--color-text-secondary)' }} />
           <span className="library-item__name">All Documents</span>
         </button>
 
@@ -318,7 +318,7 @@ function DocumentList({
     return (
       <div className="doc-list-panel doc-list-panel--empty">
         <div className="doc-list-empty">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#e7e5e4" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-border)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
             <polyline points="14 2 14 8 20 8"/>
           </svg>
@@ -337,7 +337,7 @@ function DocumentList({
     );
   }
 
-  const headerColor = selectedLib?.color ?? '#78716c';
+  const headerColor = selectedLib?.color ?? 'var(--color-text-secondary)';
 
   return (
     <div className="doc-list-panel">
@@ -566,7 +566,7 @@ function DocumentDetail({
     return (
       <div className="doc-detail-panel doc-detail-panel--empty">
         <div className="doc-detail-empty">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#e7e5e4" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--color-border)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
             <polyline points="14 2 14 8 20 8"/>
           </svg>
@@ -585,7 +585,7 @@ function DocumentDetail({
     <div className="doc-detail-panel">
       {/* File icon */}
       <div className="doc-detail__icon-wrap">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c2410c" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
           <polyline points="14 2 14 8 20 8"/>
         </svg>
