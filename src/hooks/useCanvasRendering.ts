@@ -804,13 +804,105 @@ export function useCanvasRendering(
       });
   };
 
+  // Debounce timer for zoom changes
+  const zoomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Track last zoom level that triggered a full re-render (for change detection)
+  const lastRerenderZoomRef = useRef<number>(1);
+
+  // Handle zoom changes — when zoom changes significantly, trigger a full re-render
+  // for crisp PDF display at the new zoom level
   useEffect(() => {
     latestZoomRef.current = zoomLevel;
-    const containerEl = globalThis.document?.getElementById(containerId) as HTMLElement | null;
-    if (!containerEl) return;
-    // Chromium WebView supports css zoom and keeps layout/scroll consistent.
-    containerEl.style.zoom = String(zoomLevel);
-  }, [containerId, zoomLevel]);
+
+    if (!pdfDocument || !containerId) return;
+
+    // Clear any pending debounce
+    if (zoomDebounceRef.current) {
+      clearTimeout(zoomDebounceRef.current);
+    }
+
+    // Skip tiny changes (< 5%) to avoid excessive re-rendering
+    const zoomChange = Math.abs(zoomLevel - lastRerenderZoomRef.current) / lastRerenderZoomRef.current;
+    if (zoomChange < 0.05 && lastRerenderZoomRef.current !== 1) {
+      return;
+    }
+
+    // Debounce zoom re-renders to coalesce rapid zooming
+    zoomDebounceRef.current = setTimeout(() => {
+      const containerEl = globalThis.document?.getElementById(containerId);
+      const scrollEl = globalThis.document?.getElementById(scrollContainerId);
+      if (!containerEl || !scrollEl) return;
+
+      // Save scroll position as ratio (before clearing)
+      const scrollRatio = scrollEl.scrollTop / Math.max(scrollEl.scrollHeight - scrollEl.clientHeight, 1);
+
+      // Clear container to force re-render at new zoom level
+      containerEl.textContent = '';
+
+      // Reset the re-render skip check by advancing job ID
+      renderJobIdRef.current += 1;
+      const jobId = renderJobIdRef.current;
+
+      // Trigger re-render by updating a state variable (reuse pdfDocument trigger)
+      // We need to force the render effect to re-run - do this by dispatching an event
+      // that the render effect can pick up, or by directly calling render logic
+      (async () => {
+        if (!pdfDocument?.fileBlob) return;
+
+        try {
+          const file = pdfDocument.fileBlob instanceof File
+            ? pdfDocument.fileBlob
+            : new File([pdfDocument.fileBlob], pdfDocument.fileName, { type: 'application/pdf' });
+
+          // Cancel previous lazy cleanup
+          lazyCleanupRef.current?.();
+          lazyCleanupRef.current = null;
+
+          const result = await renderPagesToContainer(file, containerEl, {
+            scale: 1.25,
+            zoomLevel,
+            shouldCancel: () => jobId !== renderJobIdRef.current,
+            scrollContainerId,
+            onBatchRendered: () => {
+              if (batchRenderTimerRef.current) clearTimeout(batchRenderTimerRef.current);
+              batchRenderTimerRef.current = setTimeout(() => {
+                void loadStoredHighlights(pdfDocument.id);
+              }, 100);
+            },
+          });
+
+          if (jobId !== renderJobIdRef.current) return;
+
+          setTotalPages(result.totalPages);
+          setOutline(result.outline);
+          lazyCleanupRef.current = result.cleanup ?? null;
+
+          await loadStoredHighlights(pdfDocument.id);
+
+          // Restore scroll position after render completes
+          requestAnimationFrame(() => {
+            if (scrollEl) {
+              const newScrollTop = scrollRatio * (scrollEl.scrollHeight - scrollEl.clientHeight);
+              scrollEl.scrollTop = Math.max(0, newScrollTop);
+            }
+          });
+
+          lastRerenderZoomRef.current = zoomLevel;
+        } catch (err) {
+          if (jobId !== renderJobIdRef.current) return;
+          console.error('[zoom-rerender] Error:', err);
+        }
+      })();
+    }, 300);
+
+    return () => {
+      if (zoomDebounceRef.current) {
+        clearTimeout(zoomDebounceRef.current);
+        zoomDebounceRef.current = null;
+      }
+    };
+  }, [containerId, scrollContainerId, pdfDocument, zoomLevel]);
 
   // Render pages when document changes.
   useEffect(() => {
@@ -885,6 +977,7 @@ export function useCanvasRendering(
         const result = await Promise.race([
           renderPagesToContainer(file, containerEl, {
             scale: 1.25,
+            zoomLevel,
             shouldCancel: () => jobId !== renderJobIdRef.current,
             scrollContainerId,
             // Re-apply highlights after each lazy batch renders so newly visible

@@ -51,6 +51,9 @@ export interface RenderPdfResult {
 
 interface RenderOptions {
   scale?: number;
+  /** User zoom level (e.g. 1.0 = 100%, 1.5 = 150%). Effective scale = scale * zoomLevel.
+   *  When provided, PDF pages are rendered at higher resolution for crisp display. */
+  zoomLevel?: number;
   shouldCancel?: () => boolean;
   /** Number of pages to render eagerly on first load (default 5). Remaining pages
    *  are left as skeleton divs and rendered lazily on scroll. */
@@ -531,8 +534,10 @@ export async function renderPagesToContainer(
   container: HTMLElement,
   options: RenderOptions = {}
 ): Promise<RenderPdfResult> {
-  const { scale = 1.25, shouldCancel } = options;
-  console.log('renderPagesToContainer called:', file.name, 'scale:', scale);
+  const { scale = 1.25, zoomLevel = 1, shouldCancel } = options;
+  // Effective scale combines base scale and user zoom level for crisp rendering
+  const effectiveScale = scale * zoomLevel;
+  console.log('renderPagesToContainer called:', file.name, 'scale:', scale, 'zoomLevel:', zoomLevel, 'effectiveScale:', effectiveScale);
 
   const arrayBuffer = await file.arrayBuffer();
   console.log('ArrayBuffer size:', arrayBuffer.byteLength);
@@ -541,7 +546,8 @@ export async function renderPagesToContainer(
   const totalPages = pdfDoc.numPages;
   console.log('PDF loaded, total pages:', totalPages);
 
-  container.innerHTML = '';
+  // Clear container before rendering at new scale
+  container.textContent = '';
   const dpr = Math.min(globalThis.window?.devicePixelRatio || 1, 2);
 
   // Compute fingerprint for thumbnail cache and evict entries from other documents.
@@ -556,9 +562,9 @@ export async function renderPagesToContainer(
     return hasNavigable ? extracted : buildFallbackOutline(totalPages);
   });
 
-  // Get first page dimensions for skeleton sizing
+  // Get first page dimensions for skeleton sizing (using effectiveScale for correct dimensions at zoom)
   const firstPage = await pdfDoc.getPage(1);
-  const firstViewport = firstPage.getViewport({ scale });
+  const firstViewport = firstPage.getViewport({ scale: effectiveScale });
   const skeletonWidth = firstViewport.width;
   const skeletonHeight = firstViewport.height;
 
@@ -578,7 +584,7 @@ export async function renderPagesToContainer(
     const batchPromises: Promise<HTMLElement>[] = [];
     for (let pageNum = 1; pageNum <= initialBatchEnd; pageNum++) {
       batchPromises.push(
-        renderSinglePage(pdfDoc, pageNum, scale, dpr, fingerprint).catch((err) => {
+        renderSinglePage(pdfDoc, pageNum, effectiveScale, dpr, fingerprint).catch((err) => {
           console.error(`Page ${pageNum} render error:`, err);
           const placeholder = document.createElement('div');
           placeholder.className = 'pdf-page pdf-page-error';
@@ -608,7 +614,7 @@ export async function renderPagesToContainer(
   const scrollContainer = options.scrollContainerId
     ? (document.getElementById(options.scrollContainerId) ?? null)
     : null;
-  const lazyState = createLazyState(pdfDoc, scale, dpr, shouldCancel ?? (() => false), fingerprint, scrollContainer, options.onBatchRendered);
+  const lazyState = createLazyState(pdfDoc, effectiveScale, dpr, shouldCancel ?? (() => false), fingerprint, scrollContainer, options.onBatchRendered);
   // Mark initial pages as already rendered and update maxLoadedPage
   lazyState.maxLoadedPage = initialBatchEnd;
   for (let i = 1; i <= initialBatchEnd; i++) {
