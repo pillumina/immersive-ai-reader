@@ -835,6 +835,8 @@ export function MainCanvas({
               <button
                 type="button"
                 onClick={() => { setSearchOpen(false); setSearchQuery(''); setSearchResultPages([]); }}
+                title="清除搜索"
+                aria-label="清除搜索"
                 className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors leading-none ml-auto"
               >
                 ×

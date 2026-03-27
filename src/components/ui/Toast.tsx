@@ -72,6 +72,8 @@ export function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
       <span className="text-[13px] leading-snug font-medium">{message}</span>
       <button
         onClick={() => setExiting(true)}
+        title="关闭提示"
+        aria-label="关闭提示"
         className="ml-1 shrink-0 rounded-full p-0.5 transition-colors hover:bg-white/15"
       >
         <X size={14} />

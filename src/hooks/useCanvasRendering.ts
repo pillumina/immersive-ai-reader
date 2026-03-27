@@ -862,11 +862,6 @@ export function useCanvasRendering(
           skeletonEls.push(skeleton);
         }
 
-        console.log('PDF container element:', containerEl);
-
-        console.log('Document:', pdfDocument);
-        console.log('File blob type:', typeof pdfDocument.fileBlob, pdfDocument.fileBlob instanceof File);
-
         // Render all pages
         if (!pdfDocument.fileBlob) {
           throw new Error('当前文档未包含本地文件内容，请重新上传 PDF');
@@ -875,9 +870,6 @@ export function useCanvasRendering(
         const file = pdfDocument.fileBlob instanceof File
           ? pdfDocument.fileBlob
           : new File([pdfDocument.fileBlob], pdfDocument.fileName, { type: 'application/pdf' });
-
-        console.log('File to render:', file.name, file.size, file.type);
-        console.log('Zoom level:', latestZoomRef.current);
 
         const result = await Promise.race([
           renderPagesToContainer(file, containerEl, {
@@ -903,9 +895,7 @@ export function useCanvasRendering(
         setTotalPages(result.totalPages);
         setCurrentPage(pdfDocument.lastPage ?? 1);
         setOutline(result.outline);
-        // Store the lazy renderer's IntersectionObserver cleanup.
         lazyCleanupRef.current = result.cleanup ?? null;
-        console.log('Rendered pages count:', result.totalPages);
 
         await loadStoredHighlights(pdfDocument.id);
       } catch (error) {

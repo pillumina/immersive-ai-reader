@@ -632,6 +632,8 @@ function DocumentDetail({
               {tag}
               <button
                 type="button"
+                title="移除标签"
+                aria-label="移除标签"
                 onClick={() => onRemoveTag(document.id, tag)}
                 className="doc-detail__tag-remove"
               >

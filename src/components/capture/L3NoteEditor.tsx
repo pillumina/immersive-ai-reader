@@ -220,6 +220,8 @@ export function L3NoteEditor({
                   {tag.name}
                   <button
                     type="button"
+                    title="移除标签"
+                    aria-label="移除标签"
                     className="ml-0.5 leading-none hover:opacity-70 transition-opacity"
                     onClick={() => handleTagRemove(tag.name)}
                   >
