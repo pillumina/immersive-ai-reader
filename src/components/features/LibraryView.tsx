@@ -188,11 +188,10 @@ function LibraryList({
             </form>
           ) : (
             <div key={lib.id} className="library-item-wrapper">
-              <div
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
+                key={lib.id}
                 onClick={() => onSelectLibrary(lib.id)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectLibrary(lib.id); } }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setContextMenu({ lib, x: e.clientX, y: e.clientY });
@@ -211,7 +210,7 @@ function LibraryList({
                 >
                   <MoreHorizontal size={11} />
                 </button>
-              </div>
+              </button>
             </div>
           )
         )}

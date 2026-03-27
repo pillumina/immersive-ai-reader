@@ -44,12 +44,10 @@ export function TopBar({ tabs, activeTabId, onSelectTab, onCloseTab, onToggleSid
             const isActive = tab.id === activeTabId;
             const isLibrary = tab.type === 'library';
             return (
-              <div
+              <button
+                type="button"
                 key={tab.id}
-                role="button"
-                tabIndex={0}
                 onClick={() => onSelectTab(tab.id)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectTab(tab.id); } }}
                 className={`topbar__tab ${isActive ? 'topbar__tab--active' : ''} ${isLibrary ? 'topbar__tab--library' : ''}`}
               >
                 {isLibrary ? (
@@ -69,7 +67,7 @@ export function TopBar({ tabs, activeTabId, onSelectTab, onCloseTab, onToggleSid
                     <X size={11} />
                   </button>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
