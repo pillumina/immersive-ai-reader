@@ -36,6 +36,72 @@ function evictOtherFingerprints(currentFingerprint: string): void {
   }
 }
 
+// ─── PDF Document Parsing Cache ─────────────────────────────────────────────────
+
+/** Cache entry for a parsed PDF document and its raw data. */
+interface PdfDocCacheEntry {
+  pdfDoc: pdfjsLib.PDFDocumentProxy;
+  arrayBuffer: ArrayBuffer;
+}
+
+/**
+ * Session-level cache for parsed PDF documents.
+ * Keyed by document fingerprint (name + size).
+ * Allows rapid re-renders (zoom changes) without re-parsing the PDF.
+ *
+ * Uses in-flight promise map to coalesce concurrent parse requests for the same document.
+ */
+const pdfDocCache = new Map<string, PdfDocCacheEntry>();
+const pdfParsePromises = new Map<string, Promise<PdfDocCacheEntry>>();
+
+/**
+ * Get a cached PDF document or parse it if not cached.
+ * Coalesces concurrent requests for the same fingerprint into a single parse operation.
+ */
+async function getOrParsePdfDoc(
+  file: File,
+  fingerprint: string
+): Promise<{ pdfDoc: pdfjsLib.PDFDocumentProxy; arrayBuffer: ArrayBuffer }> {
+  // Return cached entry if available
+  const cached = pdfDocCache.get(fingerprint);
+  if (cached) {
+    console.log('[pdfDocCache] HIT:', fingerprint);
+    return cached;
+  }
+
+  // Check if a parse is already in-flight for this fingerprint
+  const inFlight = pdfParsePromises.get(fingerprint);
+  if (inFlight) {
+    console.log('[pdfDocCache] WAIT (in-flight):', fingerprint);
+    return inFlight;
+  }
+
+  console.log('[pdfDocCache] PARSE:', fingerprint);
+
+  // Parse and cache
+  const parsePromise = (async () => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const entry: PdfDocCacheEntry = { pdfDoc, arrayBuffer };
+    pdfDocCache.set(fingerprint, entry);
+    pdfParsePromises.delete(fingerprint);
+
+    // Evict old entries if cache grows too large (keep max 10 documents)
+    if (pdfDocCache.size > 10) {
+      const oldestKey = pdfDocCache.keys().next().value;
+      if (oldestKey) {
+        console.log('[pdfDocCache] EVICT:', oldestKey);
+        pdfDocCache.delete(oldestKey);
+      }
+    }
+
+    return entry;
+  })();
+
+  pdfParsePromises.set(fingerprint, parsePromise);
+  return parsePromise;
+}
+
 export interface PdfOutlineItem {
   id: string;
   title: string;
@@ -539,10 +605,12 @@ export async function renderPagesToContainer(
   const effectiveScale = scale * zoomLevel;
   console.log('renderPagesToContainer called:', file.name, 'scale:', scale, 'zoomLevel:', zoomLevel, 'effectiveScale:', effectiveScale);
 
-  const arrayBuffer = await file.arrayBuffer();
-  console.log('ArrayBuffer size:', arrayBuffer.byteLength);
+  // Compute fingerprint first (needed for cache lookup)
+  const fingerprint = fingerprintFile(file);
 
-  const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  // Get cached PDF doc or parse if not cached
+  const { pdfDoc, arrayBuffer } = await getOrParsePdfDoc(file, fingerprint);
+  console.log('ArrayBuffer size:', arrayBuffer.byteLength);
   const totalPages = pdfDoc.numPages;
   console.log('PDF loaded, total pages:', totalPages);
 
@@ -550,8 +618,7 @@ export async function renderPagesToContainer(
   container.textContent = '';
   const dpr = Math.min(globalThis.window?.devicePixelRatio || 1, 2);
 
-  // Compute fingerprint for thumbnail cache and evict entries from other documents.
-  const fingerprint = fingerprintFile(file);
+  // Evict thumbnail cache entries from other documents.
   evictOtherFingerprints(fingerprint);
 
   // Extract outline (non-blocking, happens while pages render)
