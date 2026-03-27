@@ -45,10 +45,12 @@ export const TopBar = memo(function TopBar({ tabs, activeTabId, onSelectTab, onC
             const isActive = tab.id === activeTabId;
             const isLibrary = tab.type === 'library';
             return (
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 key={tab.id}
                 onClick={() => onSelectTab(tab.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelectTab(tab.id); }}
                 className={`topbar__tab ${isActive ? 'topbar__tab--active' : ''} ${isLibrary ? 'topbar__tab--library' : ''}`}
               >
                 {isLibrary ? (
@@ -68,7 +70,7 @@ export const TopBar = memo(function TopBar({ tabs, activeTabId, onSelectTab, onC
                     <X size={11} />
                   </button>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>

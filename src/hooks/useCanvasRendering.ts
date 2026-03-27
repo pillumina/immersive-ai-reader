@@ -850,6 +850,9 @@ export function useCanvasRendering(
       (async () => {
         if (!pdfDocument?.fileBlob) return;
 
+        setIsRendering(true);
+        setRenderError(null);
+
         try {
           const file = pdfDocument.fileBlob instanceof File
             ? pdfDocument.fileBlob
@@ -892,6 +895,12 @@ export function useCanvasRendering(
         } catch (err) {
           if (jobId !== renderJobIdRef.current) return;
           console.error('[zoom-rerender] Error:', err);
+          const message = err instanceof Error ? err.message : 'Failed to render PDF';
+          setRenderError(message);
+        } finally {
+          if (jobId === renderJobIdRef.current) {
+            setIsRendering(false);
+          }
         }
       })();
     }, 300);
