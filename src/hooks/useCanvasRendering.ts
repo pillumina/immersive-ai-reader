@@ -16,6 +16,7 @@ export function useCanvasRendering(
 ) {
   const renderJobIdRef = useRef(0);
   const latestZoomRef = useRef(zoomLevel);
+  const latestPdfDocRef = useRef(pdfDocument);
   const lastSavedPageRef = useRef<number | null>(null);
   const lazyCleanupRef = useRef<(() => void) | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -23,6 +24,8 @@ export function useCanvasRendering(
   const tagChipRenderersRef = useRef<Map<string, (tags: Tag[]) => void>>(new Map());
   /** Debounces onBatchRendered calls so rapid lazy renders don't spam loadStoredHighlights. */
   const batchRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Stores the current zoomLevel at the time the debounce was set (to avoid stale closure in async). */
+  const zoomDebounceZoomRef = useRef<number>(1);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(0);
@@ -811,9 +814,11 @@ export function useCanvasRendering(
   const lastRerenderZoomRef = useRef<number>(1);
 
   // Handle zoom changes — when zoom changes significantly, trigger a full re-render
-  // for crisp PDF display at the new zoom level
+  // for crisp PDF display at the new zoom level.
+  // Uses refs to avoid stale closure issues in the debounced async callback.
   useEffect(() => {
     latestZoomRef.current = zoomLevel;
+    latestPdfDocRef.current = pdfDocument;
 
     if (!pdfDocument || !containerId) return;
 
@@ -828,11 +833,22 @@ export function useCanvasRendering(
       return;
     }
 
+    // Capture values in refs at debounce time (avoid stale closure in async)
+    const debouncedZoomLevel = zoomLevel;
+    zoomDebounceZoomRef.current = debouncedZoomLevel;
+
     // Debounce zoom re-renders to coalesce rapid zooming
     zoomDebounceRef.current = setTimeout(() => {
+      // Use refs to get current values (not closure values)
+      const currentPdfDoc = latestPdfDocRef.current;
+      const currentZoom = zoomDebounceZoomRef.current;
+      const currentScrollContainerId = scrollContainerId;
+
       const containerEl = globalThis.document?.getElementById(containerId);
-      const scrollEl = globalThis.document?.getElementById(scrollContainerId);
-      if (!containerEl || !scrollEl) return;
+      const scrollEl = currentScrollContainerId
+        ? globalThis.document?.getElementById(currentScrollContainerId)
+        : null;
+      if (!containerEl || !scrollEl || !currentPdfDoc) return;
 
       // Save scroll position as ratio (before clearing)
       const scrollRatio = scrollEl.scrollTop / Math.max(scrollEl.scrollHeight - scrollEl.clientHeight, 1);
@@ -840,23 +856,21 @@ export function useCanvasRendering(
       // Clear container to force re-render at new zoom level
       containerEl.textContent = '';
 
-      // Reset the re-render skip check by advancing job ID
+      // Advance job ID to cancel any in-flight render
       renderJobIdRef.current += 1;
       const jobId = renderJobIdRef.current;
 
-      // Trigger re-render by updating a state variable (reuse pdfDocument trigger)
-      // We need to force the render effect to re-run - do this by dispatching an event
-      // that the render effect can pick up, or by directly calling render logic
       (async () => {
-        if (!pdfDocument?.fileBlob) return;
+        if (!currentPdfDoc?.fileBlob) return;
+        if (jobId !== renderJobIdRef.current) return;
 
         setIsRendering(true);
         setRenderError(null);
 
         try {
-          const file = pdfDocument.fileBlob instanceof File
-            ? pdfDocument.fileBlob
-            : new File([pdfDocument.fileBlob], pdfDocument.fileName, { type: 'application/pdf' });
+          const file = currentPdfDoc.fileBlob instanceof File
+            ? currentPdfDoc.fileBlob
+            : new File([currentPdfDoc.fileBlob], currentPdfDoc.fileName, { type: 'application/pdf' });
 
           // Cancel previous lazy cleanup
           lazyCleanupRef.current?.();
@@ -864,13 +878,13 @@ export function useCanvasRendering(
 
           const result = await renderPagesToContainer(file, containerEl, {
             scale: 1.25,
-            zoomLevel,
+            zoomLevel: currentZoom,
             shouldCancel: () => jobId !== renderJobIdRef.current,
-            scrollContainerId,
+            scrollContainerId: currentScrollContainerId,
             onBatchRendered: () => {
               if (batchRenderTimerRef.current) clearTimeout(batchRenderTimerRef.current);
               batchRenderTimerRef.current = setTimeout(() => {
-                void loadStoredHighlights(pdfDocument.id);
+                void loadStoredHighlights(currentPdfDoc.id);
               }, 100);
             },
           });
@@ -881,17 +895,17 @@ export function useCanvasRendering(
           setOutline(result.outline);
           lazyCleanupRef.current = result.cleanup ?? null;
 
-          await loadStoredHighlights(pdfDocument.id);
+          await loadStoredHighlights(currentPdfDoc.id);
 
           // Restore scroll position after render completes
           requestAnimationFrame(() => {
-            if (scrollEl) {
+            if (scrollEl && jobId === renderJobIdRef.current) {
               const newScrollTop = scrollRatio * (scrollEl.scrollHeight - scrollEl.clientHeight);
               scrollEl.scrollTop = Math.max(0, newScrollTop);
             }
           });
 
-          lastRerenderZoomRef.current = zoomLevel;
+          lastRerenderZoomRef.current = currentZoom;
         } catch (err) {
           if (jobId !== renderJobIdRef.current) return;
           console.error('[zoom-rerender] Error:', err);
