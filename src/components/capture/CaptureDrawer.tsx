@@ -307,6 +307,7 @@ export function CaptureDrawer({
             type="button"
             className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={onClose}
+            title="关闭"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" />

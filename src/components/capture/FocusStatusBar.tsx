@@ -28,7 +28,7 @@ export function FocusStatusBar({
 }: FocusStatusBarProps) {
   return (
     <div
-      className="flex items-center gap-3 px-4 py-2 bg-[var(--color-bg-raised)]/95 backdrop-blur-sm border-t border-[var(--color-bg-subtle)] rounded-none"
+      className="flex items-center gap-3 px-4 py-2 bg-[var(--color-bg-raised)]/95 border-t border-[var(--color-bg-subtle)] rounded-none"
       style={{ willChange: 'transform', transform: 'translateZ(0)' }}
     >
       {/* Page info */}

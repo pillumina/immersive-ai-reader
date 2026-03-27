@@ -471,7 +471,7 @@ export function AIPanel({
               <p className="leading-relaxed">
                 Low confidence ({Math.round(pendingRouteConfirmation.confidence * 100)}%) — choose how to answer:
               </p>
-              <button type="button" className="shrink-0 text-amber-500 hover:text-amber-700 transition-colors" onClick={onDismissRouteConfirm}>✕</button>
+              <button type="button" className="shrink-0 text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors" onClick={onDismissRouteConfirm} title="Dismiss">✕</button>
             </div>
             <div className="mt-2 flex gap-1.5">
               <button type="button" className="quick-action-chip" onClick={onConfirmRouteAsChat}>Chat</button>

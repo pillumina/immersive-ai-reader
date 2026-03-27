@@ -208,7 +208,8 @@ export function TagManagePopup({ annotationId, onClose, onTagsChanged }: TagMana
             </div>
             <button
               onClick={onClose}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '2px' }}
+              title="关闭"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: '2px' }}
             >
               <X size={16} />
             </button>

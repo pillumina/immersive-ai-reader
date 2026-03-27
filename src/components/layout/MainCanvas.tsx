@@ -771,7 +771,7 @@ export function MainCanvas({
             </button>
           )}
           {searchOpen && (
-            <div className="flex items-center gap-1 border border-[var(--color-border)] rounded-lg px-2 py-1 bg-[var(--color-bg-raised)] shadow-sm min-w-[220px]">
+            <div className="flex items-center gap-1 border border-[var(--color-border)] rounded-lg px-2 py-1 bg-[var(--color-bg-raised)] shadow-sm min-w-[min(220px,calc(100vw-32px))]">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input
                 autoFocus
@@ -938,7 +938,7 @@ export function MainCanvas({
         </div>
 
         {splitMode && hasDocument && totalPages > 0 && (
-          <aside className="relative w-[45%] min-w-[340px] max-w-[55%] border-l border-[var(--color-border)] bg-[var(--color-bg)] flex flex-col">
+          <aside className="relative w-[45%] min-w-[min(340px,calc(100vw-32px))] max-w-[55%] border-l border-[var(--color-border)] bg-[var(--color-bg)] flex flex-col">
             <div className="border-b border-[var(--color-border)] bg-[var(--color-bg-raised)]/90">
               {/* Row 1: Task context */}
               <div className="flex h-8 items-center justify-between px-3">
@@ -1115,8 +1115,8 @@ export function MainCanvas({
       {isFocusMode && l1Bubble && (
         <button
           type="button"
-          className="l1-bubble fixed z-50 flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-border)]/80 bg-[var(--color-bg-raised)]/95 shadow-[0_2px_12px_rgba(28,25,23,0.15)] backdrop-blur-md transition-all duration-150 hover:scale-110 hover:bg-[var(--color-accent-subtle)] hover:border-[var(--color-accent-border)] active:scale-95"
-          style={{ left: l1Bubble.x, top: l1Bubble.y, transform: 'translateY(-50%)' }}
+          className="l1-bubble fixed z-50 flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-border)]/80 bg-[var(--color-bg-raised)]/95 shadow-[0_2px_12px_rgba(28,25,23,0.15)] backdrop-blur-md transition-all duration-150 translate-y-1/2 hover:scale-110 hover:bg-[var(--color-accent-subtle)] hover:border-[var(--color-accent-border)] active:scale-95"
+          style={{ left: l1Bubble.x, top: l1Bubble.y }}
           onClick={(e) => {
             e.stopPropagation();
             // Dismiss bubble and open L2 popover — capture values before clearing state

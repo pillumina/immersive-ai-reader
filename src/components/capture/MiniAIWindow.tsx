@@ -89,7 +89,7 @@ export function MiniAIWindow({
       style={{ willChange: 'transform', transform: 'translateZ(0)' }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-bg-subtle)] bg-[var(--color-bg-raised)]/95 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-bg-subtle)] bg-[var(--color-bg-raised)]/95">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-pulse" />
           <span className="text-[11px] font-medium text-[var(--color-text-secondary)]">Focus AI</span>
