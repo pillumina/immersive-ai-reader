@@ -48,3 +48,4 @@ pnpm-debug.log*
 # Misc
 *.pem
 .vercel
+test-results/
