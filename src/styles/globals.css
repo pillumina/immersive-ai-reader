@@ -179,9 +179,9 @@ h1, h2, h3, h4, h5, h6 {
   will-change: transform;
   /* Isolate style/layout: changes inside a page don't cascade to siblings/ancestors */
   contain: layout style;
-  /* Skip rendering entirely for off-screen pages — major scroll perf win */
-  content-visibility: auto;
-  contain-intrinsic-size: 0 900px;
+  /* Note: content-visibility:auto is intentionally omitted — it can cause
+     IntersectionObserver to misfire on Linux, preventing proper re-rendering after scroll.
+     The lazy-loading observer handles visibility instead. */
   transition: box-shadow 0.2s ease;
 }
 
@@ -1035,8 +1035,10 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--color-border);
   border-radius: 12px;
   overflow: hidden;
-  content-visibility: auto;
-  contain-intrinsic-size: 0 900px;
+  /* Note: content-visibility:auto is intentionally omitted — it can cause
+     IntersectionObserver to misfire on Linux, preventing skeleton→page
+     re-rendering after scroll. The lazy-loading observer handles this instead. */
+  contain: layout style;
 }
 
 .pdf-page-skeleton-inner {
