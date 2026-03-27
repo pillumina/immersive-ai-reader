@@ -9,6 +9,8 @@ pub async fn init_database(db_url: &str) -> Result<SqlitePool> {
 
 async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     let migration_sql = include_str!("migrations/001_initial.sql");
+    let migration_002 = include_str!("migrations/002_add_last_page.sql");
+    let migration_003 = include_str!("migrations/003_add_file_path_index.sql");
 
     for statement in migration_sql.split(';') {
         let trimmed = statement.trim();
@@ -24,6 +26,44 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
                     && !msg.contains("index already exists")
                 {
                     eprintln!("Migration warning (usually safe to ignore): {}", msg);
+                }
+            }
+        }
+    }
+
+    // Migration 002: add last_page column
+    for statement in migration_002.split(';') {
+        let trimmed = statement.trim();
+        if !trimmed.is_empty() {
+            let add_last_page = sqlx::query(trimmed);
+            if let Err(e) = add_last_page.execute(pool).await {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column name")
+                    && !msg.contains("no such table")
+                    && !msg.contains("UNIQUE constraint failed")
+                    && !msg.contains("table already exists")
+                    && !msg.contains("index already exists")
+                {
+                    eprintln!("Migration 002 warning (usually safe to ignore): {}", msg);
+                }
+            }
+        }
+    }
+
+    // Migration 003: add file_path index
+    for statement in migration_003.split(';') {
+        let trimmed = statement.trim();
+        if !trimmed.is_empty() {
+            let add_idx = sqlx::query(trimmed);
+            if let Err(e) = add_idx.execute(pool).await {
+                let msg = e.to_string();
+                if !msg.contains("duplicate column name")
+                    && !msg.contains("no such table")
+                    && !msg.contains("UNIQUE constraint failed")
+                    && !msg.contains("table already exists")
+                    && !msg.contains("index already exists")
+                {
+                    eprintln!("Migration 003 warning (usually safe to ignore): {}", msg);
                 }
             }
         }

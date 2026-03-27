@@ -123,22 +123,33 @@ export const SettingsModal = memo(function SettingsModal({
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<AIConnectivityResult | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
+  // Track the last profileId we synced from (to avoid resetting user edits)
+  const lastSyncedProfileIdRef = useRef<string | null>(null);
 
   // Reset section when modal opens
   useEffect(() => {
     if (open) setSection('provider');
   }, [open]);
 
+  // Sync form state when profile changes, but only if the profileId actually changed
+  // (not just object reference change from parent re-render)
   useEffect(() => {
-    if (!open || !activeProfile) return;
-    setProfileName(activeProfile.name);
-    setProvider(activeProfile.config.provider);
-    setEndpoint(activeProfile.config.endpoint);
-    setModel(activeProfile.config.model);
-    setApiKey(activeProfile.config.apiKey);
-    setTestResult(null);
-    setTestError(null);
-  }, [open, activeProfileId, activeProfile]);
+    if (!open || !activeProfileId) return;
+    const profile = profiles.find((p) => p.id === activeProfileId);
+    if (!profile) return;
+
+    // Only reset if switching to a different profile
+    if (lastSyncedProfileIdRef.current !== activeProfileId) {
+      setProfileName(profile.name);
+      setProvider(profile.config.provider);
+      setEndpoint(profile.config.endpoint);
+      setModel(profile.config.model);
+      setApiKey(profile.config.apiKey);
+      setTestResult(null);
+      setTestError(null);
+    }
+    lastSyncedProfileIdRef.current = activeProfileId;
+  }, [open, activeProfileId, profiles]);
 
   const applyPreset = (nextProvider: AIProvider) => {
     setProvider(nextProvider);
@@ -281,7 +292,7 @@ export const SettingsModal = memo(function SettingsModal({
                   <SettingRow label="Profile Name" description="A friendly name for this configuration">
                     <Input
                       value={profileName}
-                      onChange={(e) => setProfileName(e.target.value)}
+                      onChange={(e) => { setProfileName(e.target.value); }}
                       onBlur={() => { if (activeProfile) onRenameProfile(activeProfile.id, profileName); }}
                       className="settings-input settings-input--sm"
                     />
@@ -309,7 +320,7 @@ export const SettingsModal = memo(function SettingsModal({
                   <SettingRow label="Endpoint" description="Base URL of the API endpoint">
                     <Input
                       value={endpoint}
-                      onChange={(e) => setEndpoint(e.target.value)}
+                      onChange={(e) => { setEndpoint(e.target.value); }}
                       placeholder="https://open.bigmodel.cn/api/paas/v4"
                       className="settings-input"
                     />
@@ -320,7 +331,7 @@ export const SettingsModal = memo(function SettingsModal({
                   <SettingRow label="Model ID" description="The model identifier to use">
                     <Input
                       value={model}
-                      onChange={(e) => setModel(e.target.value)}
+                      onChange={(e) => { setModel(e.target.value); }}
                       placeholder="glm-4-flash"
                       className="settings-input"
                     />
@@ -333,7 +344,7 @@ export const SettingsModal = memo(function SettingsModal({
                       <Input
                         type={showKey ? 'text' : 'password'}
                         value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
+                        onChange={(e) => { setApiKey(e.target.value); }}
                         placeholder="••••••••••••••••"
                         className="settings-input"
                       />
