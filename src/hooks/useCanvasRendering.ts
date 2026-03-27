@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { annotationCommands, documentCommands, tagCommands } from '@/lib/tauri';
 import { PdfOutlineItem, renderPagesToContainer } from '@/lib/pdf/renderer';
 import { PDFDocument } from '@/types/document';
