@@ -13,6 +13,13 @@ export function useCanvasRendering(
   zoomLevel: number,
   onPinnedIdsChange?: (messageId: string) => void,
   onHighlightDoubleClick?: (annotationId: string, pageNumber: number) => void,
+  /** Called once after the first page renders, passing the rendered page width in pixels.
+   *  Used by App to calculate and apply fit-to-width zoom on initial load. */
+  onFirstPageRendered?: (pageWidth: number) => void,
+  /** Called whenever zoom is applied (either automatic or user-initiated).
+   *  @param isAutomatic - true if zoom was set by auto-fit, false if by user action.
+   *  Used by App to track whether user has manually overridden auto-fit. */
+  onZoomApplied?: (isAutomatic: boolean) => void,
 ) {
   const renderJobIdRef = useRef(0);
   const latestZoomRef = useRef(zoomLevel);
@@ -26,6 +33,10 @@ export function useCanvasRendering(
   const batchRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Stores the current zoomLevel at the time the debounce was set (to avoid stale closure in async). */
   const zoomDebounceZoomRef = useRef<number>(1);
+  /** Track if initial fit-to-width zoom has been applied. */
+  const initialZoomSetRef = useRef(false);
+  /** Stores the fit-to-width zoom value set by App (used to detect auto vs manual zoom). */
+  const fitToWidthZoomRef = useRef<number>(1);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(0);
@@ -906,6 +917,9 @@ export function useCanvasRendering(
           });
 
           lastRerenderZoomRef.current = currentZoom;
+          // Notify App about zoom application: automatic (fit-to-width) or manual (user action)
+          const isAutomatic = Math.abs(currentZoom - fitToWidthZoomRef.current) < 0.001;
+          onZoomApplied?.(isAutomatic);
         } catch (err) {
           if (jobId !== renderJobIdRef.current) return;
           console.error('[zoom-rerender] Error:', err);
@@ -930,6 +944,8 @@ export function useCanvasRendering(
   // Render pages when document changes.
   useEffect(() => {
     if (!pdfDocument) return;
+    // Reset initial zoom flag when document changes
+    initialZoomSetRef.current = false;
     renderJobIdRef.current += 1;
     const jobId = renderJobIdRef.current;
 
@@ -1025,6 +1041,18 @@ export function useCanvasRendering(
         lazyCleanupRef.current = result.cleanup ?? null;
 
         await loadStoredHighlights(pdfDocument.id);
+
+        // Notify App about first page render for fit-to-width calculation (once per document)
+        if (initialZoomSetRef.current === false) {
+          // Use requestAnimationFrame to ensure page element has dimensions
+          requestAnimationFrame(() => {
+            const firstPageEl = containerEl.querySelector<HTMLElement>('.pdf-page[data-page-number="1"]');
+            if (firstPageEl) {
+              onFirstPageRendered?.(firstPageEl.offsetWidth);
+            }
+          });
+          initialZoomSetRef.current = true;
+        }
       } catch (error) {
         if (jobId !== renderJobIdRef.current) return;
         if (error instanceof Error && error.message === 'PDF rendering cancelled') return;
@@ -1537,6 +1565,11 @@ export function useCanvasRendering(
     clearCardRenderer(annotationId);
   };
 
+  /** Update the stored fit-to-width zoom value (called by App when it calculates fit-to-width). */
+  const setFitToWidthZoom = useCallback((zoom: number) => {
+    fitToWidthZoomRef.current = zoom;
+  }, []);
+
   return {
     isRendering,
     renderError,
@@ -1555,5 +1588,6 @@ export function useCanvasRendering(
     refreshCardTags,
     clearCardRenderer,
     removeCapture,
+    setFitToWidthZoom,
   };
 }

@@ -10,6 +10,7 @@ interface MainCanvasProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomByFactor: (factor: number) => void;
+  onFitToWidth: () => void;
   hasDocument: boolean;
   isLoading?: boolean;
   currentPage: number;
@@ -45,6 +46,7 @@ export const MainCanvas = memo(function MainCanvas({
   onZoomIn,
   onZoomOut,
   onZoomByFactor,
+  onFitToWidth,
   hasDocument,
   isLoading,
   currentPage,
@@ -727,6 +729,9 @@ export const MainCanvas = memo(function MainCanvas({
           <span className="min-w-[38px] text-center text-[12px] font-medium tabular-nums text-[var(--color-text-secondary)]">{Math.round(zoomLevel * 100)}%</span>
           <button type="button" className="toolbar-icon-btn" onClick={onZoomIn} title="Zoom in">
             <ZoomIn size={15} />
+          </button>
+          <button type="button" className="toolbar-icon-btn text-[11px] px-1.5" onClick={onFitToWidth} title="Fit to width">
+            Fit
           </button>
           {totalPages > 0 && (
             <>

@@ -158,6 +158,7 @@ function AppInner() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notesAnnotations, setNotesAnnotations] = useState<any[]>([]);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [userManuallyZoomed, setUserManuallyZoomed] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [noteInputOpen, setNoteInputOpen] = useState(false);
   const noteInputRef = useRef<HTMLInputElement>(null);
@@ -197,6 +198,7 @@ function AppInner() {
     refreshCardTags,
     clearCardRenderer,
     removeCapture,
+    setFitToWidthZoom,
   } = useCanvasRendering(
     activeTabId === 'library' ? '' : 'pdf-scroll-container',
     activeTabId === 'library' ? '' : 'pdf-pages-container',
@@ -205,6 +207,26 @@ function AppInner() {
     (messageId: string) => setPinnedMessageIds((prev) => prev.filter((id) => id !== messageId)),
     (annotationId: string) => {
       setL3Editor({ type: 'edit', annotationId });
+    },
+    // onFirstPageRendered: calculate and apply fit-to-width zoom
+    (pageWidth: number) => {
+      if (userManuallyZoomed) return; // Skip if user already manually zoomed
+      const scrollContainer = globalThis.document?.getElementById('pdf-scroll-container');
+      if (!scrollContainer) return;
+      const containerWidth = scrollContainer.clientWidth;
+      // effectiveScale = baseScale (1.25) * zoomLevel, so zoomLevel = effectiveScale / baseScale
+      // effectiveScale = containerWidth / pageWidth
+      const effectiveZoom = containerWidth / pageWidth;
+      const fitZoom = effectiveZoom / 1.25; // baseScale is 1.25
+      const clampedFitZoom = Math.min(Math.max(fitZoom, 0.3), 3);
+      setFitToWidthZoom(clampedFitZoom);
+      setZoomLevel(clampedFitZoom);
+    },
+    // onZoomApplied: track if user manually zoomed
+    (isAutomatic: boolean) => {
+      if (!isAutomatic) {
+        setUserManuallyZoomed(true);
+      }
     }
   );
 
@@ -275,6 +297,13 @@ function AppInner() {
 
   // ─── Load data on mount ───────────────────────────────────────
   useEffect(() => { void loadSettings(); }, [loadSettings]);
+
+  // Reset manual zoom flag when document changes (to enable auto fit-to-width for new documents)
+  useEffect(() => {
+    if (currentDocument) {
+      setUserManuallyZoomed(false);
+    }
+  }, [currentDocument?.id]);
 
   useEffect(() => {
     void (async () => {
@@ -649,12 +678,39 @@ function AppInner() {
     return await aiCommands.testConnectivity(config.provider, config.endpoint, config.model, config.apiKey);
   }, []);
 
-  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev * 1.2, 3));
-  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev / 1.2, 0.3));
+  const handleZoomIn = () => {
+    setUserManuallyZoomed(true);
+    setZoomLevel(prev => Math.min(prev * 1.2, 3));
+  };
+  const handleZoomOut = () => {
+    setUserManuallyZoomed(true);
+    setZoomLevel(prev => Math.max(prev / 1.2, 0.3));
+  };
   const handleZoomByFactor = (factor: number) => {
+    setUserManuallyZoomed(true);
     setZoomLevel(prev => Math.min(Math.max(prev * factor, 0.3), 3));
   };
-  const handleResetZoom = () => setZoomLevel(1);
+  const handleResetZoom = () => {
+    setUserManuallyZoomed(true);
+    setZoomLevel(1);
+  };
+  const handleFitToWidth = () => {
+    setUserManuallyZoomed(false);
+    // Trigger recalculation by setting zoomLevel to current value (useCanvasRendering will notify via onFirstPageRendered... actually no)
+    // Simpler: just trigger a resize check by re-reading container width
+    const scrollContainer = globalThis.document?.getElementById('pdf-scroll-container');
+    const containerEl = globalThis.document?.getElementById('pdf-pages-container');
+    if (!scrollContainer || !containerEl) return;
+    const firstPageEl = containerEl.querySelector<HTMLElement>('.pdf-page[data-page-number="1"]');
+    if (!firstPageEl) return;
+    const pageWidth = firstPageEl.offsetWidth;
+    const containerWidth = scrollContainer.clientWidth;
+    const effectiveZoom = containerWidth / pageWidth;
+    const fitZoom = effectiveZoom / 1.25;
+    const clampedFitZoom = Math.min(Math.max(fitZoom, 0.3), 3);
+    setFitToWidthZoom(clampedFitZoom);
+    setZoomLevel(clampedFitZoom);
+  };
 
   // Escape — exit Focus Mode if active, otherwise handled by individual components.
   const handleEscape = () => {
@@ -1296,6 +1352,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onZoomByFactor={handleZoomByFactor}
+            onFitToWidth={handleFitToWidth}
             hasDocument={!!currentDocument}
             isLoading={pdfLoading || isRendering}
             currentPage={currentPage}
