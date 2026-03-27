@@ -72,11 +72,39 @@
   background: rgba(194, 65, 12, 0.12);
 }
 
+/* Root div: transition CSS variable-driven properties when theme changes */
+#root,
+[data-theme] {
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
 body {
   font-family: var(--font-sans);
   color: var(--color-text);
   background: linear-gradient(135deg, #fafaf9 0%, #f5f5f4 50%, #f0eeed 100%);
   overflow: hidden;
+  /* Transition the gradient stops when theme changes */
+  transition: background 0.2s ease;
+}
+
+/* Dark/warm-dark/sepia: override body gradient with solid dark bg */
+[data-theme="dark"] body,
+[data-theme="warm-dark"] body {
+  background: var(--color-bg-base);
+}
+
+/* Root div: transition CSS variable-driven properties */
+#root,
+[data-theme] {
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -1447,6 +1475,8 @@ h1, h2, h3, h4, h5, h6 {
 .settings-content {
   flex: 1;
   overflow-y: auto;
+  /* Fixed max-height prevents dialog from resizing when switching sections */
+  max-height: 440px;
   padding: 0;
 }
 
