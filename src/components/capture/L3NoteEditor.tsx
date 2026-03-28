@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { tagCommands } from '@/lib/tauri/commands';
 import type { BackendTag } from '@/lib/tauri/commands';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
@@ -52,6 +53,13 @@ export const L3NoteEditor = memo(function L3NoteEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Focus trap: keep Tab navigation within the editor and handle Escape
+  const handleEscape = useCallback(() => {
+    if (dirty) { setShowDiscardConfirm(true); return; }
+    onClose();
+  }, [dirty, onClose]);
+  useFocusTrap(containerRef, { active: true, onEscape: handleEscape });
 
   // Load tags for existing annotation
   useEffect(() => {

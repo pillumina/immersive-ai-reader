@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, memo } from 'react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import type { Message } from '@/types/conversation';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
 
@@ -59,6 +60,10 @@ export const MiniAIWindow = memo(function MiniAIWindow({
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Focus trap: keep Tab navigation within the mini AI window
+  useFocusTrap(containerRef, { active: true, onEscape: onToggleMiniAI });
   const [autoScroll, setAutoScroll] = useState(true);
 
   // Auto-scroll to bottom on new messages
@@ -85,6 +90,7 @@ export const MiniAIWindow = memo(function MiniAIWindow({
 
   return (
     <div
+      ref={containerRef}
       className="fixed right-0 top-0 bottom-0 z-[9000] flex flex-col w-80 bg-[var(--color-bg-raised)] border-l border-[var(--color-border)]/60 shadow-[-4px_0_24px_rgba(28,25,23,0.08)]"
       style={{ willChange: 'transform', transform: 'translateZ(0)' }}
     >

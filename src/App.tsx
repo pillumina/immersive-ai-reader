@@ -1,13 +1,15 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, memo, lazy, Suspense } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MainCanvas } from '@/components/layout/MainCanvas';
 import { AIPanel } from '@/components/layout/AIPanel';
 import { TopBar, AppTab } from '@/components/layout/TopBar';
-import { LibraryView } from '@/components/features/LibraryView';
-import { SettingsModal } from '@/components/features/SettingsModal';
+const LibraryView = lazy(() => import('@/components/features/LibraryView').then(m => ({ default: m.LibraryView })));
+const SettingsModal = lazy(() => import('@/components/features/SettingsModal').then(m => ({ default: m.SettingsModal })));
 import { Toast } from '@/components/ui/Toast';
 import { TagManagePopup } from '@/components/ui/TagManagePopup';
 import { L2AIPopover } from '@/components/capture/L2AIPopover';
+import { useCanvasRendering } from '@/hooks/useCanvasRendering';
+import { useCanvasColors } from '@/hooks/useCanvasColors';
 import { L3NoteEditor } from '@/components/capture/L3NoteEditor';
 import { MiniAIWindow } from '@/components/capture/MiniAIWindow';
 import { CaptureDrawer } from '@/components/capture/CaptureDrawer';
@@ -19,7 +21,6 @@ import { usePDFThumbnails } from '@/hooks/usePDFThumbnails';
 import { useAI } from '@/hooks/useAI';
 import { useSettings } from '@/hooks/useSettings';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { useCanvasRendering } from '@/hooks/useCanvasRendering';
 import { FocusModeProvider, useFocusMode } from '@/hooks/useFocusMode';
 import { AIConfig } from '@/types/settings';
 import { aiCommands, annotationCommands, tagCommands, focusCommands, conversationCommands } from '@/lib/tauri';
@@ -40,7 +41,7 @@ function App() {
   );
 }
 
-function AppInner() {
+const AppInner = memo(function AppInner() {
   const AI_CARD_PREFIX = '__AICARD__|';
   const {
     currentDocument,
@@ -181,6 +182,9 @@ function AppInner() {
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
 
   // ─── Canvas rendering ────────────────────────────────────────
+  // Theme-aware colors for canvas (Fabric.js) — must be declared before useCanvasRendering
+  const canvasColors = useCanvasColors();
+
   const {
     isRendering,
     renderError,
@@ -214,10 +218,8 @@ function AppInner() {
       const scrollContainer = globalThis.document?.getElementById('pdf-scroll-container');
       if (!scrollContainer) return;
       const containerWidth = scrollContainer.clientWidth;
-      // effectiveScale = baseScale (1.25) * zoomLevel, so zoomLevel = effectiveScale / baseScale
-      // effectiveScale = containerWidth / pageWidth
       const effectiveZoom = containerWidth / pageWidth;
-      const fitZoom = effectiveZoom / 1.25; // baseScale is 1.25
+      const fitZoom = effectiveZoom / 1.25;
       const clampedFitZoom = Math.min(Math.max(fitZoom, 0.3), 3);
       setFitToWidthZoom(clampedFitZoom);
       setZoomLevel(clampedFitZoom);
@@ -227,7 +229,8 @@ function AppInner() {
       if (!isAutomatic) {
         setUserManuallyZoomed(true);
       }
-    }
+    },
+    canvasColors,
   );
 
   // Stable callbacks passed to AIPanel to prevent unnecessary re-renders
@@ -294,6 +297,29 @@ function AppInner() {
 
   const handleConfirmRouteAsChat = useCallback(() => { void confirmPendingRoute('chat'); }, [confirmPendingRoute]);
   const handleConfirmRouteAsDoc = useCallback(() => { void confirmPendingRoute('doc'); }, [confirmPendingRoute]);
+  const handleToggleSidebar = useCallback(() => setSidebarOpen((v) => !v), []);
+  const handleOpenL2Popover = useCallback((position: { x: number; y: number }, text: string, page?: number) => {
+    setL2Popover({ position, text, page });
+  }, []);
+  const handleToggleFocusMode = useCallback(() => {
+    if (focusState.isActive) {
+      void handleExitFocusMode();
+    } else {
+      void handleEnterFocusMode();
+    }
+  }, [focusState.isActive]);
+  const handleSendAIMessage = useCallback((content: string, mode?: string, attachments?: Array<{ id: string; type: 'text' | 'note'; content: string; page?: number }>) => {
+    void sendMessage(content, ((mode || 'auto') as 'auto' | 'chat' | 'doc' | 'term_light' | 'deep'), attachments);
+  }, [sendMessage]);
+  const handleRetryMessage = useCallback((messageId: string, mode?: string) => {
+    void retryAssistantMessage(messageId, mode as 'auto' | 'chat' | 'doc' | undefined);
+  }, [retryAssistantMessage]);
+  const handleExplainSelection = useCallback(() => {
+    void handleExplainTerm();
+  }, []);
+  const handleExitFocusModeCallback = useCallback(() => {
+    void handleExitFocusMode();
+  }, []);
 
   // ─── Load data on mount ───────────────────────────────────────
   useEffect(() => { void loadSettings(); }, [loadSettings]);
@@ -801,13 +827,12 @@ function AppInner() {
     }
   };
 
-  const handleAddNoteSelection = (
+  const handleAddNoteSelection = useCallback((
     position?: { x: number; y: number },
     targetPageNumber?: number,
     capturedText?: string,
     capturedRange?: { left: number; top: number; width: number; height: number; pageNumber: number }
   ) => {
-    // Use text passed from toolbar/right-click if available, otherwise try DOM selection
     noteInputCapturedTextRef.current =
       capturedText ?? (() => {
         const sel = globalThis.getSelection?.();
@@ -817,7 +842,7 @@ function AppInner() {
     setNoteInputOpen(true);
     noteInputPositionRef.current = position;
     noteInputPageRef.current = targetPageNumber;
-  };
+  }, []);
 
   // ─── Capture Drawer handlers ─────────────────────────────────────
   const handleDeleteCapture = async (id: string) => {
@@ -961,7 +986,7 @@ Please provide a comprehensive synthesis in Chinese.`;
       setToast({ message, type: 'info' });
     }
   };
-  const handleSummarize = () => {
+  const handleSummarize = useCallback(() => {
     if (!currentDocument) {
       setToast({ message: 'No document loaded', type: 'info' });
       return;
@@ -971,7 +996,7 @@ Please provide a comprehensive synthesis in Chinese.`;
       return;
     }
     setChapterSelectorOpen(true);
-  };
+  }, [currentDocument, setToast, setChapterSelectorOpen]);
 
   const handleSummarizeChapters = async (selectedChapters: ChapterInfo[]) => {
     setChapterSelectorOpen(false);
@@ -1021,23 +1046,23 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       setToast({ message: 'Failed to extract chapter text', type: 'error' });
     }
   };
-  const handleTranslateSelection = () => {
+  const handleTranslateSelection = useCallback(() => {
     const text = globalThis.getSelection?.()?.toString().trim();
     if (!text) {
       setToast({ message: 'Select some text first', type: 'info' });
       return;
     }
     void sendMessage(`Translate the following text into Chinese, preserve technical terms in English when needed, and provide concise explanation:\n\n${text}`);
-  };
-  const handleExplainTerm = async () => {
+  }, [sendMessage, setToast]);
+  const handleExplainTerm = useCallback(async () => {
     const term = globalThis.getSelection?.()?.toString().trim();
     if (!term) {
       setToast({ message: 'Select a term first', type: 'info' });
       return;
     }
     await explainTerm(term);
-  };
-  const handleExportNotes = async () => {
+  }, [explainTerm, setToast]);
+  const handleExportNotes = useCallback(async () => {
     if (!currentDocument) {
       setToast({ message: 'No document loaded', type: 'info' });
       return;
@@ -1076,11 +1101,10 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       const message = error instanceof Error ? error.message : 'Failed to export notes';
       setToast({ message, type: 'error' });
     }
-  };
+  }, [currentDocument, setToast, annotationCommands]);
 
-  const handleDeleteNote = async (annotationId: string) => {
+  const handleDeleteNote = useCallback(async (annotationId: string) => {
     try {
-      // Delete from DB first — only update UI on success
       await annotationCommands.delete(annotationId);
       setNotesAnnotations((prev) => prev.filter((a) => a.id !== annotationId));
       clearCardRenderer(annotationId);
@@ -1088,12 +1112,11 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to delete note';
       setToast({ message, type: 'error' });
-      // Don't re-throw — caller doesn't await this, would become unhandled rejection
     }
-  };
+  }, [setNotesAnnotations, clearCardRenderer, setToast, annotationCommands]);
   handleDeleteNoteRef.current = handleDeleteNote;
 
-  const handleUpdateNote = async (annotationId: string, newContent: string) => {
+  const handleUpdateNote = useCallback(async (annotationId: string, newContent: string) => {
     try {
       const annotation = notesAnnotations.find((a) => a.id === annotationId);
       if (!annotation) throw new Error('Annotation not found');
@@ -1108,10 +1131,9 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update note';
       setToast({ message, type: 'error' });
-      // Don't re-throw — caller doesn't await this, would become unhandled rejection
     }
-  };
-  const handlePinMessageToCanvas = async (messageId: string, pageHint?: number) => {
+  }, [notesAnnotations, setNotesAnnotations, setToast]);
+  const handlePinMessageToCanvas = useCallback(async (messageId: string, pageHint?: number) => {
     const target = messages.find((m) => m.id === messageId && m.role === 'assistant');
     if (!target?.content?.trim()) {
       setToast({ message: 'No message content to pin', type: 'info' });
@@ -1133,22 +1155,21 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       const message = error instanceof Error ? error.message : 'Failed to pin message';
       setToast({ message, type: 'error' });
     }
-  };
-  const handleLocateCanvasCard = (messageId: string) => {
+  }, [messages, focusState, currentPage, pinNoteToCurrentPage, setPinnedMessageIds, setToast, updateCaptureCounts]);
+  const handleLocateCanvasCard = useCallback((messageId: string) => {
     const found = locateAiCardByMessageId(messageId);
     if (!found) {
       setToast({ message: 'No pinned AI card found for this message', type: 'info' });
     }
-  };
-  const handleUnpinFromCanvas = async (messageId: string) => {
+  }, [locateAiCardByMessageId, setToast]);
+  const handleUnpinFromCanvas = useCallback(async (messageId: string) => {
     try {
       await unpinAiCardByMessageId(messageId);
-      // Toast is shown via the 'ai-card-unpinned' event listener below.
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to unpin';
       setToast({ message, type: 'error' });
     }
-  };
+  }, [unpinAiCardByMessageId, setToast]);
   const handleJumpToCitation = (page: number) => {
     jumpToCitation(page);
     setComparePageSignal(page);
@@ -1158,7 +1179,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       reason: 'evidence'
     });
   };
-  const handleSendToRightPane = (messageId: string, pageHint?: number) => {
+  const handleSendToRightPane = useCallback((messageId: string, pageHint?: number) => {
     const target = messages.find((m) => m.id === messageId && m.role === 'assistant');
     if (!target) {
       setToast({ message: 'Message not found', type: 'info' });
@@ -1176,8 +1197,8 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       reason: 'reference'
     });
     setToast({ message: `Verify source · page ${targetPage}`, type: 'success' });
-  };
-  const handleDropAICard = (
+  }, [messages, currentPage, setComparePaneCommand, setToast]);
+  const handleDropAICard = useCallback((
     payload: { messageId: string; content: string; pageHint?: number },
     clientX: number,
     clientY: number
@@ -1200,7 +1221,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
         setToast({ message, type: 'error' });
       }
     })();
-  };
+  }, [dropAICardAtPoint, setPinnedMessageIds, setToast]);
 
   // ─── Library handlers ────────────────────────────────────────
   const handleCreateLibrary = async (name: string) => {
@@ -1282,7 +1303,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
         activeTabId={activeTabId}
         onSelectTab={handleSelectTab}
         onCloseTab={handleCloseTab}
-        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+        onToggleSidebar={handleToggleSidebar}
         sidebarOpen={sidebarOpen}
       />
 
@@ -1290,7 +1311,8 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
       <div className="flex flex-1 min-h-0 relative">
         {/* Library view — always in DOM, shown when library tab active */}
         <div className={`absolute inset-0 transition-opacity duration-150 ${isLibraryTab ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-          <LibraryView
+          <Suspense fallback={null}>
+            <LibraryView
             documents={documents}
             libraries={libraries}
             allTags={allTags}
@@ -1309,6 +1331,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             onClearRecent={handleClearRecent}
             onOpenSettings={() => setSettingsOpen(true)}
           />
+          </Suspense>
         </div>
 
         {/* Document reader — always in DOM, shown when document tab active */}
@@ -1361,20 +1384,12 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             onJumpToPage={jumpToPage}
             onHighlightSelection={handleHighlightSelection}
             onAddNoteSelection={handleAddNoteSelection}
-            onExplainSelection={() => { void handleExplainTerm(); }}
+            onExplainSelection={handleExplainSelection}
             onDropAICard={handleDropAICard}
             documentId={currentDocument?.id}
-            onToggleFocusMode={() => {
-              if (focusState.isActive) {
-                void handleExitFocusMode();
-              } else {
-                void handleEnterFocusMode();
-              }
-            }}
+            onToggleFocusMode={handleToggleFocusMode}
             isFocusMode={focusState.isActive}
-            onOpenL2Popover={(position, text, page) => {
-              setL2Popover({ position, text, page });
-            }}
+            onOpenL2Popover={handleOpenL2Popover}
             comparePageSignal={comparePageSignal}
             comparePaneCommand={comparePaneCommand}
             onSplitModeChange={setSplitActive}
@@ -1386,9 +1401,9 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
               messages={messages}
               isLoading={aiLoading}
               defaultInputMode={uiSettings.chatInputModeDefault}
-              onSendMessage={(content, mode, attachments) => { void sendMessage(content, mode || 'auto', attachments); }}
-              onExplainTerm={() => { void handleExplainTerm(); }}
-              onRetryMessage={(messageId, mode) => { void retryAssistantMessage(messageId, mode); }}
+              onSendMessage={handleSendAIMessage}
+              onExplainTerm={handleExplainTerm}
+              onRetryMessage={handleRetryMessage}
               onStopGeneration={stopGeneration}
               onPinToCanvas={handlePinMessageToCanvas}
               onUnpinFromCanvas={handleUnpinFromCanvas}
@@ -1418,8 +1433,9 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
         </main>
       </div>
 
-      <SettingsModal
-        open={settingsOpen}
+      <Suspense fallback={null}>
+        <SettingsModal
+          open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         profiles={profiles}
         activeProfileId={activeProfile?.id || ''}
@@ -1450,6 +1466,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
         onSaveActiveProfile={handleSaveSettings}
         onTestConnectivity={handleTestConnectivity}
       />
+      </Suspense>
 
       {tagPopupAnnotationId && (
         <TagManagePopup
@@ -1666,7 +1683,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
         <MiniAIWindow
           messages={messages}
           isLoading={aiLoading}
-          onSendMessage={(content) => { void sendMessage(content, 'auto', []); }}
+          onSendMessage={handleSendAIMessage}
           onStopGeneration={stopGeneration}
           onToggleMiniAI={toggleMiniAI}
           sessionDurationSecs={sessionDurationSecs}
@@ -1711,11 +1728,11 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
           notesCount={focusState.notesCount}
           aiResponsesCount={focusState.aiResponsesCount}
           sessionDurationSecs={sessionDurationSecs}
-          onExitFocusMode={() => { void handleExitFocusMode(); }}
+          onExitFocusMode={handleExitFocusModeCallback}
         />
       )}
     </div>
   );
-}
+});
 
 export default App;

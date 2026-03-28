@@ -517,13 +517,21 @@ function updateVisibleRange(state: LazyRenderState, totalPages: number): void {
   if (pages.length === 0) return;
 
   // Find first visible page by checking each page's offsetTop relative to scrollTop.
+  // Split into two passes: read all rects first, then process. This prevents
+  // layout thrashing — the browser can coalesce all getBoundingClientRect calls
+  // into a single layout pass rather than recalculating after each read.
   let minPage = totalPages;
   let maxPage = 1;
   const containerRect = sc.getBoundingClientRect();
+  // Pass 1: batch-read all page rects
+  const pageRects: Array<{ num: number; rect: DOMRect }> = [];
   for (const p of pages) {
     const num = Number(p.dataset.pageNumber ?? p.dataset['pageNumber'] ?? 0);
     if (!num) continue;
-    const rect = p.getBoundingClientRect();
+    pageRects.push({ num, rect: p.getBoundingClientRect() });
+  }
+  // Pass 2: process without any layout reads
+  for (const { num, rect } of pageRects) {
     const relTop = rect.top - containerRect.top;
     const relBottom = rect.bottom - containerRect.top;
     // Visible if any part is within viewport (with 1 viewport buffer)

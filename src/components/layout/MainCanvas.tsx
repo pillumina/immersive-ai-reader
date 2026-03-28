@@ -723,11 +723,11 @@ export const MainCanvas = memo(function MainCanvas({
       {/* Toolbar — compact spacing */}
       <div className="h-11 border-b border-[var(--color-border)]/60 bg-[var(--color-bg-raised)]/80 backdrop-blur-xl flex items-center justify-between px-3 gap-2 select-none">
         <div className="flex items-center gap-1.5">
-          <button type="button" className="toolbar-icon-btn" onClick={onZoomOut} title="Zoom out">
+          <button type="button" className="toolbar-icon-btn" onClick={onZoomOut} aria-label="Zoom out" title="Zoom out">
             <ZoomOut size={15} />
           </button>
           <span className="min-w-[38px] text-center text-[12px] font-medium tabular-nums text-[var(--color-text-secondary)]">{Math.round(zoomLevel * 100)}%</span>
-          <button type="button" className="toolbar-icon-btn" onClick={onZoomIn} title="Zoom in">
+          <button type="button" className="toolbar-icon-btn" onClick={onZoomIn} aria-label="Zoom in" title="Zoom in">
             <ZoomIn size={15} />
           </button>
           <button type="button" className="toolbar-icon-btn text-[11px] px-1.5" onClick={onFitToWidth} title="Fit to width">
@@ -770,6 +770,7 @@ export const MainCanvas = memo(function MainCanvas({
               type="button"
               className="toolbar-icon-btn"
               onClick={() => setTocOpen((v) => !v)}
+              aria-label="Open Table of Contents"
               title="Open Table of Contents"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -853,6 +854,7 @@ export const MainCanvas = memo(function MainCanvas({
               type="button"
               className="toolbar-icon-btn"
               onClick={() => setSearchOpen(true)}
+              aria-label="Search"
               title="Search (Ctrl+F)"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>

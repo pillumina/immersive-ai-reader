@@ -1,5 +1,6 @@
-import { Brain, Languages, MessageSquare, StickyNote } from 'lucide-react';
-import { useEffect, useRef, useState, useCallback, memo, type ReactNode } from 'react';
+import { Brain, Languages, MessageSquare, StickyNote, type LucideIcon } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback, memo } from 'react';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 /** Position relative to viewport (fixed coordinates) */
 export interface L2PopoverPosition {
@@ -25,7 +26,7 @@ interface L2AIPopoverProps {
 interface L2Option {
   key: string;
   label: string;
-  icon: ReactNode;
+  icon: LucideIcon;
   shortcut: string;
 }
 
@@ -54,6 +55,9 @@ export const L2AIPopover = memo(function L2AIPopover({
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Focus trap: keep Tab navigation within the popover
+  useFocusTrap(popoverRef, { active: true });
 
   // Slide-in animation trigger
   useEffect(() => {

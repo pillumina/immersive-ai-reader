@@ -6,6 +6,17 @@ import { simpleMarkdownToHtml } from '@/utils/markdown';
 import type { Tag } from '@/types/annotation';
 import { TAG_PRESET_COLORS, PRESET_TAGS } from '@/types/annotation';
 
+export interface CanvasThemeColors {
+  aiAccent: string;
+  noteAccent: string;
+  deleteBtnDefault: string;
+  deleteBtnHover: string;
+  statusText: string;
+  connectorStroke: string;
+  skeletonWave: string;
+  skeletonWaveEnd: string;
+}
+
 export function useCanvasRendering(
   scrollContainerId: string,
   containerId: string,
@@ -20,6 +31,7 @@ export function useCanvasRendering(
    *  @param isAutomatic - true if zoom was set by auto-fit, false if by user action.
    *  Used by App to track whether user has manually overridden auto-fit. */
   onZoomApplied?: (isAutomatic: boolean) => void,
+  themeColors?: CanvasThemeColors,
 ) {
   const renderJobIdRef = useRef(0);
   const latestZoomRef = useRef(zoomLevel);
@@ -39,6 +51,18 @@ export function useCanvasRendering(
   const fitToWidthZoomRef = useRef<number>(1);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
+
+  const mergedColors: CanvasThemeColors = {
+    aiAccent: '#7c3aed',
+    noteAccent: '#0d9488',
+    deleteBtnDefault: '#d4d4d4',
+    deleteBtnHover: '#dc2626',
+    statusText: '#78716c',
+    connectorStroke: '#0d9488',
+    skeletonWave: '#f5f5f4',
+    skeletonWaveEnd: 'rgba(255,255,255,0.55)',
+    ...themeColors,
+  };
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(pdfDocument?.lastPage ?? 1);
   const [outline, setOutline] = useState<PdfOutlineItem[]>([]);
@@ -236,7 +260,7 @@ export function useCanvasRendering(
     card.className = `pdf-note-card${kind === 'ai-card' ? ' pdf-ai-card' : ''}`;
 
     // Colored left-border accent
-    const accentColor = kind === 'ai-card' ? '#7c3aed' : '#0d9488';
+    const accentColor = kind === 'ai-card' ? mergedColors.aiAccent : mergedColors.noteAccent;
     card.style.borderLeft = `3px solid ${accentColor}`;
 
     // Absolute position within scroll container
@@ -275,7 +299,7 @@ export function useCanvasRendering(
     deleteBtn.className = 'canvas-card-delete-btn';
     deleteBtn.title = 'Delete note';
     deleteBtn.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
-    deleteBtn.style.cssText = 'background:none;border:none;cursor:pointer;color:#d4d4d4;font-size:13px;line-height:1;padding:2px;border-radius:4px;transition:color 0.12s,background 0.12s;opacity:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+    deleteBtn.style.cssText = `background:none;border:none;cursor:pointer;color:${mergedColors.deleteBtnDefault};font-size:13px;line-height:1;padding:2px;border-radius:4px;transition:color 0.12s,background 0.12s;opacity:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;`;
     deleteBtn.addEventListener('click', (evt) => {
       evt.stopPropagation();
       const annotationId = options?.annotationId;
@@ -291,11 +315,11 @@ export function useCanvasRendering(
       }
     });
     deleteBtn.addEventListener('mouseenter', () => {
-      deleteBtn.style.color = '#ef4444';
+      deleteBtn.style.color = mergedColors.deleteBtnHover;
       deleteBtn.style.background = 'rgba(239,68,68,0.08)';
     });
     deleteBtn.addEventListener('mouseleave', () => {
-      deleteBtn.style.color = '#d4d4d4';
+      deleteBtn.style.color = mergedColors.deleteBtnDefault;
       deleteBtn.style.background = 'transparent';
     });
     // Show delete on card hover
@@ -535,7 +559,7 @@ export function useCanvasRendering(
 
       const statusEl = document.createElement('div');
       statusEl.className = 'note-card-status';
-      statusEl.style.cssText = 'font-size:10px;opacity:0.5;margin:2px 10px 6px;color:#a8a29e;';
+      statusEl.style.cssText = `font-size:10px;opacity:0.5;margin:2px 10px 6px;color:${mergedColors.statusText};`;
 
       card.appendChild(displayEl);
       card.appendChild(statusEl);
@@ -566,8 +590,8 @@ export function useCanvasRendering(
             const y2 = cardRect.top - containerRect.top;
             existingConnector!.innerHTML = `
               <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
-                stroke="#0d9488" stroke-width="1.5" stroke-dasharray="4 3" stroke-opacity="0.5" />
-              <circle cx="${x1}" cy="${y1}" r="3" fill="#0d9488" fill-opacity="0.5" />`;
+                stroke="${mergedColors.connectorStroke}" stroke-width="1.5" stroke-dasharray="4 3" stroke-opacity="0.5" />
+              <circle cx="${x1}" cy="${y1}" r="3" fill="${mergedColors.connectorStroke}" fill-opacity="0.5" />`;
           };
           updateConnector();
           const cardExt = card as HTMLElement & { _updateConnector?: () => void; _connectorId?: string; _connectorRafIds?: number[] };
@@ -702,9 +726,10 @@ export function useCanvasRendering(
           pendingNoteDragRafRef.current = requestAnimationFrame(() => {
             card.style.left = `${Math.max(origLeft + dx, 0)}px`;
             card.style.top = `${Math.max(origTop + dy, 0)}px`;
+            // Batch the connector rect reads with the same RAF — reading 3 rects
+            // outside RAF on every pointermove caused layout thrashing at 60fps
+            (card as HTMLElement & { _updateConnector?: () => void })._updateConnector?.();
           });
-          // Update connector line if attached to selected text
-          (card as HTMLElement & { _updateConnector?: () => void })._updateConnector?.();
         };
 
         const cleanup = () => {

@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { Plus, X, Tag } from 'lucide-react';
 import { Tag as TagType, TAG_PRESET_COLORS, PRESET_TAGS, DEFAULT_TAG_COLOR } from '@/types/annotation';
 import { tagCommands } from '@/lib/tauri';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface TagChipProps {
   tag: TagType;
@@ -103,6 +104,10 @@ export const TagManagePopup = memo(function TagManagePopup({ annotationId, onClo
   const [allTags, setAllTags] = useState<TagType[]>([]);
   const [selectedColor, setSelectedColor] = useState(DEFAULT_TAG_COLOR);
   const [newTagName, setNewTagName] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Focus trap: keep Tab navigation within the popup
+  useFocusTrap(containerRef, { active: true, onEscape: onClose });
 
   // Load current tags and all available tags
   useEffect(() => {
@@ -190,7 +195,7 @@ export const TagManagePopup = memo(function TagManagePopup({ annotationId, onClo
         }}
       />
       {/* Popup */}
-      <div style={style}>
+      <div ref={containerRef} style={style}>
         <div
           style={{
             background: '#fff',

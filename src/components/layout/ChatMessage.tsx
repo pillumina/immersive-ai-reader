@@ -223,6 +223,7 @@ export const ChatMessage = memo(function ChatMessageWip({
                   className="ai-msg-action"
                   onClick={() => onCopy(msg)}
                   disabled={isLoading}
+                  aria-label={copiedMessageId === msg.id ? 'Copied' : 'Copy'}
                   title={copiedMessageId === msg.id ? 'Copied' : 'Copy'}
                 >
                   {copiedMessageId === msg.id ? <Check size={13} /> : <Copy size={13} />}
@@ -231,7 +232,10 @@ export const ChatMessage = memo(function ChatMessageWip({
                 {msg.id && (
                   <div
                     draggable
+                    role="button"
+                    tabIndex={0}
                     className="ai-msg-action"
+                    aria-label="Drag to canvas"
                     style={{ cursor: 'grab' }}
                     title="Drag to canvas"
                     onDragStart={(e: DragEvent<HTMLElement>) => {
@@ -303,6 +307,7 @@ export const ChatMessage = memo(function ChatMessageWip({
                         : onPin(msg.id!, extractFirstCitationPage(msg.content))
                     }
                     disabled={isLoading}
+                    aria-label={pinnedIdSet.has(msg.id || '') ? 'Unpin from canvas' : 'Pin to canvas'}
                     title={pinnedIdSet.has(msg.id || '') ? 'Unpin from canvas' : 'Pin to canvas'}
                   >
                     <Pin size={13} />
@@ -315,6 +320,7 @@ export const ChatMessage = memo(function ChatMessageWip({
                     className="ai-msg-action"
                     onClick={() => onLocate(msg.id!)}
                     disabled={isLoading}
+                    aria-label="Find in canvas"
                     title="Find in canvas"
                   >
                     <Search size={13} />
@@ -327,6 +333,7 @@ export const ChatMessage = memo(function ChatMessageWip({
                     className="ai-msg-action"
                     onClick={() => onSendToRight(msg.id!, extractFirstCitationPage(msg.content))}
                     disabled={isLoading}
+                    aria-label="Verify cited page"
                     title="Verify cited page"
                   >
                     <BadgeCheck size={13} />
@@ -339,6 +346,7 @@ export const ChatMessage = memo(function ChatMessageWip({
                     className="ai-msg-action ai-msg-action--danger"
                     onClick={() => onRetry(msg.id!)}
                     disabled={isLoading}
+                    aria-label="Retry"
                     title="Retry"
                   >
                     <RotateCcw size={13} />
