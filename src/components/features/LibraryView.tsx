@@ -107,6 +107,7 @@ function LibraryList({
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
+            aria-label="Open settings"
             onClick={onOpenSettings}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-colors"
             title="Settings"
@@ -124,7 +125,7 @@ function LibraryList({
               <Clock size={11} />
               Recent
             </span>
-            <button type="button" onClick={onClearRecent} className="library-section__clear" title="Clear recent">
+            <button type="button" aria-label="Clear recent documents" onClick={onClearRecent} className="library-section__clear" title="Clear recent">
               <X size={10} />
             </button>
           </div>
@@ -151,6 +152,7 @@ function LibraryList({
           </span>
           <button
             type="button"
+            aria-label="Create new library"
             onClick={() => setIsCreating(true)}
             className="library-section__add"
             title="New library"
@@ -188,20 +190,23 @@ function LibraryList({
             </form>
           ) : (
             <div key={lib.id} className="library-item-wrapper">
-              <button
-                type="button"
-                key={lib.id}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={lib.name}
                 onClick={() => onSelectLibrary(lib.id)}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   setContextMenu({ lib, x: e.clientX, y: e.clientY });
                 }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectLibrary(lib.id); } }}
                 className={`library-item ${selectedLibraryId === lib.id ? 'library-item--active' : ''}`}
               >
                 <span className="library-item__dot" style={{ background: lib.color }} />
                 <span className="library-item__name">{lib.name}</span>
                 <button
                   type="button"
+                  aria-label="More options"
                   className="library-item__menu-btn"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -210,7 +215,7 @@ function LibraryList({
                 >
                   <MoreHorizontal size={11} />
                 </button>
-              </button>
+              </div>
             </div>
           )
         )}
@@ -364,6 +369,7 @@ function DocumentList({
           <div className="view-mode-toggle">
             <button
               type="button"
+              aria-label="List view"
               onClick={() => onChangeViewMode('list')}
               className={`view-mode-btn ${viewMode === 'list' ? 'view-mode-btn--active' : ''}`}
               title="List view"
@@ -375,6 +381,7 @@ function DocumentList({
             </button>
             <button
               type="button"
+              aria-label="Grid view"
               onClick={() => onChangeViewMode('grid')}
               className={`view-mode-btn ${viewMode === 'grid' ? 'view-mode-btn--active' : ''}`}
               title="Grid view"
@@ -417,6 +424,7 @@ function DocumentList({
                 </div>
                 <button
                   type="button"
+                  aria-label="Open document"
                   className="doc-card__open-btn"
                   onClick={(e) => { e.stopPropagation(); onOpenDocument(doc); }}
                   title="Open document"

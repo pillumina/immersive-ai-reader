@@ -192,24 +192,23 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
 
       if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
       progressTimerRef.current = setTimeout(async () => {
-        const p = pendingProgressRef.current;
-        if (!p || !state.currentSessionId) return;
-        pendingProgressRef.current = null;
-        progressTimerRef.current = null;
-
-        try {
-          await focusCommands.update(state.currentSessionId, {
+        // Read state fresh inside the timeout to avoid stale closure
+        setState((prev) => {
+          const sessionId = prev.currentSessionId;
+          if (!sessionId || !pendingProgressRef.current) return prev;
+          const p = pendingProgressRef.current;
+          pendingProgressRef.current = null;
+          progressTimerRef.current = null;
+          focusCommands.update(sessionId, {
             last_page: p.lastPage,
             max_scroll_top: p.maxScrollTop,
             max_read_percentage: p.maxPercentage,
-          });
-          setState((prev) => ({ ...prev, maxProgress: p.maxPercentage }));
-        } catch (err) {
-          console.error('[FocusMode] Failed to update progress:', err);
-        }
+          }).catch((err) => console.error('[FocusMode] Failed to update progress:', err));
+          return { ...prev, maxProgress: p.maxPercentage };
+        });
       }, 1000);
     },
-    [state.currentSessionId]
+    []
   );
 
   const updateCaptureCounts = useCallback(

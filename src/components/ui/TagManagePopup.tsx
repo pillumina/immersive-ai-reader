@@ -26,66 +26,41 @@ export function TagChip({ tag, onRemove }: TagChipProps) {
   }, [showPopup]);
 
   return (
-    <span style={{ position: 'relative', display: 'inline-block' }}>
-      <span
+    <span className="relative inline-block">
+      <button
+        type="button"
         onClick={() => setShowPopup(true)}
+        className="inline-flex cursor-pointer items-center gap-0.5 rounded px-1 text-[9px] font-medium"
         style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '2px',
-          height: '16px',
-          padding: '0 4px',
-          borderRadius: '4px',
+          height: 16,
           backgroundColor: tag.color + '28',
           border: `1px solid ${tag.color}55`,
           color: tag.color,
-          fontSize: '9px',
-          fontWeight: 500,
-          cursor: 'pointer',
           userSelect: 'none',
           whiteSpace: 'nowrap' as const,
         }}
       >
         {tag.name}
-      </span>
+      </button>
       {showPopup && (
         <div
           ref={popupRef}
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            left: '0',
-            zIndex: 9999,
-            background: '#fff',
-            border: '1px solid #e7e5e4',
-            borderRadius: '8px',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-            padding: '8px',
-            minWidth: '140px',
-          }}
+          role="dialog"
+          aria-label={`Manage tag: ${tag.name}`}
+          className="absolute left-0 top-full z-[9999] z-50 mt-1 min-w-[140px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-raised)] p-2 shadow-[0_4px_16px_rgba(28,25,23,0.12)]"
         >
-          <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '6px', fontWeight: 500 }}>
-            <Tag size={10} style={{ display: 'inline', marginRight: '4px' }} />
+          <p className="mb-1.5 flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-secondary)]">
+            <Tag size={10} />
             {tag.name}
-          </div>
-          <div
+          </p>
+          <button
+            type="button"
             onClick={() => { onRemove(tag.id); setShowPopup(false); }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '5px 6px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              color: '#ef4444',
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
-            }}
+            className="flex w-full cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] text-[var(--color-danger)] hover:bg-[var(--color-danger-subtle)]"
           >
             <X size={12} />
             Remove tag
-          </div>
+          </button>
         </div>
       )}
     </span>
@@ -173,180 +148,147 @@ export const TagManagePopup = memo(function TagManagePopup({ annotationId, onClo
     }
   };
 
-  // Position: center of screen
-  const style: React.CSSProperties = {
-    position: 'fixed',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    zIndex: 10000,
-  };
-
   return createPortal(
     <>
       {/* Backdrop */}
       <div
+        aria-hidden="true"
+        className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm"
         onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,0.25)',
-          zIndex: 9999,
-        }}
       />
       {/* Popup */}
-      <div ref={containerRef} style={style}>
-        <div
-          style={{
-            background: '#fff',
-            borderRadius: '12px',
-            boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
-            padding: '16px',
-            width: '260px',
-          }}
-        >
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#1c1917' }}>
-              <Tag size={14} />
-              Card Tags
-            </div>
-            <button
-              onClick={onClose}
-              title="关闭"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: '2px' }}
-            >
-              <X size={16} />
-            </button>
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-label="Manage card tags"
+        aria-modal="true"
+        className="fixed left-1/2 top-1/2 z-[10000] w-[260px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-raised)] p-4 shadow-[0_16px_48px_rgba(28,25,23,0.18)]"
+      >
+        {/* Header */}
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text)]">
+            <Tag size={14} />
+            Card Tags
           </div>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="cursor-pointer rounded p-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg)]"
+          >
+            <X size={16} />
+          </button>
+        </div>
 
-          {/* Current tags */}
-          {tags.length > 0 && (
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Applied
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '4px' }}>
-                {tags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    onClick={() => void handleRemoveTag(tag.id)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                      padding: '2px 6px',
-                      borderRadius: '6px',
-                      backgroundColor: tag.color + '22',
-                      border: `1px solid ${tag.color}55`,
-                      color: tag.color,
-                      fontSize: '11px',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                    }}
-                    title="Click to remove"
-                  >
-                    {tag.name}
-                    <X size={10} />
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Add tag section */}
-          <div style={{ marginBottom: '8px' }}>
-            <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Add tag
-            </div>
-            <input
-              value={newTagName || search}
-              onChange={(e) => { setNewTagName(e.target.value); setSearch(e.target.value); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateNew(); }}
-              placeholder="Tag name..."
-              style={{
-                width: '100%',
-                padding: '6px 8px',
-                border: '1px solid #e7e5e4',
-                borderRadius: '6px',
-                fontSize: '12px',
-                outline: 'none',
-                boxSizing: 'border-box',
-                marginBottom: '6px',
-              }}
-            />
-            {/* Color palette */}
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' as const }}>
-              {TAG_PRESET_COLORS.map((color) => (
+        {/* Current tags */}
+        {tags.length > 0 && (
+          <div className="mb-3">
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+              Applied
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {tags.map((tag) => (
                 <button
-                  key={color}
-                  onClick={() => setSelectedColor(color)}
+                  type="button"
+                  key={tag.id}
+                  aria-label={`Remove tag: ${tag.name}`}
+                  onClick={() => void handleRemoveTag(tag.id)}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium"
                   style={{
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    background: color,
-                    border: selectedColor === color ? '2px solid #1c1917' : '2px solid transparent',
-                    cursor: 'pointer',
-                    padding: 0,
-                    outline: selectedColor === color ? '2px solid #fff' : 'none',
-                    outlineOffset: '-2px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    backgroundColor: tag.color + '22',
+                    border: `1px solid ${tag.color}55`,
+                    color: tag.color,
                   }}
-                />
+                >
+                  {tag.name}
+                  <X size={10} />
+                </button>
               ))}
             </div>
-            <button
-              onClick={handleCreateNew}
-              disabled={!newTagName.trim() && !search.trim()}
-              style={{
-                width: '100%',
-                padding: '6px',
-                borderRadius: '6px',
-                border: 'none',
-                background: newTagName.trim() ? '#0d9488' : '#e7e5e4',
-                color: newTagName.trim() ? '#fff' : '#94a3b8',
-                fontSize: '12px',
-                fontWeight: 500,
-                cursor: newTagName.trim() ? 'pointer' : 'not-allowed',
-              }}
-            >
-              Add &ldquo;{newTagName.trim() || search.trim() || '...'}&rdquo;
-            </button>
           </div>
+        )}
 
-          {/* Suggestions */}
-          {suggestions.length > 0 && (
-            <div>
-              <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Suggestions
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '4px' }}>
-                {suggestions.slice(0, 8).map((t) => (
-                  <button
-                    key={(t as TagType).id || t.name}
-                    onClick={() => void handleAddTag(t.name, t.color)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                      padding: '2px 6px',
-                      borderRadius: '6px',
-                      background: t.color + '18',
-                      border: `1px solid ${t.color}44`,
-                      color: t.color,
-                      fontSize: '11px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Plus size={10} />
-                    {t.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* Add tag section */}
+        <div className="mb-2">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+            Add tag
+          </p>
+          <input
+            value={newTagName || search}
+            onChange={(e) => { setNewTagName(e.target.value); setSearch(e.target.value); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleCreateNew(); }}
+            aria-label="New tag name"
+            placeholder="Tag name..."
+            className="mb-1.5 box-border w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1.5 text-[12px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)]"
+          />
+          {/* Color palette */}
+          <div className="mb-2 flex flex-wrap gap-1">
+            {TAG_PRESET_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                aria-label={`Select color ${color}`}
+                aria-pressed={selectedColor === color}
+                onClick={() => setSelectedColor(color)}
+                className="h-5 w-5 cursor-pointer rounded-full"
+                style={{
+                  background: color,
+                  border: selectedColor === color
+                    ? '2px solid var(--color-text)'
+                    : '2px solid transparent',
+                  outline: selectedColor === color ? '2px solid var(--color-bg-raised)' : 'none',
+                  outlineOffset: '-2px',
+                  boxShadow: '0 1px 3px rgba(28,25,23,0.2)',
+                }}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleCreateNew}
+            disabled={!newTagName.trim() && !search.trim()}
+            className="w-full cursor-pointer rounded-md py-1.5 text-[12px] font-medium transition-colors"
+            style={{
+              border: 'none',
+              background: newTagName.trim()
+                ? 'var(--color-accent)'
+                : 'var(--color-border)',
+              color: newTagName.trim()
+                ? 'var(--color-accent-text, #fff)'
+                : 'var(--color-text-muted)',
+            }}
+          >
+            Add &ldquo;{newTagName.trim() || search.trim() || '...'}&rdquo;
+          </button>
         </div>
+
+        {/* Suggestions */}
+        {suggestions.length > 0 && (
+          <div>
+            <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+              Suggestions
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {suggestions.slice(0, 8).map((t) => (
+                <button
+                  type="button"
+                  key={(t as TagType).id || t.name}
+                  aria-label={`Add tag: ${t.name}`}
+                  onClick={() => void handleAddTag(t.name, t.color)}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]"
+                  style={{
+                    background: t.color + '18',
+                    border: `1px solid ${t.color}44`,
+                    color: t.color,
+                  }}
+                >
+                  <Plus size={10} />
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </>,
     document.body

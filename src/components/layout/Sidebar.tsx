@@ -87,6 +87,7 @@ export const Sidebar = memo(function Sidebar({
             <button
               type="button"
               onClick={onToggleSidebar}
+              aria-label="Hide sidebar"
               className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-colors"
               title="Hide sidebar"
             >
@@ -98,6 +99,7 @@ export const Sidebar = memo(function Sidebar({
           <button
             type="button"
             onClick={onOpenSettings}
+            aria-label="Open settings"
             className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-colors"
             title="Settings"
           >
@@ -144,6 +146,7 @@ export const Sidebar = memo(function Sidebar({
             <Search size={13} className="absolute left-2.5 text-[var(--color-text-muted)] pointer-events-none" />
             <input
               type="text"
+              aria-label="Search documents"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search documents…"
@@ -228,14 +231,18 @@ export const Sidebar = memo(function Sidebar({
                       const isActive = currentDocumentId === doc.id;
                       return (
                         <div
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Open ${doc.fileName}`}
                           key={doc.id}
-                          className={`group flex items-center gap-2 rounded-lg px-2 py-2 mb-0.5 cursor-pointer transition-all duration-100 ${
+                          className={`group w-full flex items-center gap-2 rounded-lg px-2 py-2 mb-0.5 transition-all duration-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-accent)] focus-visible:outline-offset-1 cursor-pointer ${
                             isActive
                               ? 'bg-[var(--color-danger-subtle)]'
                               : 'hover:bg-[var(--color-bg)]'
                           }`}
                           onClick={() => onSelectDocument(doc.id)}
-                      >
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectDocument(doc.id); } }}
+                        >
                         <div className={`shrink-0 rounded ${isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)]'} transition-colors`}>
                           <FileText size={13} />
                         </div>
@@ -249,6 +256,7 @@ export const Sidebar = memo(function Sidebar({
                         )}
                         <div className={`flex items-center gap-0.5 shrink-0 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                           <button
+                            aria-label="Relink file"
                             className="rounded p-0.5 hover:bg-black/[0.05] transition-colors"
                             title="Relink file"
                             onClick={(e) => { e.stopPropagation(); onRelinkDocument(doc.id); }}
@@ -256,6 +264,7 @@ export const Sidebar = memo(function Sidebar({
                             <Link size={11} className="text-[var(--color-text-muted)]" />
                           </button>
                           <button
+                            aria-label="Delete document"
                             className="rounded p-0.5 hover:bg-[var(--color-danger-subtle)] transition-colors"
                             title="Delete"
                             onClick={(e) => { e.stopPropagation(); onDeleteDocument(doc.id); }}

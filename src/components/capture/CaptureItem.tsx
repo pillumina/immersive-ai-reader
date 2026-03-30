@@ -81,6 +81,7 @@ export const CaptureItemComponent = memo(function CaptureItemComponent({
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             type="button"
+            aria-label={`Jump to page ${item.pageNumber}`}
             className="flex items-center justify-center w-6 h-6 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={() => onJumpTo(item.pageNumber)}
             title="跳转到"
@@ -94,6 +95,7 @@ export const CaptureItemComponent = memo(function CaptureItemComponent({
           {item.type === 'note' && onEdit && (
             <button
               type="button"
+              aria-label="Edit note"
               className="flex items-center justify-center w-6 h-6 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
               onClick={() => onEdit(item)}
               title="编辑"
@@ -107,6 +109,7 @@ export const CaptureItemComponent = memo(function CaptureItemComponent({
           {onDelete && (
             <button
               type="button"
+              aria-label="Delete item"
               className="flex items-center justify-center w-6 h-6 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-danger-subtle)] hover:text-[var(--color-danger)] transition-colors"
               onClick={() => onDelete(item.id)}
               title="删除"
@@ -156,6 +159,7 @@ export const CaptureItemComponent = memo(function CaptureItemComponent({
             <button
               key={p}
               type="button"
+              aria-label={`Copy citation from page ${p}`}
               className="text-[10px] text-[var(--color-accent)] hover:underline"
               onClick={() => onJumpTo(p)}
             >

@@ -108,6 +108,7 @@ export const MiniAIWindow = memo(function MiniAIWindow({
           )}
           <button
             type="button"
+            aria-label="Close mini AI"
             className="flex items-center justify-center w-6 h-6 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={onToggleMiniAI}
             title="关闭 mini AI (Cmd+`)"
@@ -173,6 +174,7 @@ export const MiniAIWindow = memo(function MiniAIWindow({
           {isLoading ? (
             <button
               type="button"
+              aria-label="Stop generation"
               className="flex items-center justify-center w-8 h-8 rounded-xl bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)] transition-colors flex-shrink-0"
               onClick={onStopGeneration}
               title="停止生成"
@@ -184,6 +186,7 @@ export const MiniAIWindow = memo(function MiniAIWindow({
           ) : (
             <button
               type="button"
+              aria-label="Send message"
               className="flex items-center justify-center w-8 h-8 rounded-xl bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
               onClick={handleSend}
               disabled={!input.trim()}

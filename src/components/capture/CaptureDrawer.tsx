@@ -113,6 +113,7 @@ function SessionCard({
         </div>
         <button
           type="button"
+          aria-label="Delete session"
           onClick={() => onDelete(session.session_id)}
           className="flex items-center justify-center w-6 h-6 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-danger-subtle)] hover:text-[var(--color-danger)] transition-colors"
           title="删除会话"
@@ -305,6 +306,7 @@ export const CaptureDrawer = memo(function CaptureDrawer({
           </div>
           <button
             type="button"
+            aria-label="Close drawer"
             className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={onClose}
             title="关闭"

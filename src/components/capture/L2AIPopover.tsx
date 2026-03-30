@@ -171,14 +171,18 @@ export const L2AIPopover = memo(function L2AIPopover({
       ref={popoverRef}
       role="menu"
       aria-label="AI capture options"
-      className="l2-popover fixed z-[9999] flex flex-col rounded-xl border border-[var(--color-border)]/80 bg-[var(--color-bg-raised)]/98 shadow-[0_8px_32px_rgba(28,25,23,0.16),0_2px_8px_rgba(28,25,23,0.08)] backdrop-blur-md"
+      className="l2-popover fixed z-[9999] flex flex-col rounded-xl shadow-lg"
       style={{
         left,
         top,
         width: POPOVER_WIDTH,
-        animation: entered
-          ? `l2-slide-in ${animDuration}ms cubic-bezier(0.16, 1, 0.3, 1) forwards`
-          : 'opacity: 0; transform: translateY(-4px)',
+        background: 'var(--color-bg-raised)',
+        border: '1px solid var(--color-border)',
+        backdropFilter: 'blur(12px)',
+        boxShadow: '0 8px 32px rgba(28,25,23,0.16), 0 2px 8px rgba(28,25,23,0.08)',
+        opacity: entered ? 1 : 0,
+        transform: entered ? 'translateY(0)' : 'translateY(-4px)',
+        transition: `opacity ${animDuration}ms cubic-bezier(0.16, 1, 0.3, 1), transform ${animDuration}ms cubic-bezier(0.16, 1, 0.3, 1)`,
       }}
       onMouseMove={resetAutoClose}
       onClick={(e) => e.stopPropagation()}
@@ -192,6 +196,7 @@ export const L2AIPopover = memo(function L2AIPopover({
           style={{ height: 36 }}
           onClick={() => handleOptionClick(option.key)}
           title={`${option.label} (${option.shortcut})`}
+          aria-label={option.label}
         >
           <span className="text-base leading-none"><option.icon size={16} /></span>
           <span className="flex-1 font-medium">{option.label}</span>

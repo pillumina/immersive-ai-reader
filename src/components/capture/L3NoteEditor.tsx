@@ -191,6 +191,7 @@ export const L3NoteEditor = memo(function L3NoteEditor({
           </div>
           <button
             type="button"
+            aria-label="Close"
             className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={() => {
               if (dirty) { setShowDiscardConfirm(true); return; }

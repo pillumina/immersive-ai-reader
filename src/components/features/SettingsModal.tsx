@@ -41,11 +41,14 @@ interface SettingsModalProps {
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-function SettingRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
+function SettingRow({ label, description, id, children }: { label: string; description?: string; id?: string; children: React.ReactNode }) {
   return (
     <div className="setting-row">
       <div className="setting-row__text">
-        <p className="setting-row__label">{label}</p>
+        {id
+          ? <label htmlFor={id} className="setting-row__label">{label}</label>
+          : <p className="setting-row__label">{label}</p>
+        }
         {description && <p className="setting-row__desc">{description}</p>}
       </div>
       <div className="setting-row__control">{children}</div>
@@ -267,6 +270,7 @@ export const SettingsModal = memo(function SettingsModal({
                 />
                 <button
                   type="button"
+                  aria-label="Create new profile"
                   onClick={() => { void handleCreateProfile(); }}
                   className="settings-nav__add-btn"
                   title="Create profile"
@@ -289,8 +293,9 @@ export const SettingsModal = memo(function SettingsModal({
                 />
 
                 <div className="settings-group">
-                  <SettingRow label="Profile Name" description="A friendly name for this configuration">
+                  <SettingRow label="Profile Name" description="A friendly name for this configuration" id="setting-profile-name">
                     <Input
+                      id="setting-profile-name"
                       value={profileName}
                       onChange={(e) => { setProfileName(e.target.value); }}
                       onBlur={() => { if (activeProfile) onRenameProfile(activeProfile.id, profileName); }}
@@ -317,8 +322,9 @@ export const SettingsModal = memo(function SettingsModal({
                 </div>
 
                 <div className="settings-group">
-                  <SettingRow label="Endpoint" description="Base URL of the API endpoint">
+                  <SettingRow label="Endpoint" description="Base URL of the API endpoint" id="setting-endpoint">
                     <Input
+                      id="setting-endpoint"
                       value={endpoint}
                       onChange={(e) => { setEndpoint(e.target.value); }}
                       placeholder="https://open.bigmodel.cn/api/paas/v4"
@@ -328,8 +334,9 @@ export const SettingsModal = memo(function SettingsModal({
                 </div>
 
                 <div className="settings-group">
-                  <SettingRow label="Model ID" description="The model identifier to use">
+                  <SettingRow label="Model ID" description="The model identifier to use" id="setting-model">
                     <Input
+                      id="setting-model"
                       value={model}
                       onChange={(e) => { setModel(e.target.value); }}
                       placeholder="glm-4-flash"
@@ -339,9 +346,10 @@ export const SettingsModal = memo(function SettingsModal({
                 </div>
 
                 <div className="settings-group">
-                  <SettingRow label="API Key" description="Your secret key — stored securely in the system keychain">
+                  <SettingRow label="API Key" description="Your secret key — stored securely in the system keychain" id="setting-api-key">
                     <div className="settings-input-password">
                       <Input
+                        id="setting-api-key"
                         type={showKey ? 'text' : 'password'}
                         value={apiKey}
                         onChange={(e) => { setApiKey(e.target.value); }}
@@ -350,6 +358,7 @@ export const SettingsModal = memo(function SettingsModal({
                       />
                       <button
                         type="button"
+                        aria-label={showKey ? 'Hide API key' : 'Show API key'}
                         onClick={() => setShowKey(!showKey)}
                         className="settings-input-password__toggle"
                         title={showKey ? 'Hide key' : 'Show key'}
@@ -934,8 +943,10 @@ function LogsSection() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-3">
+        <label htmlFor="log-filter" className="sr-only">Filter logs</label>
         <input
           type="text"
+          id="log-filter"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter logs…"

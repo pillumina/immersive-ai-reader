@@ -52,7 +52,11 @@ export function useCanvasRendering(
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
 
+  // themeColors (from useCanvasColors) reads CSS variables via getComputedStyle,
+  // so it is always theme-aware. Spread it FIRST — our hardcoded fallbacks only
+  // apply when themeColors doesn't provide a value (i.e., before the hook mounts).
   const mergedColors: CanvasThemeColors = {
+    ...themeColors,
     aiAccent: '#7c3aed',
     noteAccent: '#0d9488',
     deleteBtnDefault: '#d4d4d4',
@@ -61,7 +65,6 @@ export function useCanvasRendering(
     connectorStroke: '#0d9488',
     skeletonWave: '#f5f5f4',
     skeletonWaveEnd: 'rgba(255,255,255,0.55)',
-    ...themeColors,
   };
   const [totalPages, setTotalPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(pdfDocument?.lastPage ?? 1);
@@ -1005,6 +1008,12 @@ export function useCanvasRendering(
         }
 
         // Show skeleton placeholders while PDF parses.
+        // Read theme-aware colors so the shimmer adapts to dark/sepia/warm-dark modes.
+        const root = document.documentElement;
+        const cs = getComputedStyle(root);
+        const skeletonBase = cs.getPropertyValue('--color-bg-hover').trim() || '#f5f5f4';
+        const skeletonAccent = cs.getPropertyValue('--color-border-subtle').trim() || '#fafaf9';
+        const waveColor = cs.getPropertyValue('--color-text-muted').trim() || '#78716c';
         for (let i = 0; i < 2; i++) {
           const wrapper = document.createElement('div');
           wrapper.style.cssText = 'width: 612px; margin: 0 auto 16px; position: relative; padding-top: 129.4%;';
@@ -1014,12 +1023,12 @@ export function useCanvasRendering(
           const shimmer = document.createElement('div');
           shimmer.style.cssText = [
             'position: absolute; inset: 0;',
-            'background: linear-gradient(135deg, #fafaf9 0%, #f5f5f4 100%);',
+            `background: linear-gradient(135deg, ${skeletonBase} 0%, ${skeletonAccent} 100%);`,
           ].join('');
           const wave = document.createElement('div');
           wave.style.cssText = [
             'position: absolute; inset: 0;',
-            'background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);',
+            `background: linear-gradient(90deg, transparent 0%, ${waveColor}33 50%, transparent 100%);`,
             'animation: skeletonShimmer 1.8s ease-in-out infinite;',
           ].join('');
           shimmer.appendChild(wave);
@@ -1115,11 +1124,51 @@ export function useCanvasRendering(
       throw new Error('选中文本为空');
     }
 
-    const clientRects = Array.from(range.getClientRects()).filter(
+    const rawRects = Array.from(range.getClientRects()).filter(
       (rect) => rect.width > 1 && rect.height > 1
     );
-    if (clientRects.length === 0) {
+    if (rawRects.length === 0) {
       throw new Error('未找到可高亮的文本区域');
+    }
+
+    // ── Merge adjacent rects per line to avoid jagged multi-line highlights ──
+    // Group rects by their top-Y into "line buckets" (±2px tolerance)
+    const LINE_TOLERANCE = 2;
+    const lineBuckets: DOMRect[][] = [];
+    for (const rect of rawRects) {
+      const y = rect.top;
+      let placed = false;
+      for (const bucket of lineBuckets) {
+        if (Math.abs(bucket[0].top - y) <= LINE_TOLERANCE) {
+          bucket.push(rect);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) lineBuckets.push([rect]);
+    }
+
+    // Within each line bucket, merge overlapping/adjacent rects into a single block
+    const mergedRects: DOMRect[] = [];
+    for (const bucket of lineBuckets) {
+      // Sort by left
+      bucket.sort((a, b) => a.left - b.left);
+      let cur = bucket[0];
+      for (let i = 1; i < bucket.length; i++) {
+        const r = bucket[i];
+        // If current rect and next rect overlap or are within 3px of each other, merge them
+        if (r.left - cur.right <= 3) {
+          const minLeft = Math.min(cur.left, r.left);
+          const minTop = Math.min(cur.top, r.top);
+          const maxRight = Math.max(cur.right, r.right);
+          const maxBottom = Math.max(cur.bottom, r.bottom);
+          cur = new DOMRect(minLeft, minTop, maxRight - minLeft, maxBottom - minTop);
+        } else {
+          mergedRects.push(cur);
+          cur = r;
+        }
+      }
+      mergedRects.push(cur);
     }
 
     // Collect rect data first (sync), then create all annotations in parallel
@@ -1127,7 +1176,7 @@ export function useCanvasRendering(
       pageNumber: number; x: number; y: number; width: number; height: number;
     }> = [];
 
-    for (const rect of clientRects) {
+    for (const rect of mergedRects) {
       const target = globalThis.document
         ?.elementFromPoint(rect.left + 1, rect.top + 1)
         ?.closest('.pdf-page') as HTMLElement | null;
@@ -1314,7 +1363,7 @@ export function useCanvasRendering(
       document_id: pdfDocument.id,
       page_number: pageNumber,
       annotation_type: 'highlight',
-      color: kind === 'ai-card' ? 'rgba(168, 85, 247, 0.18)' : 'rgba(14, 165, 233, 0.06)',
+      color: kind === 'ai-card' ? 'rgba(168, 85, 247, 0.40)' : 'rgba(14, 165, 233, 0.20)',
       position_x: x,
       position_y: y,
       position_width: width,

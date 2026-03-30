@@ -16,15 +16,15 @@ const icons = {
 
 const styles: Record<ToastProps['type'], { bg: string; ring: string }> = {
   success: {
-    bg: 'linear-gradient(135deg, var(--color-success), #0f766e)',
+    bg: 'linear-gradient(135deg, var(--color-success), var(--color-success-dark, #0a7068))',
     ring: 'var(--color-success)',
   },
   error: {
-    bg: 'linear-gradient(135deg, var(--color-danger), #b91c1c)',
+    bg: 'linear-gradient(135deg, var(--color-danger), var(--color-error-dark, #9b1c1c))',
     ring: 'var(--color-danger)',
   },
   info: {
-    bg: 'linear-gradient(135deg, var(--color-text-secondary), #57534e)',
+    bg: 'linear-gradient(135deg, var(--color-text-secondary), var(--color-info-dark, #44403c))',
     ring: 'var(--color-text-secondary)',
   },
 };

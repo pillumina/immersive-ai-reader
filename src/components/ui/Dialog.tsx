@@ -62,7 +62,7 @@ export function DialogTitle({ children }: { children: ReactNode }) {
 
 export function DialogDescription({ children }: { children: ReactNode }) {
   return (
-    <DialogPrimitive.Description className="text-sm text-gray-600 mb-4">
+    <DialogPrimitive.Description className="text-sm text-[var(--color-text-secondary)] mb-4">
       {children}
     </DialogPrimitive.Description>
   );

@@ -27,6 +27,7 @@ export const TopBar = memo(function TopBar({ tabs, activeTabId, onSelectTab, onC
           type="button"
           onClick={onToggleSidebar}
           className="topbar__sidebar-toggle"
+          aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
           title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -50,7 +51,7 @@ export const TopBar = memo(function TopBar({ tabs, activeTabId, onSelectTab, onC
                 tabIndex={0}
                 key={tab.id}
                 onClick={() => onSelectTab(tab.id)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelectTab(tab.id); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectTab(tab.id); } }}
                 className={`topbar__tab ${isActive ? 'topbar__tab--active' : ''} ${isLibrary ? 'topbar__tab--library' : ''}`}
               >
                 {isLibrary ? (
@@ -60,6 +61,7 @@ export const TopBar = memo(function TopBar({ tabs, activeTabId, onSelectTab, onC
                 {!isLibrary && (
                   <button
                     type="button"
+                    aria-label="Close tab"
                     className="topbar__tab-close"
                     onClick={(e) => {
                       e.stopPropagation();

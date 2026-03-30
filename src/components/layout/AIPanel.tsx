@@ -246,6 +246,7 @@ export const AIPanel = memo(function AIPanel({
         <div className="w-[48px] border-l border-[var(--color-border)]/60 bg-[var(--color-bg)] flex flex-col items-center py-4 gap-3">
           <button
             type="button"
+            aria-label="Expand AI panel"
             onClick={() => onCollapse?.(false)}
             className="w-9 h-9 rounded-xl bg-[var(--color-accent)] text-white flex items-center justify-center shadow-sm hover:bg-[var(--color-accent-hover)] transition-colors"
             title="Expand AI Panel"
@@ -284,6 +285,7 @@ export const AIPanel = memo(function AIPanel({
         {/* Collapse Button */}
         <button
           type="button"
+          aria-label="Collapse AI panel"
           onClick={() => onCollapse?.(true)}
           className="absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-6 h-6 rounded-full bg-[var(--color-bg-raised)] border border-[var(--color-border)] shadow-sm flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-accent)] hover:border-[var(--color-accent-border)] transition-colors"
           title="Collapse AI Panel"
@@ -377,19 +379,19 @@ export const AIPanel = memo(function AIPanel({
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <button type="button" className="quick-action-chip" onClick={onSummarize} title="Summarize the current document">
+            <button type="button" className="quick-action-chip" aria-label="Summarize the current document" onClick={onSummarize} title="Summarize the current document">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="21" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
               Summarize
             </button>
-            <button type="button" className={`quick-action-chip${hasSelection ? '' : ' quick-action-chip--disabled'}`} onClick={onExplainTerm} title={hasSelection ? 'Explain the selected term' : 'Select text in the PDF first'}>
+            <button type="button" className={`quick-action-chip${hasSelection ? '' : ' quick-action-chip--disabled'}`} aria-label={hasSelection ? 'Explain the selected term' : 'Select text in the PDF first'} onClick={onExplainTerm} title={hasSelection ? 'Explain the selected term' : 'Select text in the PDF first'}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               Explain
             </button>
-            <button type="button" className={`quick-action-chip${hasSelection ? '' : ' quick-action-chip--disabled'}`} onClick={onTranslateSelection} title={hasSelection ? 'Translate the selected text' : 'Select text in the PDF first'}>
+            <button type="button" className={`quick-action-chip${hasSelection ? '' : ' quick-action-chip--disabled'}`} aria-label={hasSelection ? 'Translate the selected text' : 'Select text in the PDF first'} onClick={onTranslateSelection} title={hasSelection ? 'Translate the selected text' : 'Select text in the PDF first'}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>
               Translate
             </button>
-            <button type="button" className="quick-action-chip" onClick={onExportNotes} title="Export all highlights and notes as Markdown">
+            <button type="button" className="quick-action-chip" aria-label="Export all highlights and notes as Markdown" onClick={onExportNotes} title="Export all highlights and notes as Markdown">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Export
             </button>
@@ -455,6 +457,7 @@ export const AIPanel = memo(function AIPanel({
                 <span className="truncate flex-1" title={a.content}>{a.content.slice(0, 120)}{a.content.length > 120 ? '…' : ''}</span>
                 <button
                   type="button"
+                  aria-label="Remove attachment"
                   className="shrink-0 w-4 h-4 flex items-center justify-center rounded-full text-[var(--color-accent)] hover:bg-[var(--color-accent-border)] transition-colors opacity-0 group-hover:opacity-100"
                   onClick={() => onRemoveAttachment(a.id)}
                   title="Remove attachment"
@@ -466,12 +469,12 @@ export const AIPanel = memo(function AIPanel({
           </div>
         )}
         {pendingRouteConfirmation && !isLoading && (
-          <div className="mb-2.5 rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2.5 text-[11px] text-amber-800">
+          <div className="mb-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2.5 text-[11px] text-[var(--color-text-secondary)]">
             <div className="flex items-start justify-between gap-2">
               <p className="leading-relaxed">
                 Low confidence ({Math.round(pendingRouteConfirmation.confidence * 100)}%) — choose how to answer:
               </p>
-              <button type="button" className="shrink-0 text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors" onClick={onDismissRouteConfirm} title="Dismiss">✕</button>
+              <button type="button" aria-label="Dismiss route confirmation" className="shrink-0 text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors" onClick={onDismissRouteConfirm} title="Dismiss">✕</button>
             </div>
             <div className="mt-2 flex gap-1.5">
               <button type="button" className="quick-action-chip" onClick={onConfirmRouteAsChat}>Chat</button>
@@ -515,6 +518,7 @@ export const AIPanel = memo(function AIPanel({
             ))}
           </div>
           <Input
+            aria-label="Ask a question"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSend()}
@@ -524,6 +528,7 @@ export const AIPanel = memo(function AIPanel({
           />
           <button
             type="button"
+            aria-label="Send message"
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent)] text-white shadow-sm transition-all duration-150 hover:bg-[var(--color-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.93]"

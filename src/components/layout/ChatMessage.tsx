@@ -188,7 +188,7 @@ export const ChatMessage = memo(function ChatMessageWip({
         {timeStr && <span className="ai-msg-time">{timeStr}</span>}
 
         {msg.status === 'thinking' ? (
-          <div className="inline-flex items-center gap-2 text-gray-400">
+          <div className="inline-flex items-center gap-2 text-[var(--color-text-muted)]">
             <span className="inline-flex items-center gap-1.5">
               <span className="ai-dot" />
               <span className="ai-dot ai-dot-delay-1" />
@@ -208,7 +208,7 @@ export const ChatMessage = memo(function ChatMessageWip({
             )}
 
             {msg.role === 'assistant' && (
-              <div className="mt-2 text-[11px] text-gray-500">
+              <div className="mt-2 text-[11px] text-[var(--color-text-muted)]">
                 {[
                   formatRouteHint(msg),
                   pinnedIdSet.has(msg.id || '') ? 'pinned' : null,

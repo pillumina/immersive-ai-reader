@@ -85,6 +85,7 @@ export const FocusStatusBar = memo(function FocusStatusBar({
       <button
         type="button"
         className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-colors flex-shrink-0"
+        aria-label="Exit Focus Mode"
         onClick={onExitFocusMode}
         title="退出 Focus Mode"
       >

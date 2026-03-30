@@ -129,6 +129,8 @@ const AppInner = memo(function AppInner() {
       return [...prev, { id: tabId, label: doc.fileName, type: 'document', documentId: doc.id }];
     });
     setActiveTabIdWithSync(tabId);
+    // Load the document's PDF data
+    void selectDocument(doc.id);
     // Track recents
     recentDocIdsRef.current.delete(doc.id);
     const newSet = new Set([doc.id, ...recentDocIdsRef.current]);
@@ -137,7 +139,7 @@ const AppInner = memo(function AppInner() {
     setRecentDocuments(
       documentsRef.current.filter((d) => newSet.has(d.id)).slice(0, 8)
     );
-  }, []);
+  }, [selectDocument]);
 
   const handleCloseTab = useCallback((tabId: string) => {
     if (tabId === 'library') return;
@@ -151,6 +153,7 @@ const AppInner = memo(function AppInner() {
     setActiveTabIdWithSync(tabId);
     if (tabId !== 'library' && tabId.startsWith('doc-')) {
       const docId = tabId.replace('doc-', '');
+      console.log('[DEBUG] calling selectDocument with docId=', docId);
       void selectDocument(docId);
     }
   }, [selectDocument]);
@@ -307,7 +310,7 @@ const AppInner = memo(function AppInner() {
     } else {
       void handleEnterFocusMode();
     }
-  }, [focusState.isActive]);
+  }, [focusState.isActive, currentDocument]);
   const handleSendAIMessage = useCallback((content: string, mode?: string, attachments?: Array<{ id: string; type: 'text' | 'note'; content: string; page?: number }>) => {
     void sendMessage(content, ((mode || 'auto') as 'auto' | 'chat' | 'doc' | 'term_light' | 'deep'), attachments);
   }, [sendMessage]);
@@ -595,13 +598,21 @@ const AppInner = memo(function AppInner() {
     return () => clearInterval(interval);
   }, [focusState.isActive]);
 
-  // ─── Focus Mode: scroll-based progress tracking ───────────────
+  // ─── Focus Mode: scroll-based progress tracking ─────────────────────
+  // Uses a ref for currentPage to avoid stale closures; the handler also
+  // reads the page directly from the DOM as a fallback.
   const maxPercentageRef = useRef(0);
   const maxScrollTopRef = useRef(0);
+  const currentPageRef = useRef(currentPage ?? 1);
+
+  useEffect(() => {
+    currentPageRef.current = currentPage ?? 1;
+  }, [currentPage]);
 
   useEffect(() => {
     if (!focusState.isActive) {
       maxPercentageRef.current = 0;
+      maxScrollTopRef.current = 0;
       return;
     }
     const container = globalThis.document?.getElementById('pdf-scroll-container');
@@ -614,7 +625,10 @@ const AppInner = memo(function AppInner() {
       const pct = Math.round((scrollTop / total) * 100);
       if (pct > maxPercentageRef.current) maxPercentageRef.current = pct;
       if (scrollTop > maxScrollTopRef.current) maxScrollTopRef.current = scrollTop;
-      void updateProgress(currentPage ?? 1, scrollTop, maxPercentageRef.current);
+      // Read current page from DOM — avoids stale closure, works even if currentPage hasn't updated yet.
+      const pageEl = container.querySelector<HTMLElement>('.pdf-page[data-page-number]');
+      const page = pageEl ? Number(pageEl.dataset.pageNumber) || currentPageRef.current : currentPageRef.current;
+      void updateProgress(page, scrollTop, maxPercentageRef.current);
       if (pct >= 80 && !focusState.summary80Shown && !focusState.summary80Visible) {
         setShowFocus80Prompt(true);
       }
@@ -622,7 +636,7 @@ const AppInner = memo(function AppInner() {
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [focusState.isActive, focusState.summary80Shown, focusState.summary80Visible, currentPage, updateProgress]);
+  }, [focusState.isActive, focusState.summary80Shown, focusState.summary80Visible, updateProgress]);
 
   // ─── Focus Mode: auto-enter on document open ─────────────────
   const autoEnteredRef = useRef<Set<string>>(new Set());
@@ -756,7 +770,10 @@ const AppInner = memo(function AppInner() {
   };
 
   const handleEnterFocusMode = async (showResumePromptOverride?: boolean) => {
-    if (!currentDocument?.id) return;
+    if (!currentDocument?.id) {
+      setToast({ message: '请先打开一个文档', type: 'info' });
+      return;
+    }
     // Save current conversation so we can restore it on exit
     focusEnteredConversationIdRef.current = conversationId;
     const showPrompt = showResumePromptOverride !== undefined ? showResumePromptOverride : uiSettings.showFocusResumePrompt;

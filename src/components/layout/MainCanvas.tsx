@@ -175,6 +175,8 @@ export const MainCanvas = memo(function MainCanvas({
     let isDragging = false;
 
     const onPointerDown = (e: PointerEvent) => {
+      // Don't dismiss bubble if clicking on it — let the bubble's onClick handle it
+      if ((e.target as HTMLElement).closest('.l1-bubble')) return;
       pointerDownAt = { x: e.clientX, y: e.clientY };
       isDragging = false;
       // Dismiss bubble on any pointer press (unless it's a selection drag)
@@ -186,39 +188,43 @@ export const MainCanvas = memo(function MainCanvas({
       if (pointerDownAt) {
         const dx = e.clientX - pointerDownAt.x;
         const dy = e.clientY - pointerDownAt.y;
-        if (dx * dx + dy * dy > 25) isDragging = true; // moved > 5px
+        if (dx * dx + dy * dy > 25) isDragging = true;
       }
     };
 
     const onMouseUp = () => {
-      if (isDragging) {
+      if (!isDragging) {
+        pointerDownAt = null;
+        isDragging = false;
+        return;
+      }
+      // Defer to next frame so the browser has committed the selection
+      requestAnimationFrame(() => {
         const sel = globalThis.getSelection?.();
         if (sel && !sel.isCollapsed && sel.toString().trim().length >= 2) {
           const range = sel.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0) {
-            const pageEl = range.commonAncestorContainer instanceof Node
-              ? (range.commonAncestorContainer as Node).ownerDocument
-                  ?.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-                  ?.closest('.pdf-page') as HTMLElement | null
-              : null;
-            if (pageEl) {
-              const page = Number(pageEl.dataset.pageNumber || '0') || undefined;
-              const bubbleX = rect.right + 8;
-              const bubbleY = rect.top + rect.height / 2;
-              setL1Bubble({ x: bubbleX, y: bubbleY, text: sel.toString().trim(), page });
-              l1BubbleHideTimerRef.current = setTimeout(() => setL1Bubble(null), 3000);
-            }
+          const rects = Array.from(range.getClientRects()).filter(r => r.width > 1 && r.height > 1);
+          const lastRect = rects.length > 0 ? rects[rects.length - 1] : range.getBoundingClientRect();
+          const probeX = lastRect.left + lastRect.width / 2;
+          const probeY = lastRect.top + lastRect.height / 2;
+          const hitEl = globalThis.document?.elementFromPoint(probeX, probeY);
+          const pageEl = hitEl?.closest('.pdf-page') as HTMLElement | null;
+          if (pageEl) {
+            const page = Number(pageEl.dataset.pageNumber || '0') || undefined;
+            const bubbleX = lastRect.right + 8;
+            const bubbleY = lastRect.top + lastRect.height / 2;
+            setL1Bubble({ x: bubbleX, y: bubbleY, text: sel.toString().trim(), page });
+            l1BubbleHideTimerRef.current = setTimeout(() => setL1Bubble(null), 3000);
           }
         }
-      }
-      pointerDownAt = null;
-      isDragging = false;
+        pointerDownAt = null;
+        isDragging = false;
+      });
     };
 
     const onPointerUp = () => {
       pointerDownAt = null;
-      isDragging = false;
+      // Don't reset isDragging — onMouseUp handles final reset
     };
 
     const doc = globalThis.document as Document | null;
@@ -236,6 +242,93 @@ export const MainCanvas = memo(function MainCanvas({
       doc.removeEventListener('mouseup', onMouseUp);
       target.removeEventListener('pointerup', onPointerUp as unknown as EventListener);
       if (l1BubbleHideTimerRef.current) { clearTimeout(l1BubbleHideTimerRef.current); l1BubbleHideTimerRef.current = null; }
+    };
+  }, [isFocusMode]);
+
+  // Monitor text selection to show the floating toolbar in NON-focus mode.
+  // Mirrors the Focus Mode pattern but populates textHandleRef instead of l1Bubble.
+  useEffect(() => {
+    if (isFocusMode) return;
+
+    let pointerDownAt: { x: number; y: number } | null = null;
+    let isDragging = false;
+
+    const onPointerDown = (e: PointerEvent) => {
+      pointerDownAt = { x: e.clientX, y: e.clientY };
+      isDragging = false;
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (pointerDownAt) {
+        const dx = e.clientX - pointerDownAt.x;
+        const dy = e.clientY - pointerDownAt.y;
+        if (dx * dx + dy * dy > 25) isDragging = true;
+      }
+    };
+
+    const onMouseUp = () => {
+      if (!isDragging) {
+        pointerDownAt = null;
+        isDragging = false;
+        return;
+      }
+      requestAnimationFrame(() => {
+        const sel = globalThis.getSelection?.();
+        if (!sel || sel.isCollapsed || sel.toString().trim().length < 2) {
+          pointerDownAt = null;
+          isDragging = false;
+          return;
+        }
+        const range = sel.getRangeAt(0);
+        const rects = Array.from(range.getClientRects()).filter(
+          (r) => r.width > 1 && r.height > 1
+        );
+
+        if (rects.length === 0) {
+          pointerDownAt = null;
+          isDragging = false;
+          return;
+        }
+
+        const lastRect = rects[rects.length - 1];
+        const pageEl = range.commonAncestorContainer instanceof Node
+          ? (range.commonAncestorContainer as Node).ownerDocument
+              ?.elementFromPoint(lastRect.left + lastRect.width / 2, lastRect.top + lastRect.height / 2)
+              ?.closest('.pdf-page') as HTMLElement | null
+          : null;
+        if (pageEl) {
+          const page = Number(pageEl.dataset.pageNumber || '0') || undefined;
+
+          textHandleRef.current = {
+            x: lastRect.left + lastRect.width / 2,
+            y: lastRect.top - 8,
+            page,
+            text: sel.toString().trim(),
+          };
+          forceTextToolbarUpdate((n) => n + 1);
+        }
+        pointerDownAt = null;
+        isDragging = false;
+      });
+    };
+
+    const onPointerUp = () => {
+      pointerDownAt = null;
+    };
+
+    const doc = globalThis.document as Document | null;
+    if (!doc) return;
+    const target = doc as unknown as EventTarget;
+    target.addEventListener('pointerdown', onPointerDown as unknown as EventListener, { passive: true });
+    target.addEventListener('pointermove', onPointerMove as unknown as EventListener, { passive: true });
+    doc.addEventListener('mouseup', onMouseUp);
+    target.addEventListener('pointerup', onPointerUp as unknown as EventListener);
+
+    return () => {
+      target.removeEventListener('pointerdown', onPointerDown as unknown as EventListener);
+      target.removeEventListener('pointermove', onPointerMove as unknown as EventListener);
+      doc.removeEventListener('mouseup', onMouseUp);
+      target.removeEventListener('pointerup', onPointerUp as unknown as EventListener);
     };
   }, [isFocusMode]);
 
@@ -743,7 +836,7 @@ export const MainCanvas = memo(function MainCanvas({
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <Button variant={isFocusMode ? 'primary' : 'secondary'} size="sm" onClick={onToggleFocusMode} className="!h-7 !px-2.5 !text-[11px]">
+          <Button variant={isFocusMode ? 'primary' : 'secondary'} size="sm" onClick={onToggleFocusMode} disabled={!hasDocument} className="!h-7 !px-2.5 !text-[11px]" aria-label={isFocusMode ? 'Exit Focus Mode' : 'Enter Focus Mode'} title={hasDocument ? undefined : '请先打开一个文档'}>
             {isFocusMode ? 'Exit Focus' : 'Focus'}
           </Button>
           <Button
@@ -822,6 +915,7 @@ export const MainCanvas = memo(function MainCanvas({
                 <>
                   <button
                     type="button"
+                    aria-label="Previous search result"
                     onClick={() => void goToPrevSearchResult()}
                     title="Previous (↑)"
                     className="text-[var(--color-text-muted)] hover:text-[var(--color-success)] transition-colors leading-none px-0.5"
@@ -830,6 +924,7 @@ export const MainCanvas = memo(function MainCanvas({
                   </button>
                   <button
                     type="button"
+                    aria-label="Next search result"
                     onClick={() => void goToNextSearchResult()}
                     title="Next (↓)"
                     className="text-[var(--color-text-muted)] hover:text-[var(--color-success)] transition-colors leading-none px-0.5"
@@ -974,6 +1069,7 @@ export const MainCanvas = memo(function MainCanvas({
                   </button>
                   <button
                     type="button"
+                    aria-label="Close reference pane"
                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-raised)] text-[var(--color-text-secondary)] transition-all hover:bg-[var(--color-danger-subtle)] hover:border-[var(--color-danger)] hover:text-[var(--color-danger)] active:scale-95"
                     onClick={() => setSplitMode(false)}
                     title="Close reference pane (back to AI chat)"
@@ -984,13 +1080,13 @@ export const MainCanvas = memo(function MainCanvas({
               </div>
               {/* Row 2: Navigation controls */}
               <div className="flex h-8 items-center gap-1 border-t border-[var(--color-bg-subtle)] px-3">
-                <button type="button" className="ref-pane-btn" onClick={() => {
+                <button type="button" aria-label="Go back in reference pane history" className="ref-pane-btn" onClick={() => {
                   if (compareHistoryIndex <= 0) return;
                   const prevIdx = compareHistoryIndex - 1;
                   setCompareHistoryIndex(prevIdx);
                   navigateComparePage(compareHistory[prevIdx], { recordHistory: false });
                 }} disabled={compareHistoryIndex <= 0} title="Back">←</button>
-                <button type="button" className="ref-pane-btn" onClick={() => {
+                <button type="button" aria-label="Go forward in reference pane history" className="ref-pane-btn" onClick={() => {
                   if (compareHistoryIndex < 0 || compareHistoryIndex >= compareHistory.length - 1) return;
                   const nextIdx = compareHistoryIndex + 1;
                   setCompareHistoryIndex(nextIdx);
@@ -1008,9 +1104,9 @@ export const MainCanvas = memo(function MainCanvas({
                 <button type="button" className="ref-pane-btn" onClick={() => navigateComparePage(comparePage + 1)} disabled={comparePage >= totalPages}>Next</button>
                 <button type="button" className="ref-pane-btn" onClick={() => navigateComparePage(currentPage)}>Sync</button>
                 <span className="mx-0.5 text-[var(--color-border)]">|</span>
-                <button type="button" className="ref-pane-btn" onClick={() => setCompareZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(2))))}>−</button>
+                <button type="button" className="ref-pane-btn" aria-label="Zoom out" onClick={() => setCompareZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(2))))}>−</button>
                 <span className="min-w-[32px] text-center text-[10px] text-[var(--color-text-secondary)]">{Math.round(compareZoom * 100)}%</span>
-                <button type="button" className="ref-pane-btn" onClick={() => setCompareZoom((z) => Math.min(2.5, Number((z + 0.1).toFixed(2))))}>+</button>
+                <button type="button" className="ref-pane-btn" aria-label="Zoom in" onClick={() => setCompareZoom((z) => Math.min(2.5, Number((z + 0.1).toFixed(2))))}>+</button>
                 <span className="mx-0.5 text-[var(--color-border)]">|</span>
                 <button type="button" className="ref-pane-btn" onClick={() => setCompareTocOpen((v) => !v)}>
                   {compareTocOpen ? 'Hide TOC' : 'TOC'}
@@ -1021,7 +1117,7 @@ export const MainCanvas = memo(function MainCanvas({
               <div id="pdf-compare-container" className="pdf-compare-container" />
             </div>
             {compareTocOpen && (
-              <aside className="absolute right-0 top-11 bottom-0 w-[260px] border-l border-[var(--color-border)] bg-[var(--color-bg-raised)]/98 backdrop-blur z-10 overflow-auto">
+              <aside className="absolute right-0 top-11 bottom-0 w-[260px] border-l border-[var(--color-border)] bg-[var(--color-bg-raised)] z-10 overflow-auto">
                 <div className="sticky top-0 border-b border-[var(--color-bg-subtle)] bg-[var(--color-bg-raised)] px-3 py-2">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-semibold text-[var(--color-text-secondary)]">Compare TOC</h4>
@@ -1069,7 +1165,7 @@ export const MainCanvas = memo(function MainCanvas({
       </div>
 
       {tocOpen && hasDocument && totalPages > 0 && (
-        <aside className="absolute right-0 top-11 bottom-0 w-[280px] bg-[var(--color-bg-raised)]/[0.97] border-l border-[var(--color-border)]/60 shadow-2xl backdrop-blur-xl z-20 flex flex-col animate-in slide-in-from-right">
+        <aside className="absolute right-0 top-11 bottom-0 w-[280px] bg-[var(--color-bg-raised)] border-l border-[var(--color-border)]/60 shadow-2xl z-20 flex flex-col animate-in slide-in-from-right">
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-[var(--color-bg-subtle)]">
             <h3 className="text-[13px] font-semibold text-[var(--color-text)]">Contents</h3>
             <button className="text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" onClick={() => setTocOpen(false)}>
@@ -1113,6 +1209,7 @@ export const MainCanvas = memo(function MainCanvas({
           type="button"
           className="absolute right-5 bottom-5 z-20 flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-raised)]/90 px-3.5 py-2 text-[11px] font-medium text-[var(--color-text-secondary)] shadow-lg backdrop-blur-lg transition-all duration-200 hover:bg-[var(--color-bg-raised)] hover:shadow-xl hover:scale-[1.03] active:scale-[0.97]"
           onClick={() => setTocOpen(true)}
+          aria-label="Open Table of Contents"
           title="Open Table of Contents"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -1124,8 +1221,15 @@ export const MainCanvas = memo(function MainCanvas({
       {isFocusMode && l1Bubble && (
         <button
           type="button"
-          className="l1-bubble fixed z-50 flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-border)]/80 bg-[var(--color-bg-raised)]/95 shadow-[0_2px_12px_rgba(28,25,23,0.15)] backdrop-blur-md transition-all duration-150 translate-y-1/2 hover:scale-110 hover:bg-[var(--color-accent-subtle)] hover:border-[var(--color-accent-border)] active:scale-95"
-          style={{ left: l1Bubble.x, top: l1Bubble.y }}
+          className="l1-bubble fixed z-50 flex h-7 w-7 items-center justify-center rounded-full transition-all duration-150 translate-y-1/2 hover:scale-110 active:scale-95"
+          style={{
+            left: l1Bubble.x,
+            top: l1Bubble.y,
+            background: 'var(--color-bg-raised)',
+            border: '1px solid var(--color-border)',
+            backdropFilter: 'blur(12px)',
+            boxShadow: '0 2px 12px rgba(28,25,23,0.15)',
+          }}
           onClick={(e) => {
             e.stopPropagation();
             // Dismiss bubble and open L2 popover — capture values before clearing state
@@ -1136,6 +1240,7 @@ export const MainCanvas = memo(function MainCanvas({
             setL1Bubble(null);
             onOpenL2Popover?.(pos, text, page);
           }}
+          aria-label="Open capture options"
           title="Open capture options"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-accent)]">
@@ -1163,8 +1268,16 @@ export const MainCanvas = memo(function MainCanvas({
           {/* Toolbar */}
           <div
             data-text-toolbar
-            className="text-action-toolbar fixed z-40 flex items-center gap-0.5 rounded-xl border border-[var(--color-border)]/80 bg-[var(--color-bg-raised)]/95 shadow-[0_4px_20px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.08)] px-1 py-1 backdrop-blur-md"
-            style={{ left: textHandleRef.current.x, top: textHandleRef.current.y, transform: 'translateX(-50%)' }}
+            className="text-action-toolbar fixed z-40 flex items-center gap-0.5 rounded-xl shadow-lg px-1 py-1"
+            style={{
+              left: textHandleRef.current.x,
+              top: textHandleRef.current.y,
+              transform: 'translateX(-50%)',
+              background: 'var(--color-bg-raised)',
+              border: '1px solid var(--color-border)',
+              backdropFilter: 'blur(12px)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)',
+            }}
             onMouseDown={(e) => e.stopPropagation()}
           >
             <button

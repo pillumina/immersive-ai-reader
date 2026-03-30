@@ -432,7 +432,7 @@ export const focusCommands = {
 
   update: async (sessionId: string, updates: FocusSessionUpdate): Promise<void> => {
     try {
-      await invoke('update_focus_session', { session_id: sessionId, updates });
+      await invoke('update_focus_session', { sessionId, updates });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }
@@ -440,7 +440,7 @@ export const focusCommands = {
 
   getLast: async (documentId: string): Promise<FocusSession | null> => {
     try {
-      return await invoke<FocusSession | null>('get_last_focus_session', { document_id: documentId });
+      return await invoke<FocusSession | null>('get_last_focus_session', { documentId: documentId });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }
@@ -448,7 +448,7 @@ export const focusCommands = {
 
   getHistory: async (documentId: string, limit: number = 10): Promise<FocusSession[]> => {
     try {
-      return await invoke<FocusSession[]>('get_focus_session_history', { document_id: documentId, limit });
+      return await invoke<FocusSession[]>('get_focus_session_history', { documentId: documentId, limit });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }
@@ -456,7 +456,7 @@ export const focusCommands = {
 
   getAllSessions: async (documentId: string): Promise<FocusSession[]> => {
     try {
-      return await invoke<FocusSession[]>('get_all_focus_sessions', { document_id: documentId });
+      return await invoke<FocusSession[]>('get_all_focus_sessions', { documentId: documentId });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }
@@ -464,7 +464,7 @@ export const focusCommands = {
 
   deleteSession: async (sessionId: string): Promise<void> => {
     try {
-      await invoke('delete_focus_session', { session_id: sessionId });
+      await invoke('delete_focus_session', { sessionId });
     } catch (error) {
       throw new Error(unwrapInvokeError(error));
     }
