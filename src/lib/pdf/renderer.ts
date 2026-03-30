@@ -1,4 +1,6 @@
 import { pdfjsLib } from '@/lib/pdf/pdfjs';
+import { buildPageLayout } from '@/lib/pdf/pretext-text-layer';
+import { pretextLineCache } from '@/lib/pdf/pretext-line-cache';
 
 /**
  * Session-level thumbnail cache for rendered PDF pages.
@@ -331,6 +333,22 @@ export async function renderSinglePage(
     textLayer.render().catch(() => {
       // Silently ignore text layer errors - page is already visible
     });
+
+    // Cache Pretext line layout data for precise highlight rectangles
+    if (fingerprint) {
+      try {
+        const layout = buildPageLayout(
+          textContent.items as Array<{ str: string; dir: string; width: number; height: number; transform: [number, number, number, number, number, number]; fontName: string; hasEOL: boolean }>,
+          viewport.width,
+          viewport.height,
+          pageNum,
+          scale,
+        );
+        pretextLineCache.set(fingerprint, layout);
+      } catch {
+        // Non-fatal: highlightSelection will fall back to getClientRects()
+      }
+    }
   });
 
   return pageEl;

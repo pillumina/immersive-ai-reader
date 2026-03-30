@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { annotationCommands, documentCommands, tagCommands } from '@/lib/tauri';
 import { PdfOutlineItem, renderPagesToContainer } from '@/lib/pdf/renderer';
+import { pretextLineCache } from '@/lib/pdf/pretext-line-cache';
+import { getHighlightRects as getPretextHighlightRects, detectColumns } from '@/lib/pdf/pretext-hit-test';
 import { PDFDocument } from '@/types/document';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
 import type { Tag } from '@/types/annotation';
@@ -1111,28 +1113,52 @@ export function useCanvasRendering(
     };
   }, [containerId, pdfDocument]);
 
-  const highlightSelection = async (color = 'rgba(255, 235, 59, 0.35)') => {
-    if (!pdfDocument) throw new Error('请先上传或选择文档');
-    const selection = globalThis.getSelection?.();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      throw new Error('请先选中文本');
-    }
+  // ── Pretext-based highlight rect computation ──
 
-    const range = selection.getRangeAt(0);
-    const text = selection.toString().trim();
-    if (!text) {
-      throw new Error('选中文本为空');
-    }
+  /** Try to compute highlight rects from Pretext line data. Returns null on miss. */
+  const tryGetPretextRects = (range: Range): DOMRect[] | null => {
+    if (!pdfDocument) return null;
+    const rect = range.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
 
+    const probeEl = globalThis.document?.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    const pageEl = probeEl?.closest('.pdf-page') as HTMLElement | null;
+    if (!pageEl) return null;
+    const pageNumber = Number(pageEl.dataset.pageNumber || '0');
+    if (!pageNumber) return null;
+
+    const fingerprint = `${pdfDocument.fileName}@${pdfDocument.fileSize}`;
+    const layout = pretextLineCache.get(fingerprint, pageNumber);
+    if (!layout || layout.lines.length === 0) return null;
+
+    const pageRect = pageEl.getBoundingClientRect();
+    // Convert viewport-relative selection coords to page-relative
+    const startX = rect.left - pageRect.left;
+    const startY = rect.top - pageRect.top;
+    const endX = rect.right - pageRect.left;
+    const endY = rect.bottom - pageRect.top;
+
+    const colInfo = detectColumns(layout);
+    const pretextRects = getPretextHighlightRects(
+      layout, startX, startY, endX, endY,
+      colInfo.isMultiColumn ? colInfo.boundary : undefined,
+    );
+    if (pretextRects.length === 0) return null;
+
+    // Convert page-relative rects to viewport-relative DOMRects
+    return pretextRects.map((r) =>
+      new DOMRect(r.left + pageRect.left, r.top + pageRect.top, r.width, r.height)
+    );
+  };
+
+  /** Fallback: compute merged highlight rects from range.getClientRects(). */
+  const getMergedClientRects = (range: Range): DOMRect[] => {
     const rawRects = Array.from(range.getClientRects()).filter(
       (rect) => rect.width > 1 && rect.height > 1
     );
-    if (rawRects.length === 0) {
-      throw new Error('未找到可高亮的文本区域');
-    }
+    if (rawRects.length === 0) return [];
 
-    // ── Merge adjacent rects per line to avoid jagged multi-line highlights ──
-    // Group rects by their top-Y into "line buckets" (±2px tolerance)
+    // Merge adjacent rects per line (±2px tolerance)
     const LINE_TOLERANCE = 2;
     const lineBuckets: DOMRect[][] = [];
     for (const rect of rawRects) {
@@ -1148,27 +1174,48 @@ export function useCanvasRendering(
       if (!placed) lineBuckets.push([rect]);
     }
 
-    // Within each line bucket, merge overlapping/adjacent rects into a single block
     const mergedRects: DOMRect[] = [];
     for (const bucket of lineBuckets) {
-      // Sort by left
       bucket.sort((a, b) => a.left - b.left);
       let cur = bucket[0];
       for (let i = 1; i < bucket.length; i++) {
         const r = bucket[i];
-        // If current rect and next rect overlap or are within 3px of each other, merge them
         if (r.left - cur.right <= 3) {
-          const minLeft = Math.min(cur.left, r.left);
-          const minTop = Math.min(cur.top, r.top);
-          const maxRight = Math.max(cur.right, r.right);
-          const maxBottom = Math.max(cur.bottom, r.bottom);
-          cur = new DOMRect(minLeft, minTop, maxRight - minLeft, maxBottom - minTop);
+          cur = new DOMRect(
+            Math.min(cur.left, r.left),
+            Math.min(cur.top, r.top),
+            Math.max(cur.right, r.right) - Math.min(cur.left, r.left),
+            Math.max(cur.bottom, r.bottom) - Math.min(cur.top, r.top),
+          );
         } else {
           mergedRects.push(cur);
           cur = r;
         }
       }
       mergedRects.push(cur);
+    }
+    return mergedRects;
+  };
+
+  const highlightSelection = async (color = 'rgba(255, 235, 59, 0.35)') => {
+    if (!pdfDocument) throw new Error('请先上传或选择文档');
+    const selection = globalThis.getSelection?.();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      throw new Error('请先选中文本');
+    }
+
+    const range = selection.getRangeAt(0);
+    const text = selection.toString().trim();
+    if (!text) {
+      throw new Error('选中文本为空');
+    }
+
+    // ── Try Pretext-based highlight rects (precise, column-aware) ──
+    const pretextRects = tryGetPretextRects(range);
+    const mergedRects: DOMRect[] = pretextRects ?? getMergedClientRects(range);
+
+    if (mergedRects.length === 0) {
+      throw new Error('未找到可高亮的文本区域');
     }
 
     // Collect rect data first (sync), then create all annotations in parallel
