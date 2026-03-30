@@ -1,13 +1,12 @@
 /**
- * PretextTextLayer — Build page layout data from pdfjs TextContent using Pretext.
+ * PretextTextLayer — Build page layout data from pdfjs TextContent.
  *
- * Why: pdfjs creates one `<span>` per character → 100k+ DOM nodes for a 100-page paper.
- * Pretext's `prepareWithSegments` + `layoutWithLines` gives us exact line positions
- * without touching the DOM, enabling precise highlight rectangles and column detection.
+ * Extracts line/segment positions directly from pdfjs TextItem transforms,
+ * enabling precise highlight rectangles and column detection without DOM text layers.
  */
 
-// Pretext types re-exported for downstream consumers
-export type { PreparedTextWithSegments } from '@chenglou/pretext';
+import type { ColumnInfo } from './pretext-hit-test';
+import { detectColumns } from './pretext-hit-test';
 
 // ─── Public Types ──────────────────────────────────────────────────────────────
 
@@ -37,6 +36,8 @@ export interface PretextPageLayout {
   pageNumber: number;
   lines: PretextLineData[];
   fullText: string;
+  /** Cached column detection result (computed once at build time). */
+  columnInfo: ColumnInfo;
 }
 
 // ─── Internal: pdfjs TextItem type ─────────────────────────────────────────────
@@ -69,11 +70,10 @@ interface LineGroup {
  *
  * Strategy:
  * 1. Convert pdfjs TextItem positions from PDF coords (origin bottom-left)
- *    to viewport coords (origin top-left) using the viewport transform.
+ *    to viewport coords (origin top-left).
  * 2. Group items by baseline Y into lines (±2px tolerance).
- * 3. For each line, use Pretext's prepareWithSegments + layoutWithLines
- *    to get precise segment positions.
- * 4. Map Pretext segment offsets back to absolute page coordinates.
+ * 3. Extract segment positions directly from pdfjs TextItem transforms.
+ * 4. Detect column layout and cache on the result.
  *
  * @param textContentItems - `textContent.items` from pdfjs `page.getTextContent()`
  * @param viewportWidth - Viewport width in px (from `page.getViewport({ scale })`)
@@ -94,7 +94,7 @@ export function buildPageLayout(
   );
 
   if (items.length === 0) {
-    return { pageNumber, lines: [], fullText: '' };
+    return { pageNumber, lines: [], fullText: '', columnInfo: { isMultiColumn: false, columns: [] } };
   }
 
   // 1. Convert PDF coords to viewport coords and group by line
@@ -123,11 +123,14 @@ export function buildPageLayout(
     });
   }
 
-  return {
+  const result: PretextPageLayout = {
     pageNumber,
     lines,
     fullText: lines.map((l) => l.text).join('\n'),
+    columnInfo: { isMultiColumn: false, columns: [] }, // placeholder
   };
+  result.columnInfo = detectColumns(result);
+  return result;
 }
 
 // ─── Internal Helpers ───────────────────────────────────────────────────────────

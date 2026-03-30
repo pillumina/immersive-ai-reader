@@ -14,7 +14,6 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@chenglou/pretext": "^0.0.3",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-toast": "^1.1.5",
     "@tauri-apps/api": "^2.0.0",

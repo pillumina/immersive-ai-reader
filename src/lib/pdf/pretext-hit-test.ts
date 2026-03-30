@@ -81,21 +81,43 @@ export interface HighlightRect {
  */
 export function getHighlightRects(
   layout: PretextPageLayout,
-  /** Viewport-relative start X (from selection anchor or pointerDown). */
+  /** Page-relative start X (from selection anchor or pointerDown). */
   startX: number,
-  /** Viewport-relative start Y. */
+  /** Page-relative start Y. */
   startY: number,
-  /** Viewport-relative end X (from selection focus or pointerUp). */
+  /** Page-relative end X (from selection focus or pointerUp). */
   endX: number,
-  /** Viewport-relative end Y. */
+  /** Page-relative end Y. */
   endY: number,
-  /** Optional column boundary X — segments with left >= boundary are filtered out. */
-  columnBoundary?: number,
+  /** Optional column info for multi-column pages. */
+  columnInfo?: ColumnInfo,
 ): HighlightRect[] {
   // Normalize direction: ensure start is before end
   if (startY > endY || (startY === endY && startX > endX)) {
     [startX, endX] = [endX, startX];
     [startY, endY] = [endY, startY];
+  }
+
+  // Determine which column the selection starts in
+  let targetColumn: number | undefined;
+  if (columnInfo?.isMultiColumn && columnInfo.columns.length >= 2) {
+    for (const col of columnInfo.columns) {
+      if (startX >= col.left && startX < col.right) {
+        targetColumn = col.index;
+        break;
+      }
+    }
+    // Fallback: if startX is outside all columns, pick the closest
+    if (targetColumn === undefined) {
+      let bestDist = Infinity;
+      for (const col of columnInfo.columns) {
+        const dist = startX < col.left ? col.left - startX : startX - col.right;
+        if (dist < bestDist) {
+          bestDist = dist;
+          targetColumn = col.index;
+        }
+      }
+    }
   }
 
   const rects: HighlightRect[] = [];
@@ -107,8 +129,13 @@ export function getHighlightRects(
     if (line.top + line.height < startY) continue;
     if (line.top > endY) break;
 
-    const filteredSegs = columnBoundary != null
-      ? line.segments.filter((s) => s.left + s.width <= columnBoundary || s.left < columnBoundary * 0.5)
+    // Filter segments to the target column only
+    const filteredSegs = targetColumn !== undefined && columnInfo?.isMultiColumn
+      ? line.segments.filter((s) => {
+          const col = columnInfo.columns[targetColumn!];
+          // Keep segment if it overlaps with the target column
+          return s.left < col.right && s.left + s.width > col.left;
+        })
       : line.segments;
 
     if (filteredSegs.length === 0) continue;

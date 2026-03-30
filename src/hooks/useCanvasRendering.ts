@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { annotationCommands, documentCommands, tagCommands } from '@/lib/tauri';
 import { PdfOutlineItem, renderPagesToContainer } from '@/lib/pdf/renderer';
 import { pretextLineCache } from '@/lib/pdf/pretext-line-cache';
-import { getHighlightRects as getPretextHighlightRects, detectColumns } from '@/lib/pdf/pretext-hit-test';
+import { getHighlightRects as getPretextHighlightRects } from '@/lib/pdf/pretext-hit-test';
 import { PDFDocument } from '@/types/document';
 import { simpleMarkdownToHtml } from '@/utils/markdown';
 import type { Tag } from '@/types/annotation';
@@ -1115,40 +1115,86 @@ export function useCanvasRendering(
 
   // ── Pretext-based highlight rect computation ──
 
-  /** Try to compute highlight rects from Pretext line data. Returns null on miss. */
+  /** Compute Pretext highlight rects for a single page element. */
+  const getPretextRectsForPage = (
+    pageEl: HTMLElement,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+  ): DOMRect[] | null => {
+    const fingerprint = `${pdfDocument!.fileName}@${pdfDocument!.fileSize}`;
+    const pageNumber = Number(pageEl.dataset.pageNumber || '0');
+    if (!pageNumber) return null;
+
+    const layout = pretextLineCache.get(fingerprint, pageNumber);
+    if (!layout || layout.lines.length === 0) return null;
+
+    const pageRect = pageEl.getBoundingClientRect();
+    // Convert viewport-relative coords to page-relative
+    const prStartX = startX - pageRect.left;
+    const prStartY = startY - pageRect.top;
+    const prEndX = endX - pageRect.left;
+    const prEndY = endY - pageRect.top;
+
+    const colInfo = layout.columnInfo;
+    const pretextRects = getPretextHighlightRects(
+      layout, prStartX, prStartY, prEndX, prEndY,
+      colInfo.isMultiColumn ? colInfo : undefined,
+    );
+    if (pretextRects.length === 0) return null;
+
+    // Convert page-relative rects back to viewport-relative
+    return pretextRects.map((r) =>
+      new DOMRect(r.left + pageRect.left, r.top + pageRect.top, r.width, r.height)
+    );
+  };
+
+  /** Try to compute highlight rects from Pretext line data. Supports cross-page selection. */
   const tryGetPretextRects = (range: Range): DOMRect[] | null => {
     if (!pdfDocument) return null;
     const rect = range.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
 
-    const probeEl = globalThis.document?.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-    const pageEl = probeEl?.closest('.pdf-page') as HTMLElement | null;
-    if (!pageEl) return null;
-    const pageNumber = Number(pageEl.dataset.pageNumber || '0');
-    if (!pageNumber) return null;
+    // Find start and end page elements
+    const startPageEl = (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)
+      ?.closest('.pdf-page') as HTMLElement | null;
+    const endPageEl = (range.endContainer instanceof Element ? range.endContainer : range.endContainer.parentElement)
+      ?.closest('.pdf-page') as HTMLElement | null;
 
-    const fingerprint = `${pdfDocument.fileName}@${pdfDocument.fileSize}`;
-    const layout = pretextLineCache.get(fingerprint, pageNumber);
-    if (!layout || layout.lines.length === 0) return null;
+    if (!startPageEl || !endPageEl) return null;
 
-    const pageRect = pageEl.getBoundingClientRect();
-    // Convert viewport-relative selection coords to page-relative
-    const startX = rect.left - pageRect.left;
-    const startY = rect.top - pageRect.top;
-    const endX = rect.right - pageRect.left;
-    const endY = rect.bottom - pageRect.top;
+    const startPageNum = Number(startPageEl.dataset.pageNumber || '0');
+    const endPageNum = Number(endPageEl.dataset.pageNumber || '0');
 
-    const colInfo = detectColumns(layout);
-    const pretextRects = getPretextHighlightRects(
-      layout, startX, startY, endX, endY,
-      colInfo.isMultiColumn ? colInfo.boundary : undefined,
-    );
-    if (pretextRects.length === 0) return null;
+    // Single page: fast path
+    if (startPageNum === endPageNum || startPageNum === 0 || endPageNum === 0) {
+      const pageEl = startPageEl || endPageEl;
+      if (!pageEl) return null;
+      return getPretextRectsForPage(pageEl, rect.left, rect.top, rect.right, rect.bottom);
+    }
 
-    // Convert page-relative rects to viewport-relative DOMRects
-    return pretextRects.map((r) =>
-      new DOMRect(r.left + pageRect.left, r.top + pageRect.top, r.width, r.height)
-    );
+    // Cross-page: process each page separately
+    const allRects: DOMRect[] = [];
+    const container = document.getElementById(containerId);
+    if (!container) return null;
+
+    for (let pn = startPageNum; pn <= endPageNum; pn++) {
+      const pageEl = container.querySelector(`.pdf-page[data-page-number="${pn}"]`) as HTMLElement | null;
+      if (!pageEl) continue;
+
+      const pageRect = pageEl.getBoundingClientRect();
+      // Clip the selection bounding rect to this page's viewport bounds
+      const clipStartX = pn === startPageNum ? rect.left : pageRect.left;
+      const clipStartY = pn === startPageNum ? rect.top : pageRect.top;
+      const clipEndX = pn === endPageNum ? rect.right : pageRect.right;
+      const clipEndY = pn === endPageNum ? rect.bottom : pageRect.bottom;
+
+      const pageRects = getPretextRectsForPage(pageEl, clipStartX, clipStartY, clipEndX, clipEndY);
+      if (pageRects) allRects.push(...pageRects);
+    }
+
+    return allRects.length > 0 ? allRects : null;
   };
 
   /** Fallback: compute merged highlight rects from range.getClientRects(). */
