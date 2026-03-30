@@ -1123,7 +1123,8 @@ export function useCanvasRendering(
     endX: number,
     endY: number,
   ): DOMRect[] | null => {
-    const fingerprint = `${pdfDocument!.fileName}@${pdfDocument!.fileSize}`;
+    if (!pdfDocument) return null;
+    const fingerprint = `${pdfDocument.fileName}@${pdfDocument.fileSize}`;
     const pageNumber = Number(pageEl.dataset.pageNumber || '0');
     if (!pageNumber) return null;
 
@@ -1175,20 +1176,26 @@ export function useCanvasRendering(
     }
 
     // Cross-page: process each page separately
+    // Normalize page order (backward selection has startContainer after endContainer)
+    const lo = Math.min(startPageNum, endPageNum);
+    const hi = Math.max(startPageNum, endPageNum);
+    const firstPageEl = lo === startPageNum ? startPageEl : endPageEl;
+    const lastPageEl = hi === startPageNum ? startPageEl : endPageEl;
+
     const allRects: DOMRect[] = [];
     const container = document.getElementById(containerId);
     if (!container) return null;
 
-    for (let pn = startPageNum; pn <= endPageNum; pn++) {
+    for (let pn = lo; pn <= hi; pn++) {
       const pageEl = container.querySelector(`.pdf-page[data-page-number="${pn}"]`) as HTMLElement | null;
       if (!pageEl) continue;
 
       const pageRect = pageEl.getBoundingClientRect();
       // Clip the selection bounding rect to this page's viewport bounds
-      const clipStartX = pn === startPageNum ? rect.left : pageRect.left;
-      const clipStartY = pn === startPageNum ? rect.top : pageRect.top;
-      const clipEndX = pn === endPageNum ? rect.right : pageRect.right;
-      const clipEndY = pn === endPageNum ? rect.bottom : pageRect.bottom;
+      const clipStartX = pageEl === firstPageEl ? rect.left : pageRect.left;
+      const clipStartY = pageEl === firstPageEl ? rect.top : pageRect.top;
+      const clipEndX = pageEl === lastPageEl ? rect.right : pageRect.right;
+      const clipEndY = pageEl === lastPageEl ? rect.bottom : pageRect.bottom;
 
       const pageRects = getPretextRectsForPage(pageEl, clipStartX, clipStartY, clipEndX, clipEndY);
       if (pageRects) allRects.push(...pageRects);

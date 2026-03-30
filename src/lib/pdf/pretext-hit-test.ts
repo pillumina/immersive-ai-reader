@@ -121,6 +121,7 @@ export function getHighlightRects(
   }
 
   const rects: HighlightRect[] = [];
+  let foundFirstLine = false;
 
   for (let i = 0; i < layout.lines.length; i++) {
     const line = layout.lines[i];
@@ -146,7 +147,8 @@ export function getHighlightRects(
     let left: number;
     let right: number;
 
-    const isFirstLine = line.top + line.height > startY && (i === 0 || layout.lines[i - 1].top + layout.lines[i - 1].height <= startY);
+    const isFirstLine = !foundFirstLine;
+    foundFirstLine = true;
     const isLastLine = line.top <= endY && line.top + line.height > endY;
 
     if (isFirstLine) {
@@ -248,7 +250,7 @@ export function detectColumns(layout: PretextPageLayout): ColumnInfo {
   const peak2 = sorted[1][0] * BUCKET_SIZE + BUCKET_SIZE / 2;
 
   // Check peaks are sufficiently far apart (at least 30% of page width)
-  const pageWidth = Math.max(...positions);
+  const pageWidth = positions.reduce((a, b) => Math.max(a, b), 0);
   if (Math.abs(peak2 - peak1) < pageWidth * 0.3) {
     return { isMultiColumn: false, columns: [] };
   }
