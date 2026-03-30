@@ -250,7 +250,16 @@ export function detectColumns(layout: PretextPageLayout): ColumnInfo {
   const peak2 = sorted[1][0] * BUCKET_SIZE + BUCKET_SIZE / 2;
 
   // Check peaks are sufficiently far apart (at least 30% of page width)
-  const pageWidth = positions.reduce((a, b) => Math.max(a, b), 0);
+  // Use max right edge of all segments (not just left position) for accurate page width
+  const pageWidth = layout.lines.reduce((max, line) => {
+    for (const seg of line.segments) {
+      if (seg.text.trim()) {
+        const right = seg.left + seg.width;
+        if (right > max) max = right;
+      }
+    }
+    return max;
+  }, 0);
   if (Math.abs(peak2 - peak1) < pageWidth * 0.3) {
     return { isMultiColumn: false, columns: [] };
   }
