@@ -1285,10 +1285,10 @@ export const MainCanvas = memo(function MainCanvas({
               className="text-action-btn"
               title="Highlight"
               onClick={() => {
+                onHighlightSelection();
                 globalThis.getSelection?.()?.removeAllRanges();
                 textHandleRef.current = null;
-        forceTextToolbarUpdate((n) => n + 1);
-                onHighlightSelection();
+                forceTextToolbarUpdate((n) => n + 1);
               }}
             >
               <span className="text-action-icon"><Highlighter size={14} /></span>
@@ -1339,10 +1339,10 @@ export const MainCanvas = memo(function MainCanvas({
               className="text-action-btn text-action-btn--ai"
               title="Ask AI about selected text"
               onClick={() => {
+                onExplainSelection();
                 globalThis.getSelection?.()?.removeAllRanges();
                 textHandleRef.current = null;
-        forceTextToolbarUpdate((n) => n + 1);
-                onExplainSelection();
+                forceTextToolbarUpdate((n) => n + 1);
               }}
             >
               <span className="text-action-icon"><MessageCircleQuestion size={14} /></span>
