@@ -241,11 +241,17 @@ h1, h2, h3, h4, h5, h6 {
 .pdf-text-layer {
   position: absolute;
   inset: 0;
-  overflow: hidden;
+  /* Hidden: text is invisible but present in DOM for native selection + Ctrl+F.
+     pointer-events: auto allows selection events even when visibility: hidden. */
+  visibility: hidden;
+  pointer-events: auto;
   z-index: 2;
 }
 
 .pdf-text-layer > span {
+  /* Override visibility from parent so spans participate in hit-testing.
+     Text is still invisible because color: transparent overrides any text color. */
+  visibility: visible;
   color: transparent;
   position: absolute;
   white-space: pre;

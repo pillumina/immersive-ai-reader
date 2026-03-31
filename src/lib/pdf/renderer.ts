@@ -1,6 +1,7 @@
 import { pdfjsLib } from '@/lib/pdf/pdfjs';
 import { buildPageLayout } from '@/lib/pdf/pretext-text-layer';
 import { pretextLineCache } from '@/lib/pdf/pretext-line-cache';
+import { PretextTextRenderer } from '@/lib/pdf/pretext-text-renderer';
 
 /**
  * Session-level thumbnail cache for rendered PDF pages.
@@ -35,6 +36,45 @@ function evictOtherFingerprints(currentFingerprint: string): void {
     if (!key.startsWith(`${currentFingerprint}:`)) {
       pageThumbnailCache.delete(key);
     }
+  }
+}
+
+// ─── Hidden DOM Text Layer (Canvas Text Layer Phase 2) ─────────────────────────────────
+
+/**
+ * Build a hidden DOM text layer from PretextPageLayout data.
+ *
+ * Structure: one <span> per line (vs pdfjs default: one <span> per text item,
+ * ~500-1000 per page). Reduces DOM nodes by ~90%.
+ *
+ * CSS (.pdf-text-layer) sets:
+ * - visibility: hidden → hides the layer visually
+ * - pointer-events: auto → allows native text selection even when hidden
+ *
+ * Each child <span> has visibility: visible + color: transparent
+ * (from globals.css), so:
+ * - Text is invisible (color: transparent)
+ * - Spans participate in hit-testing (visibility: visible)
+ * - Browser native selection works
+ * - Ctrl+F browser search finds the text
+ */
+function buildHiddenTextLayer(
+  container: HTMLElement,
+  layout: import('@/lib/pdf/pretext-text-layer').PretextPageLayout,
+): void {
+  for (const line of layout.lines) {
+    if (!line.text.trim()) continue;
+    const span = document.createElement('span');
+    span.style.position = 'absolute';
+    span.style.top = `${line.top}px`;
+    span.style.left = '0';
+    span.style.height = `${line.height}px`;
+    span.style.whiteSpace = 'pre';
+    span.style.lineHeight = `${line.height}px`;
+    // Concatenate segments with single space to preserve word spacing.
+    // Spans are invisible (color: transparent) so this doesn't affect visuals.
+    span.textContent = line.segments.map((s) => s.text).join(' ');
+    container.appendChild(span);
   }
 }
 
@@ -323,18 +363,9 @@ export async function renderSinglePage(
   pageEl.appendChild(canvas);
   pageEl.appendChild(textLayerEl);
 
-  // Render text layer asynchronously (doesn't block page display)
+  // Build hidden text layer (DOM) + cache Pretext layout after canvas render.
+  // The text layer container is appended below (before highlights) and styled via CSS.
   page.getTextContent().then((textContent) => {
-    const textLayer = new pdfjsLib.TextLayer({
-      textContentSource: textContent,
-      container: textLayerEl,
-      viewport,
-    });
-    textLayer.render().catch(() => {
-      // Silently ignore text layer errors - page is already visible
-    });
-
-    // Cache Pretext line layout data for precise highlight rectangles
     if (fingerprint) {
       try {
         const layout = buildPageLayout(
@@ -345,8 +376,18 @@ export async function renderSinglePage(
           scale,
         );
         pretextLineCache.set(fingerprint, layout);
+
+        // Build hidden DOM text layer: one <span> per line (~50-100 vs pdfjs 500-1000).
+        // visibility: hidden on container + visibility: visible on spans (via CSS)
+        // keeps native text selection working while hiding the visual layer.
+        buildHiddenTextLayer(textLayerEl, layout);
+
+        // Add transparent canvas overlay for future text-level hit testing extension.
+        // globalAlpha=0: draws nothing. PDF canvas already renders visible text.
+        const renderer = new PretextTextRenderer(pageEl, viewport.width, viewport.height);
+        renderer.renderLayout(layout);
       } catch {
-        // Non-fatal: highlightSelection will fall back to getClientRects()
+        // Non-fatal: text layer stays empty, selection/highlight fall back to getClientRects()
       }
     }
   });
