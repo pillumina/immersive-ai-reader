@@ -51,6 +51,11 @@ export function useCanvasRendering(
   const initialZoomSetRef = useRef(false);
   /** Stores the fit-to-width zoom value set by App (used to detect auto vs manual zoom). */
   const fitToWidthZoomRef = useRef<number>(1);
+  /** Undo stack for highlight creations. Each entry: {annotationId, pageNumber, x, y, width, height}. */
+  const highlightUndoStack = useRef<Array<{
+    annotationId: string; pageNumber: number;
+    x: number; y: number; width: number; height: number;
+  }>>([]);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
 
@@ -1341,6 +1346,16 @@ export function useCanvasRendering(
       throw new Error('未找到可高亮的文本区域');
     }
 
+    // Find the .pdf-page element from the selection range (not from elementFromPoint,
+    // which can hit fixed-position UI elements like toolbars instead of the page).
+    const rangeEl = range.startContainer instanceof Element
+      ? range.startContainer : range.startContainer.parentElement;
+    const pageEl = rangeEl?.closest('.pdf-page') as HTMLElement | null;
+    if (!pageEl) throw new Error('未找到可高亮的文本区域');
+    const pageNumber = Number(pageEl.dataset.pageNumber || '0');
+    if (!pageNumber) throw new Error('未找到可高亮的文本区域');
+    const pageRect = pageEl.getBoundingClientRect();
+
     // Collect rect data first (sync), then create all annotations in parallel
     const pendingAnnotations: Array<{
       pageNumber: number; x: number; y: number; width: number; height: number;
@@ -1349,21 +1364,14 @@ export function useCanvasRendering(
     }> = [];
 
     for (const rect of mergedRects) {
-      const target = globalThis.document
-        ?.elementFromPoint(rect.left + 1, rect.top + 1)
-        ?.closest('.pdf-page') as HTMLElement | null;
-      if (!target) continue;
-      const pageNumber = Number(target.dataset.pageNumber || '0');
-      if (!pageNumber) continue;
-      const pageRect = target.getBoundingClientRect();
+      // Convert viewport-relative rect to page-relative
       const x = Math.max(rect.left - pageRect.left, 0);
       const y = Math.max(rect.top - pageRect.top, 0);
       const width = Math.min(rect.width, pageRect.width - x);
       const height = Math.min(rect.height, pageRect.height - y);
       if (width <= 1 || height <= 1) continue;
-      // Normalize to fractions of page dimensions for scale-independent storage
-      const pw = target.offsetWidth || 1;
-      const ph = target.offsetHeight || 1;
+      const pw = pageEl.offsetWidth || 1;
+      const ph = pageEl.offsetHeight || 1;
       pendingAnnotations.push({
         pageNumber, x, y, width, height,
         nx: x / pw, ny: y / ph, nw: width / pw, nh: height / ph,
@@ -1376,10 +1384,10 @@ export function useCanvasRendering(
 
     // Create all annotations in parallel (no await per-item)
     const created = await Promise.all(
-      pendingAnnotations.map(({ pageNumber, nx, ny, nw, nh }) =>
+      pendingAnnotations.map(({ pageNumber: pn, nx, ny, nw, nh }) =>
         annotationCommands.create({
           document_id: pdfDocument.id,
-          page_number: pageNumber,
+          page_number: pn,
           annotation_type: 'highlight',
           color,
           position_x: nx,
@@ -1392,13 +1400,32 @@ export function useCanvasRendering(
     );
 
     // Render all highlights (sync DOM ops) using pixel values at current zoom
+    // and add them to the undo stack
     for (let i = 0; i < pendingAnnotations.length; i++) {
-      const { pageNumber, x, y, width, height } = pendingAnnotations[i];
-      renderHighlight(pageNumber, x, y, width, height, color, created[i]?.id);
+      const { pageNumber: pn, x, y, width, height } = pendingAnnotations[i];
+      renderHighlight(pn, x, y, width, height, color, created[i]?.id);
+      if (created[i]?.id) {
+        highlightUndoStack.current.push({ annotationId: created[i].id, pageNumber: pn, x, y, width, height });
+      }
     }
 
     selection.removeAllRanges();
     return pendingAnnotations.length;
+  };
+
+  /** Undo the last highlight creation. Removes from DB and DOM. */
+  const undoLastHighlight = async () => {
+    const entry = highlightUndoStack.current.pop();
+    if (!entry) return;
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (!containerEl) return;
+    const { annotationId } = entry;
+    await annotationCommands.delete(annotationId);
+    const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${entry.pageNumber}"]`);
+    if (pageEl) {
+      const hl = pageEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${annotationId}"]`);
+      hl?.remove();
+    }
   };
 
   const addNoteForSelection = async (
@@ -1741,6 +1768,83 @@ export function useCanvasRendering(
     containerEl.addEventListener('dblclick', handler);
     return () => containerEl.removeEventListener('dblclick', handler);
   }, [containerId, onHighlightDoubleClick]);
+
+  // ── Highlight keyboard + context menu ──────────────────────────────────────────
+
+  /** Show/hide a simple floating delete button for highlights. */
+  const showHighlightDeleteMenu = (hlEl: HTMLElement, _pageNumber: number) => {
+    // Remove any existing menu
+    document.querySelectorAll('.highlight-delete-menu').forEach((m) => m.remove());
+
+    const menu = document.createElement('div');
+    menu.className = 'highlight-delete-menu';
+    menu.style.cssText = [
+      'position:fixed',
+      `left:${hlEl.getBoundingClientRect().left}px`,
+      `top:${hlEl.getBoundingClientRect().bottom + 4}px`,
+      'background:#1c1917',
+      'color:#fafaf9',
+      'border-radius:6px',
+      'padding:6px 12px',
+      'font-size:13px',
+      'cursor:pointer',
+      'z-index:9999',
+      'box-shadow:0 2px 8px rgba(0,0,0,0.25)',
+      'user-select:none',
+    ].join(';');
+    menu.textContent = '✕ 删除高亮';
+    menu.addEventListener('click', async () => {
+      const annotationId = hlEl.dataset.annotationId;
+      if (!annotationId) { menu.remove(); return; }
+      await annotationCommands.delete(annotationId);
+      hlEl.remove();
+      highlightUndoStack.current = highlightUndoStack.current.filter(
+        (e) => e.annotationId !== annotationId
+      );
+      menu.remove();
+    });
+    document.body.appendChild(menu);
+
+    // Close menu on next click outside
+    const closeMenu = (e: MouseEvent) => {
+      if (!menu.contains(e.target as Node)) {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu, { once: true }), 0);
+  };
+
+  useEffect(() => {
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (!containerEl) return;
+
+    // Right-click on highlight → show delete button
+    const contextHandler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const hlEl = target.closest('.pdf-highlight') as HTMLElement | null;
+      if (!hlEl) return;
+      e.preventDefault();
+      const pageEl = hlEl.closest('.pdf-page') as HTMLElement | null;
+      const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber || '1') : 1;
+      showHighlightDeleteMenu(hlEl, pageNumber);
+    };
+    containerEl.addEventListener('contextmenu', contextHandler);
+    return () => containerEl.removeEventListener('contextmenu', contextHandler);
+  }, [containerId]);
+
+  // Ctrl+Z → undo last highlight creation
+  useEffect(() => {
+    if (!pdfDocument) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        void undoLastHighlight();
+      }
+    };
+    globalThis.addEventListener('keydown', handler);
+    return () => globalThis.removeEventListener('keydown', handler);
+  }, [containerId, pdfDocument]);
 
   const jumpToPage = (pageNumber: number) => {
     // Update UI state immediately so sidebar red-dot moves without waiting for scroll.
