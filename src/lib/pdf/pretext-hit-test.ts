@@ -230,7 +230,7 @@ export function detectColumns(layout: PretextPageLayout): ColumnInfo {
     return { isMultiColumn: false, columns: [] };
   }
 
-  // Bin positions into buckets (5px tolerance)
+  // Bin positions into buckets (10px tolerance)
   const BUCKET_SIZE = 10;
   const bucketMap = new Map<number, number>();
   for (const x of positions) {
@@ -238,7 +238,7 @@ export function detectColumns(layout: PretextPageLayout): ColumnInfo {
     bucketMap.set(key, (bucketMap.get(key) || 0) + 1);
   }
 
-  // Find the top 2 peaks
+  // Find the top 2 peaks (use bucket's LEFT edge as the peak representative)
   const sorted = [...bucketMap.entries()]
     .sort((a, b) => b[1] - a[1]);
 
@@ -246,11 +246,10 @@ export function detectColumns(layout: PretextPageLayout): ColumnInfo {
     return { isMultiColumn: false, columns: [] };
   }
 
-  const peak1 = sorted[0][0] * BUCKET_SIZE + BUCKET_SIZE / 2;
-  const peak2 = sorted[1][0] * BUCKET_SIZE + BUCKET_SIZE / 2;
+  const peak1 = sorted[0][0] * BUCKET_SIZE; // LEFT edge of bucket (not center)
+  const peak2 = sorted[1][0] * BUCKET_SIZE;
 
-  // Check peaks are sufficiently far apart (at least 30% of page width)
-  // Use max right edge of all segments (not just left position) for accurate page width
+  // Use max right edge of all segments for accurate page width
   const pageWidth = layout.lines.reduce((max, line) => {
     for (const seg of line.segments) {
       if (seg.text.trim()) {
@@ -260,11 +259,15 @@ export function detectColumns(layout: PretextPageLayout): ColumnInfo {
     }
     return max;
   }, 0);
+
+  console.log('[detectColumns] page:', layout.pageNumber, 'positions:', positions.length, 'topBuckets:', sorted.slice(0,3).map(e => ({k:e[0],c:e[1]})), 'peak1:', peak1, 'peak2:', peak2, 'pageWidth:', pageWidth, 'gap:', Math.abs(peak2-peak1), '30%:', pageWidth*0.3);
+
   if (Math.abs(peak2 - peak1) < pageWidth * 0.3) {
     return { isMultiColumn: false, columns: [] };
   }
 
   const boundary = (Math.min(peak1, peak2) + Math.max(peak1, peak2)) / 2;
+  console.log('[detectColumns] → MULTI, boundary:', boundary);
 
   return {
     isMultiColumn: true,

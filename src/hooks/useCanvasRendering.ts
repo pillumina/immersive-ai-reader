@@ -1229,8 +1229,18 @@ export function useCanvasRendering(
   /** Try to compute highlight rects from Pretext line data. Supports cross-page selection. */
   const tryGetPretextRects = (range: Range): DOMRect[] | null => {
     if (!pdfDocument) return null;
-    const rect = range.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return null;
+    const selRects = Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
+    if (selRects.length === 0) return null;
+
+    // Use individual line rects for precise boundaries — NOT the full selection
+    // bounding rect (which spans the whole selection and gives wrong start/end coords
+    // for multi-line and column-aware highlighting).
+    const firstRect = selRects[0];
+    const lastRect = selRects[selRects.length - 1];
+    const startX = firstRect.left;
+    const startY = firstRect.top;
+    const endX = lastRect.right;
+    const endY = lastRect.bottom;
 
     // Find start and end page elements
     const startPageEl = (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)
@@ -1247,11 +1257,10 @@ export function useCanvasRendering(
     if (startPageNum === endPageNum || startPageNum === 0 || endPageNum === 0) {
       const pageEl = startPageEl || endPageEl;
       if (!pageEl) return null;
-      return getPretextRectsForPage(pageEl, rect.left, rect.top, rect.right, rect.bottom);
+      return getPretextRectsForPage(pageEl, startX, startY, endX, endY);
     }
 
     // Cross-page: process each page separately
-    // Normalize page order (backward selection has startContainer after endContainer)
     const lo = Math.min(startPageNum, endPageNum);
     const hi = Math.max(startPageNum, endPageNum);
     const firstPageEl = lo === startPageNum ? startPageEl : endPageEl;
@@ -1266,11 +1275,10 @@ export function useCanvasRendering(
       if (!pageEl) continue;
 
       const pageRect = pageEl.getBoundingClientRect();
-      // Clip the selection bounding rect to this page's viewport bounds
-      const clipStartX = pageEl === firstPageEl ? rect.left : pageRect.left;
-      const clipStartY = pageEl === firstPageEl ? rect.top : pageRect.top;
-      const clipEndX = pageEl === lastPageEl ? rect.right : pageRect.right;
-      const clipEndY = pageEl === lastPageEl ? rect.bottom : pageRect.bottom;
+      const clipStartX = pageEl === firstPageEl ? startX : pageRect.left;
+      const clipStartY = pageEl === firstPageEl ? startY : pageRect.top;
+      const clipEndX = pageEl === lastPageEl ? endX : pageRect.right;
+      const clipEndY = pageEl === lastPageEl ? endY : pageRect.bottom;
 
       const pageRects = getPretextRectsForPage(pageEl, clipStartX, clipStartY, clipEndX, clipEndY);
       if (pageRects) allRects.push(...pageRects);
@@ -1845,6 +1853,110 @@ export function useCanvasRendering(
     globalThis.addEventListener('keydown', handler);
     return () => globalThis.removeEventListener('keydown', handler);
   }, [containerId, pdfDocument]);
+
+  // ── Live text selection background (canvas-based) ───────────────────────────────
+
+  /** Draw orange selection background: column-aware, full-line coverage.
+   *  Determines target column from first getClientRect's X, then for each selected
+   *  line draws from the first segment's left to the last segment's right. */
+  const drawSelectionBackground = useCallback(() => {
+    if (!pdfDocument) return;
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (!containerEl) return;
+    const sel = globalThis.getSelection?.();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      containerEl.querySelectorAll<HTMLCanvasElement>('.pdf-selection-canvas').forEach((c) => {
+        c.getContext('2d')?.clearRect(0, 0, c.width, c.height);
+      });
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+    const pageEl = (range.startContainer instanceof Element
+      ? range.startContainer : range.startContainer.parentElement)
+      ?.closest('.pdf-page') as HTMLElement | null;
+    if (!pageEl) return;
+    const selCanvas = pageEl.querySelector<HTMLCanvasElement>('.pdf-selection-canvas');
+    if (!selCanvas) return;
+    const ctx = selCanvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, selCanvas.width, selCanvas.height);
+
+    const pageRect = pageEl.getBoundingClientRect();
+    const fingerprint = `${pdfDocument.fileName}@${pdfDocument.fileSize}`;
+    const pageNum = Number(pageEl.dataset.pageNumber || '0');
+    const layout = pretextLineCache.get(fingerprint, pageNum);
+    if (!layout || layout.lines.length === 0) return;
+
+    const selRects = Array.from(range.getClientRects());
+    if (selRects.length === 0) return;
+
+    const firstRectLeft = selRects[0].left;
+
+    // DEBUG
+    console.log('[selBg] page:', pageNum, 'pageRect.left:', pageRect.left.toFixed(1), 'colInfo:', layout.columnInfo.isMultiColumn, layout.columnInfo.columns.map(c => ({i:c.index,l:c.left.toFixed(1),r:c.right})));
+    console.log('[selBg] firstRectLeft(viewport):', firstRectLeft.toFixed(1), 'page-relative:', (firstRectLeft - pageRect.left).toFixed(1));
+
+    // Determine target column from the FIRST getClientRect item's left position.
+    let targetCol: number | undefined;
+    if (layout.columnInfo.isMultiColumn && layout.columnInfo.columns.length >= 2) {
+      for (const col of layout.columnInfo.columns) {
+        const colLeftVp = col.left + pageRect.left;
+        const colRightVp = col.right === Infinity ? Infinity : col.right + pageRect.left;
+        console.log('[selBg] check col', col.index, ': vp range [', colLeftVp.toFixed(1), '-', colRightVp, '] firstRectLeft:', firstRectLeft.toFixed(1), '→ in?', firstRectLeft >= colLeftVp, firstRectLeft < colRightVp);
+        if (firstRectLeft >= colLeftVp && firstRectLeft < colRightVp) {
+          targetCol = col.index;
+          break;
+        }
+      }
+    }
+    console.log('[selBg] targetCol:', targetCol);
+
+    // Get precise Y range from individual rects (not bounding box)
+    const selTopPage = selRects[0].top - pageRect.top;
+    const selBottomPage = selRects[selRects.length - 1].bottom - pageRect.top;
+
+    ctx.fillStyle = 'rgba(194, 65, 12, 0.20)';
+
+    for (const line of layout.lines) {
+      // Skip lines outside the selection Y range
+      if (line.top + line.height < selTopPage) continue;
+      if (line.top > selBottomPage) break;
+
+      // Filter segments to target column (column-aware)
+      const filteredSegs = targetCol !== undefined && layout.columnInfo.isMultiColumn
+        ? line.segments.filter((s) => {
+            const col = layout!.columnInfo.columns[targetCol!];
+            return s.left < col.right && s.left + s.width > col.left;
+          })
+        : line.segments;
+
+      if (filteredSegs.length === 0) continue;
+
+      const left = filteredSegs[0].left;
+      const right = filteredSegs[filteredSegs.length - 1].left + filteredSegs[filteredSegs.length - 1].width;
+
+      if (right > left) {
+        ctx.fillRect(left, line.top, right - left, line.height);
+      }
+    }
+  }, [containerId]);
+
+  useEffect(() => {
+    let rafId: number | null = null;
+    const handler = () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        drawSelectionBackground();
+      });
+    };
+    document.addEventListener('selectionchange', handler);
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      document.removeEventListener('selectionchange', handler);
+    };
+  }, [drawSelectionBackground]);
 
   const jumpToPage = (pageNumber: number) => {
     // Update UI state immediately so sidebar red-dot moves without waiting for scroll.

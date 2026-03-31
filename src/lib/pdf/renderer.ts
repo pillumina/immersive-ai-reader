@@ -393,8 +393,21 @@ export async function renderSinglePage(
   textLayerEl.style.width = `${viewport.width}px`;
   textLayerEl.style.height = `${viewport.height}px`;
 
+  // Selection background canvas: sits above text layer (z-index 3), draws orange
+  // selection highlight as the user drags. pointer-events: none so clicks pass through.
+  const selCanvas = document.createElement('canvas');
+  selCanvas.className = 'pdf-selection-canvas';
+  selCanvas.width = Math.floor(viewport.width * dpr);
+  selCanvas.height = Math.floor(viewport.height * dpr);
+  selCanvas.style.cssText =
+    `position:absolute;top:0;left:0;width:${viewport.width}px;height:${viewport.height}px;` +
+    `pointer-events:none;z-index:3;`;
+  const selCtx = selCanvas.getContext('2d')!;
+  selCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
   pageEl.appendChild(canvas);
   pageEl.appendChild(textLayerEl);
+  pageEl.appendChild(selCanvas);
 
   // Build hidden text layer (DOM) + cache Pretext layout after canvas render.
   // The text layer container is appended below (before highlights) and styled via CSS.

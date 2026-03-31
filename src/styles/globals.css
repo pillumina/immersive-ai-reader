@@ -241,26 +241,29 @@ h1, h2, h3, h4, h5, h6 {
 .pdf-text-layer {
   position: absolute;
   inset: 0;
-  /* Hidden: text is invisible but present in DOM for native selection + Ctrl+F.
-     pointer-events: auto allows selection events even when visibility: hidden. */
-  visibility: hidden;
+  /* opacity: 0 (not visibility:hidden) — browser uses each span's actual
+     position for selection ranges, preventing cross-column bleed. */
+  opacity: 0;
   pointer-events: auto;
   z-index: 2;
 }
 
 .pdf-text-layer > span {
-  /* Override visibility from parent so spans participate in hit-testing.
-     Text is still invisible because color: transparent overrides any text color. */
-  visibility: visible;
-  color: transparent;
+  /* Nearly-invisible text color — visible enough for ::selection to work reliably
+     in all browsers (transparent can cause ::selection to be ignored). */
+  background: transparent;
+  color: rgba(0, 0, 0, 0.005);
   position: absolute;
   white-space: pre;
   cursor: text;
   transform-origin: 0% 0%;
 }
 
-.pdf-text-layer > span::selection {
-  background: rgba(194, 65, 12, 0.20);
+/* Browser-native selection highlight (visible orange background on selected text). */
+.pdf-text-layer > span::selection,
+.pdf-text-layer > span *::selection {
+  background-color: rgba(194, 65, 12, 0.25) !important;
+  color: inherit !important;
 }
 
 .pdf-highlight {
