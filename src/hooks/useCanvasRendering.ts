@@ -133,6 +133,8 @@ export function useCanvasRendering(
     pageEl.appendChild(highlight);
   };
 
+  /** Tracks which page numbers currently have highlights rendered in the DOM. */
+  const loadedPagesRef = useRef<Set<number>>(new Set());
 
   // ─── Inline tag editor ────────────────────────────────────────────────────────
 
@@ -776,12 +778,39 @@ export function useCanvasRendering(
   };
 
 
-  const loadStoredHighlights = async (documentId: string) => {
-    clearHighlights();
-    const annotations = await annotationCommands.getByDocument(documentId);
+  const loadStoredHighlights = async (
+    documentId: string,
+    /** If provided, only load highlights for these specific pages (incremental). */
+    pageNumbers?: number[],
+  ) => {
+    const containerEl = globalThis.document?.getElementById(containerId);
 
-    // Pre-load tags for all annotations that need them (single batch query, not N per-annotation queries)
-    const annotationIds = annotations
+    if (pageNumbers && pageNumbers.length > 0) {
+      // Incremental: clear only requested pages' highlights
+      for (const pn of pageNumbers) {
+        const pageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pn}"]`);
+        pageEl?.querySelectorAll<HTMLElement>('.pdf-highlight').forEach((el) => el.remove());
+      }
+      // Clear note/ai cards for these pages
+      containerEl?.querySelectorAll<HTMLElement>('.pdf-note-card, .pdf-ai-card').forEach((el) => {
+        const cardPage = el.dataset.notePageNumber;
+        if (cardPage && pageNumbers.includes(Number(cardPage))) {
+          const cleanup = (el as HTMLElement & { _dragCleanup?: () => void })._dragCleanup;
+          if (cleanup) cleanup();
+          el.remove();
+        }
+      });
+    } else {
+      clearHighlights();
+      loadedPagesRef.current.clear();
+    }
+
+    const annotations = await annotationCommands.getByDocument(documentId);
+    const filtered = pageNumbers
+      ? annotations.filter((a) => pageNumbers.includes(Number(a.page_number)))
+      : annotations;
+
+    const annotationIds = filtered
       .filter((a) => {
         const text = typeof a.text === 'string' ? a.text : '';
         return text.startsWith(NOTE_PREFIX) || text.startsWith(AI_CARD_PREFIX);
@@ -794,10 +823,10 @@ export function useCanvasRendering(
         for (const [id, tags] of Object.entries(tagMap)) {
           tagCacheRef.current.set(id, tags.map((t) => ({ id: t.id, name: t.name, color: t.color })));
         }
-      } catch { /* silent — individual cards render without tags */ }
+      } catch { /* silent */ }
     }
 
-    annotations
+    filtered
       .filter((a) => a.type === 'highlight')
       .forEach((a) => {
         const textValue = typeof a.text === 'string' ? a.text : '';
@@ -811,41 +840,54 @@ export function useCanvasRendering(
         const aiContent = isAiCard ? aiParts.slice(1).join('\n\n').trim() : '';
         const cachedTags = tagCacheRef.current.get(a.id) || [];
 
+        const pageEl = containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${a.page_number}"]`);
+        if (!pageEl) return;
+
+        const pw = pageEl.offsetWidth || 1;
+        const ph = pageEl.offsetHeight || 1;
+        const storedX = Number(a.position_x);
+        const storedY = Number(a.position_y);
+        const storedW = Number(a.position_width);
+        const storedH = Number(a.position_height);
+
+        let px: number, py: number, pwidth: number, pheight: number;
+        if (storedX <= 1 && storedW <= 1) {
+          // Normalized fractions (0.0–1.0): scale to current page dimensions
+          px = storedX * pw;
+          py = storedY * ph;
+          pwidth = storedW * pw;
+          pheight = storedH * ph;
+        } else {
+          // Legacy pixel values: use as-is
+          px = storedX; py = storedY; pwidth = storedW; pheight = storedH;
+        }
+
         renderHighlight(
-          Number(a.page_number),
-          Number(a.position_x),
-          Number(a.position_y),
-          Number(a.position_width),
-          Number(a.position_height),
+          Number(a.page_number), px, py, pwidth, pheight,
           a.color || (
-            isAiCard
-              ? 'rgba(168, 85, 247, 0.18)'
-              : isNote
-                ? 'rgba(14, 165, 233, 0.25)'
-                : 'rgba(255, 235, 59, 0.35)'
+            isAiCard ? 'rgba(168, 85, 247, 0.18)'
+              : isNote ? 'rgba(14, 165, 233, 0.25)'
+              : 'rgba(255, 235, 59, 0.35)'
           ),
           (isAiCard || isNote) ? a.id : undefined
         );
         if (isNote && noteContent) {
-          const noteSelectedText = isNote ? noteRaw.split('\n\n').slice(1).join('\n\n') : '';
+          const noteSelectedText = noteRaw.split('\n\n').slice(1).join('\n\n');
           renderNoteCard(
-            Number(a.page_number),
-            Number(a.position_x),
-            Number(a.position_y),
-            noteContent,
+            Number(a.page_number), px, py, noteContent,
             { annotationId: a.id, selectedText: noteSelectedText, tags: cachedTags }
           );
         }
         if (isAiCard && aiContent) {
           renderNoteCard(
-            Number(a.page_number),
-            Number(a.position_x),
-            Number(a.position_y),
-            aiContent,
+            Number(a.page_number), px, py, aiContent,
             { messageId: aiMessageId, annotationId: a.id, kind: 'ai-card', tags: cachedTags }
           );
         }
       });
+
+    const pages = new Set(filtered.map((a) => Number(a.page_number)));
+    for (const p of pages) loadedPagesRef.current.add(p);
   };
 
   // Debounce timer for zoom changes
@@ -925,7 +967,15 @@ export function useCanvasRendering(
             onBatchRendered: () => {
               if (batchRenderTimerRef.current) clearTimeout(batchRenderTimerRef.current);
               batchRenderTimerRef.current = setTimeout(() => {
-                void loadStoredHighlights(currentPdfDoc.id);
+                // Incremental: only load highlights for pages not yet tracked
+                const newPages: number[] = [];
+                containerEl.querySelectorAll<HTMLElement>('.pdf-page[data-page-number]').forEach((el) => {
+                  const pn = Number(el.dataset.pageNumber);
+                  if (!loadedPagesRef.current.has(pn)) newPages.push(pn);
+                });
+                if (newPages.length > 0) {
+                  void loadStoredHighlights(currentPdfDoc.id, newPages);
+                }
               }, 100);
             },
           });
@@ -1061,7 +1111,15 @@ export function useCanvasRendering(
               // Debounce: coalesce rapid batch completions into a single reload after 100ms.
               if (batchRenderTimerRef.current) clearTimeout(batchRenderTimerRef.current);
               batchRenderTimerRef.current = setTimeout(() => {
-                void loadStoredHighlights(pdfDocument.id);
+                // Incremental: only load highlights for pages not yet tracked
+                const newPages: number[] = [];
+                containerEl.querySelectorAll<HTMLElement>('.pdf-page[data-page-number]').forEach((el) => {
+                  const pn = Number(el.dataset.pageNumber);
+                  if (!loadedPagesRef.current.has(pn)) newPages.push(pn);
+                });
+                if (newPages.length > 0) {
+                  void loadStoredHighlights(pdfDocument.id, newPages);
+                }
               }, 100);
             },
           }),
@@ -1274,6 +1332,8 @@ export function useCanvasRendering(
     // Collect rect data first (sync), then create all annotations in parallel
     const pendingAnnotations: Array<{
       pageNumber: number; x: number; y: number; width: number; height: number;
+      // Normalized fractions for scale-independent storage
+      nx: number; ny: number; nw: number; nh: number;
     }> = [];
 
     for (const rect of mergedRects) {
@@ -1289,7 +1349,13 @@ export function useCanvasRendering(
       const width = Math.min(rect.width, pageRect.width - x);
       const height = Math.min(rect.height, pageRect.height - y);
       if (width <= 1 || height <= 1) continue;
-      pendingAnnotations.push({ pageNumber, x, y, width, height });
+      // Normalize to fractions of page dimensions for scale-independent storage
+      const pw = target.offsetWidth || 1;
+      const ph = target.offsetHeight || 1;
+      pendingAnnotations.push({
+        pageNumber, x, y, width, height,
+        nx: x / pw, ny: y / ph, nw: width / pw, nh: height / ph,
+      });
     }
 
     if (pendingAnnotations.length === 0) {
@@ -1298,22 +1364,22 @@ export function useCanvasRendering(
 
     // Create all annotations in parallel (no await per-item)
     const created = await Promise.all(
-      pendingAnnotations.map(({ pageNumber, x, y, width, height }) =>
+      pendingAnnotations.map(({ pageNumber, nx, ny, nw, nh }) =>
         annotationCommands.create({
           document_id: pdfDocument.id,
           page_number: pageNumber,
           annotation_type: 'highlight',
           color,
-          position_x: x,
-          position_y: y,
-          position_width: width,
-          position_height: height,
+          position_x: nx,
+          position_y: ny,
+          position_width: nw,
+          position_height: nh,
           text,
         })
       )
     );
 
-    // Render all highlights (sync DOM ops)
+    // Render all highlights (sync DOM ops) using pixel values at current zoom
     for (let i = 0; i < pendingAnnotations.length; i++) {
       const { pageNumber, x, y, width, height } = pendingAnnotations[i];
       renderHighlight(pageNumber, x, y, width, height, color, created[i]?.id);
@@ -1344,6 +1410,8 @@ export function useCanvasRendering(
     let width: number;
     let height: number;
     let selectedText = '';
+    /** Page element used for scale-independent coordinate normalization. */
+    let normPageEl: HTMLElement | null = null;
     const hasSelection = domHasSelection || !!capturedSelectedText;
 
     if (hasSelection) {
@@ -1379,6 +1447,7 @@ export function useCanvasRendering(
 
       pageNumber = Number(targetPageEl.dataset.pageNumber || '0');
       if (!pageNumber) throw new Error('未找到页面编号');
+      normPageEl = targetPageEl;
 
       const pageRect = targetPageEl.getBoundingClientRect();
       x = Math.max(rangeRect.left - pageRect.left, 0);
@@ -1398,6 +1467,7 @@ export function useCanvasRendering(
         x = Math.max(position.x - pageRect.left, 8);
         y = Math.max(position.y - pageRect.top, 8);
         pageNumber = pn;
+        normPageEl = pageEl;
       } else {
         // Fallback: stack on current page
         const targetEl = pageEl ?? containerEl?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${currentPage ?? 1}"]`);
@@ -1406,9 +1476,20 @@ export function useCanvasRendering(
         const existingCards = targetEl.querySelectorAll('.pdf-note-card').length;
         x = 20;
         y = 24 + existingCards * 78;
+        normPageEl = targetEl;
       }
       width = 8;
       height = 8;
+    }
+
+    // Normalize positions to fractions of page dimensions for scale-independent storage
+    let nx: number, ny: number, nw: number, nh: number;
+    if (normPageEl) {
+      const pw = normPageEl.offsetWidth || 1;
+      const ph = normPageEl.offsetHeight || 1;
+      nx = x / pw; ny = y / ph; nw = width / pw; nh = height / ph;
+    } else {
+      nx = x; ny = y; nw = width; nh = height;
     }
 
     const createdNote = await annotationCommands.create({
@@ -1416,10 +1497,10 @@ export function useCanvasRendering(
       page_number: pageNumber,
       annotation_type: 'highlight',
       color: 'rgba(14, 165, 233, 0.25)',
-      position_x: x,
-      position_y: y,
-      position_width: width,
-      position_height: height,
+      position_x: nx,
+      position_y: ny,
+      position_width: nw,
+      position_height: nh,
       text: selectedText ? `${NOTE_PREFIX}${note}\n\n${selectedText}` : `${NOTE_PREFIX}${note}`,
     });
 
@@ -1454,6 +1535,8 @@ export function useCanvasRendering(
     const y = 24 + existingCards * 78;
     const width = 8;
     const height = 8;
+    const pw = pageEl.offsetWidth || 1;
+    const ph = pageEl.offsetHeight || 1;
 
     const kind = options?.kind || 'note';
     const textPayload = kind === 'ai-card'
@@ -1464,10 +1547,10 @@ export function useCanvasRendering(
       page_number: pageNumber,
       annotation_type: 'highlight',
       color: kind === 'ai-card' ? 'rgba(168, 85, 247, 0.40)' : 'rgba(14, 165, 233, 0.20)',
-      position_x: x,
-      position_y: y,
-      position_width: width,
-      position_height: height,
+      position_x: x / pw,
+      position_y: y / ph,
+      position_width: width / pw,
+      position_height: height / ph,
       text: textPayload,
     });
 
@@ -1520,6 +1603,8 @@ export function useCanvasRendering(
     const y = Math.max(rawY - 10, 8);
     const width = 8;
     const height = 8;
+    const pw = pageEl.offsetWidth || 1;
+    const ph = pageEl.offsetHeight || 1;
     const textPayload = `${AI_CARD_PREFIX}${messageId}\n\n${note}`;
 
     const created = await annotationCommands.create({
@@ -1527,10 +1612,10 @@ export function useCanvasRendering(
       page_number: resolvedPageNumber,
       annotation_type: 'highlight',
       color: 'rgba(168, 85, 247, 0.18)',
-      position_x: x,
-      position_y: y,
-      position_width: width,
-      position_height: height,
+      position_x: x / pw,
+      position_y: y / ph,
+      position_width: width / pw,
+      position_height: height / ph,
       text: textPayload,
     });
 
