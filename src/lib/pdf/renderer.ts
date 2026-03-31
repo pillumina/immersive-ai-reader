@@ -1,5 +1,5 @@
 import { pdfjsLib } from '@/lib/pdf/pdfjs';
-import { buildPageLayout } from '@/lib/pdf/pretext-text-layer';
+import { buildPageLayout, type PretextSegment } from '@/lib/pdf/pretext-text-layer';
 import { pretextLineCache } from '@/lib/pdf/pretext-line-cache';
 import { PretextTextRenderer } from '@/lib/pdf/pretext-text-renderer';
 
@@ -44,72 +44,58 @@ function evictOtherFingerprints(currentFingerprint: string): void {
 /**
  * Build a hidden DOM text layer from PretextPageLayout data.
  *
- * Structure: one <span> per line (~50-100 spans/page vs pdfjs default 500-1000).
+ * Structure: one <span> per segment-group (~20-200 spans/page vs pdfjs 500-1000).
  *
- * For multi-column layouts, segments are split by column into separate <span> elements.
- * This is critical: if all segments (both columns) are concatenated into one span,
- * the browser's native text selection may cross column boundaries, causing the
- * highlight rect to be computed for the wrong column.
+ * Strategy: group segments by their left position (5px tolerance). Segments at
+ * similar X positions belong to the same "column" on that line. This avoids
+ * relying on global column detection and correctly handles:
+ * - Single-column PDFs: one group per line → one span per line
+ * - Two-column PDFs: two groups per line → two spans per line
+ * - PDFs where detectColumns fails: grouping by position still works
+ * - Variable-width columns or asymmetric layouts
  *
- * Column splitting: each column gets its own span, with segment x positions
- * adjusted to be relative to the column's left boundary (subtract col.left).
- * The span is then positioned at col.left, so segments render at their
- * absolute page coordinates correctly.
+ * Each span is positioned at its group's left position (segment's actual X),
+ * preserving the correct absolute position. Segments within a group are
+ * concatenated with single-space separation.
  *
- * CSS (.pdf-text-layer) sets:
- * - visibility: hidden → hides the layer visually
+ * CSS (.pdf-text-layer):
+ * - visibility: hidden → invisible but present in DOM
  * - pointer-events: auto → allows native text selection even when hidden
  *
- * Each child <span> has visibility: visible + color: transparent
- * (from globals.css), so:
- * - Text is invisible (color: transparent)
- * - Spans participate in hit-testing (visibility: visible)
- * - Browser native selection works
- * - Ctrl+F browser search finds the text
+ * Each child <span>: visibility: visible + color: transparent (globals.css)
+ * → invisible, participates in hit-testing, browser selection works, Ctrl+F works
  */
 function buildHiddenTextLayer(
   container: HTMLElement,
   layout: import('@/lib/pdf/pretext-text-layer').PretextPageLayout,
 ): void {
-  const { columnInfo } = layout;
-  const isMultiColumn = columnInfo?.isMultiColumn && columnInfo.columns.length >= 2;
+  const TOLERANCE = 5; // px tolerance for grouping segments by left position
 
   for (const line of layout.lines) {
     if (!line.text.trim()) continue;
 
-    if (!isMultiColumn) {
-      // Single column: one span per line, all segments concatenated
+    // Group segments by their left position (5px tolerance).
+    // Segments at similar X belong to the same logical column.
+    const groups = new Map<number, PretextSegment[]>();
+    for (const seg of line.segments) {
+      if (!seg.text.trim()) continue;
+      const key = Math.round(seg.left / TOLERANCE) * TOLERANCE;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(seg);
+    }
+
+    for (const [_left, segs] of groups) {
       const span = document.createElement('span');
       span.style.position = 'absolute';
       span.style.top = `${line.top}px`;
-      span.style.left = '0';
+      span.style.left = `${segs[0].left}px`;
       span.style.height = `${line.height}px`;
       span.style.whiteSpace = 'pre';
       span.style.lineHeight = `${line.height}px`;
-      span.textContent = line.segments.map((s) => s.text).join(' ');
+      // Single-space separation preserves word spacing within the group.
+      // color: transparent (from globals.css) means this doesn't affect visuals.
+      span.textContent = segs.map((s) => s.text).join(' ');
       container.appendChild(span);
-    } else {
-      // Multi-column: one span per column, segments split by column.
-      // Segment x-positions are made relative to the column's left boundary,
-      // so the span (positioned at col.left) renders them at absolute page coords.
-      for (const col of columnInfo.columns) {
-        const colSegs = line.segments.filter(
-          (s) => s.left + s.width > col.left && s.left < col.right,
-        );
-        if (colSegs.length === 0) continue;
-
-        const span = document.createElement('span');
-        span.style.position = 'absolute';
-        span.style.top = `${line.top}px`;
-        span.style.left = `${col.left}px`;
-        span.style.height = `${line.height}px`;
-        span.style.width = `${col.right - col.left}px`;
-        span.style.whiteSpace = 'pre';
-        span.style.lineHeight = `${line.height}px`;
-        // Adjust segment x-positions to be relative to column left
-        span.textContent = colSegs.map((s) => s.text).join(' ');
-        container.appendChild(span);
-      }
     }
   }
 }
