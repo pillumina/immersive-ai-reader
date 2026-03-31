@@ -44,8 +44,17 @@ function evictOtherFingerprints(currentFingerprint: string): void {
 /**
  * Build a hidden DOM text layer from PretextPageLayout data.
  *
- * Structure: one <span> per line (vs pdfjs default: one <span> per text item,
- * ~500-1000 per page). Reduces DOM nodes by ~90%.
+ * Structure: one <span> per line (~50-100 spans/page vs pdfjs default 500-1000).
+ *
+ * For multi-column layouts, segments are split by column into separate <span> elements.
+ * This is critical: if all segments (both columns) are concatenated into one span,
+ * the browser's native text selection may cross column boundaries, causing the
+ * highlight rect to be computed for the wrong column.
+ *
+ * Column splitting: each column gets its own span, with segment x positions
+ * adjusted to be relative to the column's left boundary (subtract col.left).
+ * The span is then positioned at col.left, so segments render at their
+ * absolute page coordinates correctly.
  *
  * CSS (.pdf-text-layer) sets:
  * - visibility: hidden → hides the layer visually
@@ -62,19 +71,46 @@ function buildHiddenTextLayer(
   container: HTMLElement,
   layout: import('@/lib/pdf/pretext-text-layer').PretextPageLayout,
 ): void {
+  const { columnInfo } = layout;
+  const isMultiColumn = columnInfo?.isMultiColumn && columnInfo.columns.length >= 2;
+
   for (const line of layout.lines) {
     if (!line.text.trim()) continue;
-    const span = document.createElement('span');
-    span.style.position = 'absolute';
-    span.style.top = `${line.top}px`;
-    span.style.left = '0';
-    span.style.height = `${line.height}px`;
-    span.style.whiteSpace = 'pre';
-    span.style.lineHeight = `${line.height}px`;
-    // Concatenate segments with single space to preserve word spacing.
-    // Spans are invisible (color: transparent) so this doesn't affect visuals.
-    span.textContent = line.segments.map((s) => s.text).join(' ');
-    container.appendChild(span);
+
+    if (!isMultiColumn) {
+      // Single column: one span per line, all segments concatenated
+      const span = document.createElement('span');
+      span.style.position = 'absolute';
+      span.style.top = `${line.top}px`;
+      span.style.left = '0';
+      span.style.height = `${line.height}px`;
+      span.style.whiteSpace = 'pre';
+      span.style.lineHeight = `${line.height}px`;
+      span.textContent = line.segments.map((s) => s.text).join(' ');
+      container.appendChild(span);
+    } else {
+      // Multi-column: one span per column, segments split by column.
+      // Segment x-positions are made relative to the column's left boundary,
+      // so the span (positioned at col.left) renders them at absolute page coords.
+      for (const col of columnInfo.columns) {
+        const colSegs = line.segments.filter(
+          (s) => s.left + s.width > col.left && s.left < col.right,
+        );
+        if (colSegs.length === 0) continue;
+
+        const span = document.createElement('span');
+        span.style.position = 'absolute';
+        span.style.top = `${line.top}px`;
+        span.style.left = `${col.left}px`;
+        span.style.height = `${line.height}px`;
+        span.style.width = `${col.right - col.left}px`;
+        span.style.whiteSpace = 'pre';
+        span.style.lineHeight = `${line.height}px`;
+        // Adjust segment x-positions to be relative to column left
+        span.textContent = colSegs.map((s) => s.text).join(' ');
+        container.appendChild(span);
+      }
+    }
   }
 }
 
