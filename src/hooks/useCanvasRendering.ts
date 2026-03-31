@@ -466,6 +466,7 @@ export function useCanvasRendering(
       if (options?.messageId) {
         card.dataset.messageId = options.messageId;
         if (options.annotationId) card.dataset.annotationId = options.annotationId;
+        card.dataset.notePageNumber = String(pageNumber);
         card.title = 'Drag to reposition';
 
         let dragging = false;
@@ -514,7 +515,15 @@ export function useCanvasRendering(
           const nextX = Math.max(lastLeft, 0);
           const nextY = Math.max(lastTop, 0);
           try {
-            if (options.annotationId) await annotationCommands.updatePosition(options.annotationId, nextX, nextY);
+            if (options.annotationId) {
+              // Normalize container-relative pixels to fractions before saving.
+              // loadStoredHighlights treats values ≤ 1 as normalized fractions,
+              // so raw pixel values (e.g. 158) would be misinterpreted.
+              const containerEl = globalThis.document?.getElementById(containerId);
+              const cw = containerEl?.offsetWidth || 1;
+              const ch = containerEl?.offsetHeight || 1;
+              await annotationCommands.updatePosition(options.annotationId, nextX / cw, nextY / ch);
+            }
           } catch {
             card.style.left = `${startLeft}px`;
             card.style.top = `${startTop}px`;
@@ -749,10 +758,13 @@ export function useCanvasRendering(
         dragHandlers.onUp = async () => {
           cleanup();
           if (options?.annotationId) {
+            // Normalize container-relative pixels to fractions before saving.
+            const cw = containerEl?.offsetWidth || 1;
+            const ch = containerEl?.offsetHeight || 1;
             await annotationCommands.updatePosition(
               options.annotationId,
-              parseFloat(card.style.left || '0'),
-              parseFloat(card.style.top || '0'),
+              parseFloat(card.style.left || '0') / cw,
+              parseFloat(card.style.top || '0') / ch,
             );
           }
         };
