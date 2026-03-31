@@ -44,26 +44,26 @@ function evictOtherFingerprints(currentFingerprint: string): void {
 /**
  * Build a hidden DOM text layer from PretextPageLayout data.
  *
- * Structure: one <span> per segment-group (~20-200 spans/page vs pdfjs 500-1000).
+ * Structure: one <span> per (line × distinct-left-position) group.
+ * ~20-200 spans/page vs pdfjs 500-1000.
  *
- * Strategy: group segments by their left position (5px tolerance). Segments at
- * similar X positions belong to the same "column" on that line. This avoids
- * relying on global column detection and correctly handles:
- * - Single-column PDFs: one group per line → one span per line
- * - Two-column PDFs: two groups per line → two spans per line
- * - PDFs where detectColumns fails: grouping by position still works
- * - Variable-width columns or asymmetric layouts
+ * Strategy: group segments by their line + left position (5px tolerance on left).
+ * Segments on the same line at similar X belong to the same group → one span.
+ * Segments on the same line at very different X → different groups → different spans.
  *
- * Each span is positioned at its group's left position (segment's actual X),
- * preserving the correct absolute position. Segments within a group are
- * concatenated with single-space separation.
+ * This correctly handles:
+ * - Single-column: one span per line (all segments at similar left → one group)
+ * - Multi-column: one span per column per line (segments at distinct left → separate groups)
+ * - detectColumns failure: grouping by position still works correctly
+ * - PDFs where detectColumns mis-detects: grouping handles it naturally
+ *
+ * Each span is positioned at its group's left (segment's actual X from pdfjs data).
+ * Spans are invisible (color: transparent from globals.css).
  *
  * CSS (.pdf-text-layer):
  * - visibility: hidden → invisible but present in DOM
  * - pointer-events: auto → allows native text selection even when hidden
- *
  * Each child <span>: visibility: visible + color: transparent (globals.css)
- * → invisible, participates in hit-testing, browser selection works, Ctrl+F works
  */
 function buildHiddenTextLayer(
   container: HTMLElement,
@@ -74,26 +74,37 @@ function buildHiddenTextLayer(
   for (const line of layout.lines) {
     if (!line.text.trim()) continue;
 
-    // Group segments by their left position (5px tolerance).
-    // Segments at similar X belong to the same logical column.
-    const groups = new Map<number, PretextSegment[]>();
-    for (const seg of line.segments) {
-      if (!seg.text.trim()) continue;
-      const key = Math.round(seg.left / TOLERANCE) * TOLERANCE;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(seg);
+    // Greedy clustering by position: sort segments by left, then group
+    // consecutive segments whose gap is ≤ TOLERANCE px.
+    // Two segments are in the same group if curr.left - last.right ≤ TOLERANCE.
+    // This naturally separates columns: left col (~40) vs right col (~325)
+    // are separated by a >TOLERANCE gap, creating distinct groups.
+    const sorted = [...line.segments]
+      .filter((s) => s.text.trim())
+      .sort((a, b) => a.left - b.left);
+    if (sorted.length === 0) continue;
+    const groups: Array<{ left: number; segs: PretextSegment[] }> = [{
+      left: sorted[0].left,
+      segs: [sorted[0]],
+    }];
+    for (let i = 1; i < sorted.length; i++) {
+      const curr = sorted[i];
+      const last = groups[groups.length - 1].segs[groups[groups.length - 1].segs.length - 1];
+      if (curr.left - (last.left + last.width) <= TOLERANCE) {
+        groups[groups.length - 1].segs.push(curr);
+      } else {
+        groups.push({ left: curr.left, segs: [curr] });
+      }
     }
 
-    for (const [_left, segs] of groups) {
+    for (const { left, segs } of groups) {
       const span = document.createElement('span');
       span.style.position = 'absolute';
       span.style.top = `${line.top}px`;
-      span.style.left = `${segs[0].left}px`;
+      span.style.left = `${left}px`;
       span.style.height = `${line.height}px`;
       span.style.whiteSpace = 'pre';
       span.style.lineHeight = `${line.height}px`;
-      // Single-space separation preserves word spacing within the group.
-      // color: transparent (from globals.css) means this doesn't affect visuals.
       span.textContent = segs.map((s) => s.text).join(' ');
       container.appendChild(span);
     }
