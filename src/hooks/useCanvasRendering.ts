@@ -19,6 +19,20 @@ export interface CanvasThemeColors {
   skeletonWaveEnd: string;
 }
 
+/** Normalized highlight data — stored in undo stack so deleted highlights can be restored. */
+export type HighlightData = {
+  nx: number; ny: number; nw: number; nh: number;
+  color: string;
+  text: string;
+};
+
+/** Discriminated union for all capture types stored in the undo stack.
+ *  Used by App to show undo toast when a capture is deleted. */
+export type CaptureUndoEntry =
+  | { type: 'highlight'; annotationId: string; pageNumber: number; highlightData: HighlightData }
+  | { type: 'note'; annotationId: string; pageNumber: number; createRequest: Parameters<typeof annotationCommands.create>[0] }
+  | { type: 'ai-card'; annotationId: string; pageNumber: number; createRequest: Parameters<typeof annotationCommands.create>[0] };
+
 export function useCanvasRendering(
   scrollContainerId: string,
   containerId: string,
@@ -34,6 +48,9 @@ export function useCanvasRendering(
    *  Used by App to track whether user has manually overridden auto-fit. */
   onZoomApplied?: (isAutomatic: boolean) => void,
   themeColors?: CanvasThemeColors,
+  /** Called after a capture (highlight/note/AI-card) is deleted via × button.
+   *  Passes the undo stack entry so App can show a toast with undo action. */
+  onDeleteCapture?: (entry: CaptureUndoEntry) => void,
 ) {
   const renderJobIdRef = useRef(0);
   const latestZoomRef = useRef(zoomLevel);
@@ -51,14 +68,15 @@ export function useCanvasRendering(
   const initialZoomSetRef = useRef(false);
   /** Stores the fit-to-width zoom value set by App (used to detect auto vs manual zoom). */
   const fitToWidthZoomRef = useRef<number>(1);
+  /** Ref to keep onDeleteCapture callback fresh without re-registering the event listener. */
+  const onDeleteCaptureRef = useRef(onDeleteCapture);
+  onDeleteCaptureRef.current = onDeleteCapture;
+
   /** Undo stack for all capture creations (highlights, notes, AI cards).
-   *  Stores either a highlight entry (just needs annotationId to undo)
-   *  or a note/AI card entry (needs full create params to recreate). */
-  const captureUndoStack = useRef<Array<
-    | { type: 'highlight'; annotationId: string; pageNumber: number }
-    | { type: 'note'; annotationId: string; pageNumber: number; createRequest: Parameters<typeof annotationCommands.create>[0] }
-    | { type: 'ai-card'; annotationId: string; pageNumber: number; createRequest: Parameters<typeof annotationCommands.create>[0] }
-  >>([]);
+   *  Stores entries so deleted captures can be restored via undo toast.
+   *  - highlights: has highlightData (normalized rects + color + text)
+   *  - notes/AI cards: has createRequest (full create params) */
+  const captureUndoStack = useRef<CaptureUndoEntry[]>([]);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
 
@@ -1436,7 +1454,12 @@ export function useCanvasRendering(
       const { pageNumber: pn, x, y, width, height } = pendingAnnotations[i];
       renderHighlight(pn, x, y, width, height, color, created[i]?.id);
       if (created[i]?.id) {
-        captureUndoStack.current.push({ type: 'highlight', annotationId: created[i].id, pageNumber: pn });
+        captureUndoStack.current.push({
+          type: 'highlight',
+          annotationId: created[i].id,
+          pageNumber: pn,
+          highlightData: { nx: pendingAnnotations[i].nx, ny: pendingAnnotations[i].ny, nw: pendingAnnotations[i].nw, nh: pendingAnnotations[i].nh, color, text },
+        });
       }
     }
 
@@ -1861,9 +1884,17 @@ export function useCanvasRendering(
         setTimeout(() => hlWrapper.remove(), 200);
         return;
       }
+      // Capture the undo stack entry before deleting (so App can show undo toast)
+      const deletedEntry = captureUndoStack.current.find(
+        (entry) => entry.annotationId === annotationId
+      );
       await annotationCommands.delete(annotationId);
       hlWrapper.classList.add('deleting');
-      setTimeout(() => hlWrapper.remove(), 200);
+      setTimeout(() => {
+        hlWrapper.remove();
+        // Notify App so it can show undo toast
+        if (deletedEntry) onDeleteCaptureRef.current?.(deletedEntry);
+      }, 200);
       captureUndoStack.current = captureUndoStack.current.filter(
         (entry) => entry.annotationId !== annotationId
       );
@@ -2057,6 +2088,40 @@ export function useCanvasRendering(
     tagChipRenderersRef.current.delete(annotationId);
   };
 
+  /** Restore a capture from an undo stack entry (used by undo toast). */
+  const restoreCapture = async (entry: CaptureUndoEntry) => {
+    if (!pdfDocument) return;
+    const containerEl = globalThis.document?.getElementById(containerId);
+    if (!(containerEl instanceof HTMLElement)) return;
+    const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${entry.pageNumber}"]`);
+    if (!pageEl) return;
+
+    if (entry.type === 'highlight') {
+      // Restore highlight: re-create in DB, re-render at normalized position
+      const pw = pageEl.offsetWidth || 1;
+      const ph = pageEl.offsetHeight || 1;
+      const x = entry.highlightData.nx * pw;
+      const y = entry.highlightData.ny * ph;
+      const width = entry.highlightData.nw * pw;
+      const height = entry.highlightData.nh * ph;
+      const restored = await annotationCommands.create({
+        document_id: pdfDocument.id,
+        page_number: entry.pageNumber,
+        annotation_type: 'highlight',
+        color: entry.highlightData.color,
+        position_x: entry.highlightData.nx,
+        position_y: entry.highlightData.ny,
+        position_width: entry.highlightData.nw,
+        position_height: entry.highlightData.nh,
+        text: entry.highlightData.text,
+      });
+      renderHighlight(entry.pageNumber, x, y, width, height, entry.highlightData.color, restored.id);
+    } else {
+      // Restore note or AI card: re-create in DB (card will appear on next render cycle)
+      await annotationCommands.create(entry.createRequest);
+    }
+  };
+
   // Remove a capture (highlight, note card, or AI card) from DOM by annotationId.
   // Also deletes from DB so the deletion persists across sessions.
   // Used by the CaptureDrawer to sync deletion with the canvas.
@@ -2116,6 +2181,7 @@ export function useCanvasRendering(
     removeCapture,
     removeCaptures,
     undoLastCapture,
+    restoreCapture,
     setFitToWidthZoom,
   };
 }

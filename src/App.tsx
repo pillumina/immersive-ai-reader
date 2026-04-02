@@ -8,7 +8,7 @@ const SettingsModal = lazy(() => import('@/components/features/SettingsModal').t
 import { Toast } from '@/components/ui/Toast';
 import { TagManagePopup } from '@/components/ui/TagManagePopup';
 import { L2AIPopover } from '@/components/capture/L2AIPopover';
-import { useCanvasRendering } from '@/hooks/useCanvasRendering';
+import { useCanvasRendering, type CaptureUndoEntry } from '@/hooks/useCanvasRendering';
 import { useCanvasColors } from '@/hooks/useCanvasColors';
 import { L3NoteEditor } from '@/components/capture/L3NoteEditor';
 import { MiniAIWindow } from '@/components/capture/MiniAIWindow';
@@ -31,6 +31,7 @@ import { ChapterSelector } from '@/components/features/ChapterSelector';
 interface ToastState {
   message: string;
   type: 'success' | 'error' | 'info';
+  action?: { label: string; onClick: () => void };
 }
 
 function App() {
@@ -189,6 +190,23 @@ const AppInner = memo(function AppInner() {
   // Theme-aware colors for canvas (Fabric.js) — must be declared before useCanvasRendering
   const canvasColors = useCanvasColors();
 
+  /** Handler passed to useCanvasRendering — receives deleted undo entry and shows toast with undo. */
+  const handleDeleteCaptureWithUndo = useCallback(
+    (entry: CaptureUndoEntry) => {
+      setToast({
+        message: '已删除',
+        type: 'success',
+        action: {
+          label: '撤销',
+          onClick: async () => {
+            await restoreCapture(entry);
+          },
+        },
+      });
+    },
+    [restoreCapture]
+  );
+
   const {
     isRendering,
     renderError,
@@ -207,6 +225,7 @@ const AppInner = memo(function AppInner() {
     clearCardRenderer,
     removeCapture,
     removeCaptures,
+    restoreCapture,
     setFitToWidthZoom,
   } = useCanvasRendering(
     activeTabId === 'library' ? '' : 'pdf-scroll-container',
@@ -236,6 +255,7 @@ const AppInner = memo(function AppInner() {
       }
     },
     canvasColors,
+    handleDeleteCaptureWithUndo,
   );
 
   // Stable callbacks passed to AIPanel to prevent unnecessary re-renders
@@ -1504,6 +1524,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
           message={toast.message}
           type={toast.type}
           onClose={() => setToast(null)}
+          action={toast.action}
         />
       )}
 

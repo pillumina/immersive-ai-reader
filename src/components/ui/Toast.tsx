@@ -1,11 +1,12 @@
 import { useEffect, useState, memo } from 'react';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, X, RotateCcw } from 'lucide-react';
 
 interface ToastProps {
   message: string;
   type: 'success' | 'error' | 'info';
   onClose: () => void;
   duration?: number;
+  action?: { label: string; onClick: () => void };
 }
 
 const icons = {
@@ -29,7 +30,7 @@ const styles: Record<ToastProps['type'], { bg: string; ring: string }> = {
   },
 };
 
-export const Toast = memo(function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
+export const Toast = memo(function Toast({ message, type, onClose, duration = 3000, action }: ToastProps) {
   const [visible, setVisible] = useState(false);
   const [exiting, setExiting] = useState(false);
 
@@ -70,6 +71,17 @@ export const Toast = memo(function Toast({ message, type, onClose, duration = 30
     >
       <Icon size={16} className="shrink-0 opacity-90" />
       <span className="text-[13px] leading-snug font-medium">{message}</span>
+      {action && (
+        <button
+          onClick={(e) => { e.stopPropagation(); action.onClick(); setExiting(true); }}
+          title={action.label}
+          aria-label={action.label}
+          className="ml-1 flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-[12px] font-medium transition-colors hover:bg-white/30"
+        >
+          <RotateCcw size={11} />
+          {action.label}
+        </button>
+      )}
       <button
         onClick={() => setExiting(true)}
         title="关闭提示"
