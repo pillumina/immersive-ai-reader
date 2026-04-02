@@ -216,58 +216,85 @@ export function detectColumns(layout: PretextPageLayout): ColumnInfo {
     return { isMultiColumn: false, columns: [] };
   }
 
-  // Collect all segment start positions
-  const positions: number[] = [];
+  // Collect all segment positions for largest-gap method
+  const leftPositions: number[] = [];
+  let maxRight = 0;
   for (const line of layout.lines) {
     for (const seg of line.segments) {
       if (seg.text.trim()) {
-        positions.push(seg.left);
-      }
-    }
-  }
-
-  if (positions.length < 10) {
-    return { isMultiColumn: false, columns: [] };
-  }
-
-  // Bin positions into buckets (10px tolerance)
-  const BUCKET_SIZE = 10;
-  const bucketMap = new Map<number, number>();
-  for (const x of positions) {
-    const key = Math.floor(x / BUCKET_SIZE);
-    bucketMap.set(key, (bucketMap.get(key) || 0) + 1);
-  }
-
-  // Find the top 2 peaks (use bucket's LEFT edge as the peak representative)
-  const sorted = [...bucketMap.entries()]
-    .sort((a, b) => b[1] - a[1]);
-
-  if (sorted.length < 2) {
-    return { isMultiColumn: false, columns: [] };
-  }
-
-  const peak1 = sorted[0][0] * BUCKET_SIZE; // LEFT edge of bucket (not center)
-  const peak2 = sorted[1][0] * BUCKET_SIZE;
-
-  // Use max right edge of all segments for accurate page width
-  const pageWidth = layout.lines.reduce((max, line) => {
-    for (const seg of line.segments) {
-      if (seg.text.trim()) {
+        leftPositions.push(seg.left);
         const right = seg.left + seg.width;
-        if (right > max) max = right;
+        if (right > maxRight) maxRight = right;
       }
     }
-    return max;
-  }, 0);
+  }
 
-  console.log('[detectColumns] page:', layout.pageNumber, 'positions:', positions.length, 'topBuckets:', sorted.slice(0,3).map(e => ({k:e[0],c:e[1]})), 'peak1:', peak1, 'peak2:', peak2, 'pageWidth:', pageWidth, 'gap:', Math.abs(peak2-peak1), '30%:', pageWidth*0.3);
-
-  if (Math.abs(peak2 - peak1) < pageWidth * 0.3) {
+  if (leftPositions.length < 10) {
     return { isMultiColumn: false, columns: [] };
   }
 
-  const boundary = (Math.min(peak1, peak2) + Math.max(peak1, peak2)) / 2;
-  console.log('[detectColumns] → MULTI, boundary:', boundary);
+  // ── Method 1: find the largest gap between sorted left positions ──
+  const sorted = [...leftPositions].sort((a, b) => a - b);
+  let maxGap = 0;
+  let maxGapLeft = 0;
+  let maxGapRight = 0;
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = sorted[i] - sorted[i - 1];
+    if (gap > maxGap) {
+      maxGap = gap;
+      maxGapLeft = sorted[i - 1];
+      maxGapRight = sorted[i];
+    }
+  }
+
+  // ── Method 2: bimodal bucket peak detection ──
+  // Bin into 5px buckets and find the two most populous non-adjacent buckets
+  const BUCKET = 5;
+  const bucketMap = new Map<number, { count: number; maxRight: number; minLeft: number }>();
+  for (const seg of layout.lines.flatMap((l) => l.segments)) {
+    if (!seg.text.trim()) continue;
+    const key = Math.floor(seg.left / BUCKET);
+    const existing = bucketMap.get(key);
+    const right = seg.left + seg.width;
+    if (existing) {
+      existing.count++;
+      if (right > existing.maxRight) existing.maxRight = right;
+      if (seg.left < existing.minLeft) existing.minLeft = seg.left;
+    } else {
+      bucketMap.set(key, { count: 1, maxRight: right, minLeft: seg.left });
+    }
+  }
+  const bucketSorted = [...bucketMap.entries()].sort((a, b) => b[1].count - a[1].count);
+
+  let bucketBoundary = 0;
+  let isMultiBucket = false;
+  let bucketGap = 0;
+  if (bucketSorted.length >= 2) {
+    const [peak1Key, peak1] = bucketSorted[0];
+    const [peak2Key, peak2] = bucketSorted[1];
+    bucketGap = Math.abs(peak1Key - peak2Key) * BUCKET;
+    if (bucketGap >= maxRight * 0.25) {
+      isMultiBucket = true;
+      // Determine which bucket is on the left (lower key = left column)
+      const [leftPeak, rightPeak] =
+        peak1Key < peak2Key ? [peak1, peak2] : [peak2, peak1];
+      // True boundary: midpoint between the right edge of the left column
+      // (leftPeak.maxRight) and the left edge of the right column (rightPeak.minLeft)
+      bucketBoundary = (leftPeak.maxRight + rightPeak.minLeft) / 2;
+    }
+  }
+
+  // Use whichever method gives the larger gap.
+  // When gaps are equal, prefer the bucket method — it computes the boundary
+  // from actual segment right edges (more accurate for real PDFs where bucket
+  // centers don't reflect true column boundaries).
+  const useBucket = isMultiBucket && bucketGap >= maxGap;
+  const boundary = useBucket ? bucketBoundary : (maxGapLeft + maxGapRight) / 2;
+  const boundaryGap = useBucket ? bucketGap : maxGap;
+
+  if (boundaryGap < maxRight * 0.25) {
+    return { isMultiColumn: false, columns: [] };
+  }
 
   return {
     isMultiColumn: true,

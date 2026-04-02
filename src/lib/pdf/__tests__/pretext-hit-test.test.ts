@@ -229,6 +229,38 @@ describe('detectColumns', () => {
     const info = detectColumns(layout);
     expect(info.isMultiColumn).toBe(false);
   });
+
+  it('computes boundary from segment right edges in bucket method', () => {
+    // Two narrow segments whose bucket centers are far apart, but the true
+    // column boundary must be computed from the segments' actual right edges.
+    // Left column: starts at 69, width 234 → right edge at 303
+    // Right column: starts at 384, width 234 → right edge at 618
+    // Gap between columns: 81px (303→384)
+    // Bucket centers: approx 69 and 384 → gap ~315px
+    // Expected boundary: midpoint of (303 + 384) / 2 = 343.5
+    const lines: PretextLineData[] = [];
+    for (let i = 0; i < 40; i++) {
+      const isLeft = i % 2 === 0;
+      const left = isLeft ? 69.3 : 384.3;
+      lines.push({
+        text: `Line ${i}`,
+        top: Math.floor(i / 2) * 16,
+        height: 14,
+        segments: [{ text: `Line ${i}`, left, width: 234 }],
+      });
+    }
+    const layout: PretextPageLayout = {
+      pageNumber: 1,
+      lines,
+      fullText: '',
+      columnInfo: { isMultiColumn: false, columns: [] },
+    };
+    const info = detectColumns(layout);
+    expect(info.isMultiColumn).toBe(true);
+    // Boundary must be between 303 and 384 (inside the inter-column gap), not at ~226
+    expect(info.boundary).toBeGreaterThan(300);
+    expect(info.boundary).toBeLessThan(390);
+  });
 });
 
 // ── hitTestLine ────────────────────────────────────────────────────────────────

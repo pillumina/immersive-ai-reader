@@ -1892,25 +1892,17 @@ export function useCanvasRendering(
     if (selRects.length === 0) return;
 
     const firstRectLeft = selRects[0].left;
-
-    // DEBUG
-    console.log('[selBg] page:', pageNum, 'pageRect.left:', pageRect.left.toFixed(1), 'colInfo:', layout.columnInfo.isMultiColumn, layout.columnInfo.columns.map(c => ({i:c.index,l:c.left.toFixed(1),r:c.right})));
-    console.log('[selBg] firstRectLeft(viewport):', firstRectLeft.toFixed(1), 'page-relative:', (firstRectLeft - pageRect.left).toFixed(1));
-
-    // Determine target column from the FIRST getClientRect item's left position.
     let targetCol: number | undefined;
     if (layout.columnInfo.isMultiColumn && layout.columnInfo.columns.length >= 2) {
       for (const col of layout.columnInfo.columns) {
         const colLeftVp = col.left + pageRect.left;
         const colRightVp = col.right === Infinity ? Infinity : col.right + pageRect.left;
-        console.log('[selBg] check col', col.index, ': vp range [', colLeftVp.toFixed(1), '-', colRightVp, '] firstRectLeft:', firstRectLeft.toFixed(1), '→ in?', firstRectLeft >= colLeftVp, firstRectLeft < colRightVp);
         if (firstRectLeft >= colLeftVp && firstRectLeft < colRightVp) {
           targetCol = col.index;
           break;
         }
       }
     }
-    console.log('[selBg] targetCol:', targetCol);
 
     // Get precise Y range from individual rects (not bounding box)
     const selTopPage = selRects[0].top - pageRect.top;
