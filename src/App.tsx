@@ -205,6 +205,7 @@ const AppInner = memo(function AppInner() {
     refreshCardTags,
     clearCardRenderer,
     removeCapture,
+    removeCaptures,
     setFitToWidthZoom,
   } = useCanvasRendering(
     activeTabId === 'library' ? '' : 'pdf-scroll-container',
@@ -1411,6 +1412,7 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             comparePaneCommand={comparePaneCommand}
             onSplitModeChange={setSplitActive}
             pdfFileBlob={currentDocument?.fileBlob ?? null}
+            onDeleteAnnotations={removeCaptures}
           />
 
           {!focusState.isActive && !splitActive && (

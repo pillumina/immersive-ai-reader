@@ -266,14 +266,23 @@ h1, h2, h3, h4, h5, h6 {
   color: inherit !important;
 }
 
-.pdf-highlight {
+.pdf-highlight-wrapper {
   position: absolute;
-  border-radius: 3px;
+  /* Wrapper receives pointer events so :hover works.
+     The inner .pdf-highlight div has pointer-events:none (passes clicks through). */
   pointer-events: none;
-  z-index: 1;
 }
 
-/* Hover delete button on each highlight block. */
+/* Visual highlight background — receives no pointer events so text selection works underneath. */
+.pdf-highlight {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+/* Hover delete button: positioned absolutely inside the wrapper.
+   pointer-events: auto so the button itself is clickable. */
 .pdf-highlight-delete-btn {
   position: absolute;
   top: 3px;
@@ -281,7 +290,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: rgba(28, 25, 23, 0.75);
+  background: rgba(28, 25, 23, 0.8);
   color: #fafaf9;
   border: none;
   cursor: pointer;
@@ -296,7 +305,8 @@ h1, h2, h3, h4, h5, h6 {
   line-height: 1;
 }
 
-.pdf-highlight:hover .pdf-highlight-delete-btn {
+/* Show delete button when user hovers the highlight wrapper */
+.pdf-highlight-wrapper:hover .pdf-highlight-delete-btn {
   opacity: 1;
 }
 

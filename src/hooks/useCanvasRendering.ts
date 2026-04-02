@@ -127,26 +127,30 @@ export function useCanvasRendering(
     if (!(containerEl instanceof HTMLElement)) return;
     const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${pageNumber}"]`);
     if (!pageEl) return;
+
+    // Wrapper handles hover detection (pointer-events: auto).
+    // Inner highlight div is the visual background (pointer-events: none so
+    // clicks pass through to text selection).
+    // Delete button sits outside the highlight div but inside the wrapper.
+    const wrapper = document.createElement('div');
+    wrapper.className = 'pdf-highlight-wrapper';
+    wrapper.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:${width}px;height:${height}px;`;
+
     const highlight = document.createElement('div');
     highlight.className = 'pdf-highlight';
-    highlight.style.left = `${x}px`;
-    highlight.style.top = `${y}px`;
-    highlight.style.width = `${width}px`;
-    highlight.style.height = `${height}px`;
-    highlight.style.backgroundColor = color;
-    if (annotationId) highlight.dataset.annotationId = annotationId;
+    highlight.style.cssText = 'position:absolute;inset:0;border-radius:3px;background-color:' + color;
 
-    // Delete button: appears on hover, top-right corner of the highlight block.
-    // Single delegated listener on container handles all highlight deletions.
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'pdf-highlight-delete-btn';
     deleteBtn.setAttribute('aria-label', 'Delete highlight');
     deleteBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     </svg>`;
-    highlight.appendChild(deleteBtn);
 
-    pageEl.appendChild(highlight);
+    wrapper.appendChild(highlight);
+    wrapper.appendChild(deleteBtn);
+    if (annotationId) wrapper.dataset.annotationId = annotationId;
+    pageEl.appendChild(wrapper);
   };
 
   /** Tracks which page numbers currently have highlights rendered in the DOM. */
@@ -601,7 +605,7 @@ export function useCanvasRendering(
       if (options?.selectedText) {
         const annotationId = options.annotationId;
         const setupConnector = () => {
-          const hlEl = pageEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${annotationId}"]`);
+          const hlEl = pageEl.querySelector<HTMLElement>(`.pdf-highlight-wrapper[data-annotation-id="${annotationId}"]`);
           if (!hlEl) return;
           const connectorId = `connector-${annotationId}`;
           let existingConnector = containerEl.querySelector<SVGElement>(`#${connectorId}`);
@@ -1442,7 +1446,7 @@ export function useCanvasRendering(
     await annotationCommands.delete(annotationId);
     const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${entry.pageNumber}"]`);
     if (pageEl) {
-      const hl = pageEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${annotationId}"]`);
+      const hl = pageEl.querySelector<HTMLElement>(`.pdf-highlight-wrapper[data-annotation-id="${annotationId}"]`);
       hl?.remove();
     }
   };
@@ -1700,7 +1704,7 @@ export function useCanvasRendering(
     if (containerEl instanceof HTMLElement) {
       const card = containerEl.querySelector<HTMLElement>(`.pdf-ai-card[data-message-id="${messageId}"]`);
       card?.remove();
-      const highlight = containerEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${aiAnnotation.id}"]`);
+      const highlight = containerEl.querySelector<HTMLElement>(`.pdf-highlight-wrapper[data-annotation-id="${aiAnnotation.id}"]`);
       highlight?.remove();
     }
     onPinnedIdsChange?.(messageId);
@@ -1798,19 +1802,20 @@ export function useCanvasRendering(
     // Single handler covers both cases.
     const deleteHandler = async (e: MouseEvent) => {
       const btn = (e.target as HTMLElement).closest('.pdf-highlight-delete-btn') as HTMLElement | null;
-      const hlEl = btn?.closest('.pdf-highlight') as HTMLElement | null
-        ?? (e.target as HTMLElement).closest('.pdf-highlight') as HTMLElement | null;
+      // annotationId is on .pdf-highlight-wrapper (the outer container)
+      const hlWrapper = (btn?.closest('.pdf-highlight-wrapper') as HTMLElement | null)
+        ?? ((e.target as HTMLElement).closest('.pdf-highlight-wrapper') as HTMLElement | null);
 
-      // Only act when clicking the × button directly (hover case) or right-clicking the highlight
-      if (e.type === 'contextmenu' && !hlEl) return;
+      // Only act when clicking the × button (hover case) or right-clicking the wrapper
+      if (e.type === 'contextmenu' && !hlWrapper) return;
       if (e.type === 'click' && !btn) return;
       if (e.type === 'contextmenu') e.preventDefault();
 
-      if (!hlEl) return;
-      const annotationId = hlEl.dataset.annotationId;
-      if (!annotationId) { hlEl.remove(); return; }
+      if (!hlWrapper) return;
+      const annotationId = hlWrapper.dataset.annotationId;
+      if (!annotationId) { hlWrapper.remove(); return; }
       await annotationCommands.delete(annotationId);
-      hlEl.remove();
+      hlWrapper.remove();
       highlightUndoStack.current = highlightUndoStack.current.filter(
         (entry) => entry.annotationId !== annotationId
       );
@@ -2011,7 +2016,7 @@ export function useCanvasRendering(
     if (!(containerEl instanceof HTMLElement)) return;
 
     // Remove the highlight element if present
-    const highlightEl = containerEl.querySelector<HTMLElement>(`.pdf-highlight[data-annotation-id="${annotationId}"]`);
+    const highlightEl = containerEl.querySelector<HTMLElement>(`.pdf-highlight-wrapper[data-annotation-id="${annotationId}"]`);
     if (highlightEl) highlightEl.remove();
 
     // Remove the note/AI card if present and call its cleanup
@@ -2027,6 +2032,11 @@ export function useCanvasRendering(
     if (aiCardEl) aiCardEl.remove();
 
     clearCardRenderer(annotationId);
+  };
+
+  /** Remove multiple captures at once. Used when clearing overlapping highlights. */
+  const removeCaptures = (annotationIds: string[]) => {
+    annotationIds.forEach((id) => removeCapture(id));
   };
 
   /** Update the stored fit-to-width zoom value (called by App when it calculates fit-to-width). */
@@ -2052,6 +2062,7 @@ export function useCanvasRendering(
     refreshCardTags,
     clearCardRenderer,
     removeCapture,
+    removeCaptures,
     setFitToWidthZoom,
   };
 }

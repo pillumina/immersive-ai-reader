@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut, X, StickyNote, MessageCircleQuestion, Highlighter, Copy } from 'lucide-react';
+import { ZoomIn, ZoomOut, X, StickyNote, MessageCircleQuestion, Highlighter, Copy, Trash2 } from 'lucide-react';
 import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PdfOutlineItem } from '@/lib/pdf/renderer';
@@ -39,6 +39,8 @@ interface MainCanvasProps {
   } | null;
   onSplitModeChange?: (active: boolean) => void;
   pdfFileBlob?: Blob | null;
+  /** Delete multiple annotations by ID. Used to clear highlights overlapping text selection. */
+  onDeleteAnnotations?: (annotationIds: string[]) => void;
 }
 
 export const MainCanvas = memo(function MainCanvas({
@@ -65,6 +67,7 @@ export const MainCanvas = memo(function MainCanvas({
   comparePaneCommand,
   onSplitModeChange,
   pdfFileBlob,
+  onDeleteAnnotations,
 }: MainCanvasProps) {
   const [tocOpen, setTocOpen] = useState(false);
   const [tocQuery, setTocQuery] = useState('');
@@ -85,7 +88,7 @@ export const MainCanvas = memo(function MainCanvas({
   type L1Bubble = { x: number; y: number; text: string; page?: number };
   const [l1Bubble, setL1Bubble] = useState<L1Bubble | null>(null);
   const l1BubbleHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const textHandleRef = useRef<{ x: number; y: number; page?: number; text: string } | null>(null);
+  const textHandleRef = useRef<{ x: number; y: number; page?: number; text: string; overlappingHlIds?: string[] } | null>(null);
   const compareStageRef = useRef<HTMLElement | null>(null);
   const [, forceTextToolbarUpdate] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -299,11 +302,31 @@ export const MainCanvas = memo(function MainCanvas({
         if (pageEl) {
           const page = Number(pageEl.dataset.pageNumber || '0') || undefined;
 
+          // Detect if selection overlaps any existing highlight on this page
+          const overlappingHlIds: string[] = [];
+          pageEl.querySelectorAll<HTMLElement>('.pdf-highlight-wrapper[data-annotation-id]').forEach((hlEl) => {
+            const hlRect = hlEl.getBoundingClientRect();
+            for (const selRect of rects) {
+              // Check overlap (non-zero intersection)
+              if (
+                selRect.left < hlRect.right &&
+                selRect.right > hlRect.left &&
+                selRect.top < hlRect.bottom &&
+                selRect.bottom > hlRect.top
+              ) {
+                const id = hlEl.dataset.annotationId;
+                if (id && !overlappingHlIds.includes(id)) overlappingHlIds.push(id);
+                break;
+              }
+            }
+          });
+
           textHandleRef.current = {
             x: lastRect.left + lastRect.width / 2,
             y: lastRect.top - 8,
             page,
             text: sel.toString().trim(),
+            overlappingHlIds: overlappingHlIds.length > 0 ? overlappingHlIds : undefined,
           };
           forceTextToolbarUpdate((n) => n + 1);
         }
@@ -1294,6 +1317,28 @@ export const MainCanvas = memo(function MainCanvas({
               <span className="text-action-icon"><Highlighter size={14} /></span>
               <span className="text-action-label">Highlight</span>
             </button>
+
+            {/* Show "Clear highlight" when selected text overlaps an existing highlight */}
+            {textHandleRef.current?.overlappingHlIds && textHandleRef.current.overlappingHlIds.length > 0 && (
+              <>
+                <div className="text-action-divider" />
+                <button
+                  type="button"
+                  className="text-action-btn"
+                  title="Clear overlapping highlight"
+                  onClick={() => {
+                    const ids = textHandleRef.current?.overlappingHlIds ?? [];
+                    onDeleteAnnotations?.(ids);
+                    globalThis.getSelection?.()?.removeAllRanges();
+                    textHandleRef.current = null;
+                    forceTextToolbarUpdate((n) => n + 1);
+                  }}
+                >
+                  <span className="text-action-icon"><Trash2 size={14} /></span>
+                  <span className="text-action-label">Clear</span>
+                </button>
+              </>
+            )}
 
             <div className="text-action-divider" />
 
