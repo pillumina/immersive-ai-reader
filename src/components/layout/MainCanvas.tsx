@@ -1361,28 +1361,35 @@ export const MainCanvas = memo(function MainCanvas({
                   style={{ backdropFilter: 'blur(12px)' }}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
-                  {/* Clear — only when overlapping an existing highlight */}
-                  {textHandleRef.current?.overlappingHlIds && textHandleRef.current.overlappingHlIds.length > 0 && (
-                    <>
-                      <button
-                        type="button"
-                        className="text-action-btn text-action-btn--danger w-full justify-start px-3"
-                        title="清除已有高亮"
-                        onClick={() => {
-                          const ids = textHandleRef.current?.overlappingHlIds ?? [];
-                          onDeleteAnnotations?.(ids);
-                          globalThis.getSelection?.()?.removeAllRanges();
-                          textHandleRef.current = null;
-                          setOverflowOpen(false);
-                          forceTextToolbarUpdate((n) => n + 1);
-                        }}
-                      >
-                        <span className="text-action-icon"><Trash2 size={13} /></span>
-                        <span className="text-action-label">清除高亮</span>
-                      </button>
-                      <div className="text-action-divider mx-2 my-1" />
-                    </>
-                  )}
+                  {/* Clear — always shown, clears overlapping or all page highlights */}
+                  <button
+                    type="button"
+                    className="text-action-btn text-action-btn--danger w-full justify-start px-3"
+                    title={textHandleRef.current?.overlappingHlIds && textHandleRef.current.overlappingHlIds.length > 0 ? '清除重叠高亮' : '清除此页所有高亮'}
+                    onClick={() => {
+                      const overlappingIds = textHandleRef.current?.overlappingHlIds ?? [];
+                      const idsToDelete: string[] = overlappingIds.length > 0 ? overlappingIds : (() => {
+                        const ids: string[] = [];
+                        const pageEl = globalThis.document?.querySelector<HTMLElement>(`.pdf-page[data-page-number="${textHandleRef.current?.page}"]`);
+                        pageEl?.querySelectorAll<HTMLElement>('.pdf-highlight-wrapper[data-annotation-id]').forEach((el) => {
+                          const id = el.dataset.annotationId;
+                          if (id) ids.push(id);
+                        });
+                        return ids;
+                      })();
+                      onDeleteAnnotations?.(idsToDelete);
+                      globalThis.getSelection?.()?.removeAllRanges();
+                      textHandleRef.current = null;
+                      setOverflowOpen(false);
+                      forceTextToolbarUpdate((n) => n + 1);
+                    }}
+                  >
+                    <span className="text-action-icon"><Trash2 size={13} /></span>
+                    <span className="text-action-label">
+                      {textHandleRef.current?.overlappingHlIds && textHandleRef.current.overlappingHlIds.length > 0 ? '清除高亮' : '清除此页高亮'}
+                    </span>
+                  </button>
+                  <div className="text-action-divider mx-2 my-1" />
 
                   <button
                     type="button"
