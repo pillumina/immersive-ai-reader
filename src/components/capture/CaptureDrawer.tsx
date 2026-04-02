@@ -440,7 +440,7 @@ export const CaptureDrawer = memo(function CaptureDrawer({
               <div className="text-3xl mb-3">📭</div>
               <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">
                 {activeTab === 'all'
-                  ? '还没有任何捕获。\nFocus Mode 下选中文本即可开始。'
+                  ? '还没有任何捕获。\n选中文本后点击工具栏高亮按钮即可开始。'
                   : `暂无${TABS.find((t) => t.key === activeTab)?.label}。`}
               </p>
             </div>
