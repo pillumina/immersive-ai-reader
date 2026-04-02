@@ -892,10 +892,38 @@ const AppInner = memo(function AppInner() {
 
   // ─── Capture Drawer handlers ─────────────────────────────────────
   const handleDeleteCapture = async (id: string) => {
+    const item = captures.find((c) => c.id === id);
+    if (!item) return;
     try {
-      await removeCapture(id);
+      const result = await removeCapture(id);
       setCaptures((prev) => prev.filter((c) => c.id !== id));
-      setToast({ message: '已删除', type: 'success' });
+      // Build undo entry from the returned data
+      if (result && typeof result === 'object' && 'highlightData' in result) {
+        const entry: CaptureUndoEntry = {
+          type: 'highlight',
+          annotationId: result.annotationId,
+          pageNumber: result.pageNumber,
+          highlightData: { ...result.highlightData, text: item.highlightText ?? '' },
+        };
+        handleDeleteCaptureWithUndo(entry);
+      } else {
+        const entry: CaptureUndoEntry = {
+          type: item.type === 'highlight' ? 'highlight' : (item.type === 'note' ? 'note' : 'ai-card'),
+          annotationId: id,
+          pageNumber: item.pageNumber,
+          createRequest: {
+            document_id: currentDocument?.id ?? '',
+            page_number: item.pageNumber,
+            annotation_type: item.type === 'ai-response' ? 'ai-card' : 'note',
+            color: '',
+            position_x: 0,
+            position_y: 0,
+            position_width: 0,
+            position_height: 0,
+          },
+        };
+        handleDeleteCaptureWithUndo(entry);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : '删除失败';
       setToast({ message, type: 'error' });

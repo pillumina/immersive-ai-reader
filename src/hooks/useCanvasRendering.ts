@@ -2124,17 +2124,41 @@ export function useCanvasRendering(
 
   // Remove a capture (highlight, note card, or AI card) from DOM by annotationId.
   // Also deletes from DB so the deletion persists across sessions.
-  // Used by the CaptureDrawer to sync deletion with the canvas.
-  const removeCapture = async (annotationId: string) => {
+  /** Return value: annotationId + highlightData (for highlights) or just annotationId (for notes/AI cards). */
+  const removeCapture = async (annotationId: string): Promise<{ annotationId: string; pageNumber: number; highlightData: HighlightData } | string | null> => {
     const containerEl = globalThis.document?.getElementById(containerId);
-    if (!(containerEl instanceof HTMLElement)) return;
+    if (!(containerEl instanceof HTMLElement)) return null;
+
+    // Find the highlight element to capture normalized rect for undo
+    const highlightEl = containerEl.querySelector<HTMLElement>(`.pdf-highlight-wrapper[data-annotation-id="${annotationId}"]`);
+    if (highlightEl) {
+      // Compute normalized rect from current pixel position (for undo restore)
+      const pageEl = highlightEl.closest('.pdf-page') as HTMLElement | null;
+      const pw = pageEl?.offsetWidth || 1;
+      const ph = pageEl?.offsetHeight || 1;
+      const style = highlightEl.style;
+      const nx = (parseFloat(style.left) || 0) / pw;
+      const ny = (parseFloat(style.top) || 0) / ph;
+      const nw = (parseFloat(style.width) || 0) / pw;
+      const nh = (parseFloat(style.height) || 0) / ph;
+      const highlightDiv = highlightEl.querySelector<HTMLElement>('.pdf-highlight');
+      const color = highlightDiv?.style.backgroundColor ?? 'rgba(255,235,59,0.35)';
+      const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber || '1') : 1;
+
+      // Delete from DB first so the deletion persists across app restarts
+      await annotationCommands.delete(annotationId);
+      highlightEl.classList.add('deleting');
+      setTimeout(() => highlightEl.remove(), 200);
+
+      // Also clean up from the undo stack so undo doesn't double-delete
+      captureUndoStack.current = captureUndoStack.current.filter((e) => e.annotationId !== annotationId);
+
+      clearCardRenderer(annotationId);
+      return { annotationId, pageNumber, highlightData: { nx, ny, nw, nh, color, text: '' } };
+    }
 
     // Delete from DB first so the deletion persists across app restarts
     await annotationCommands.delete(annotationId);
-
-    // Remove the highlight element if present
-    const highlightEl = containerEl.querySelector<HTMLElement>(`.pdf-highlight-wrapper[data-annotation-id="${annotationId}"]`);
-    if (highlightEl) highlightEl.remove();
 
     // Remove the note/AI card if present and call its cleanup
     const noteCardEl = containerEl.querySelector<HTMLElement>(`.pdf-note-card[data-annotation-id="${annotationId}"]`);
@@ -2148,7 +2172,11 @@ export function useCanvasRendering(
     const aiCardEl = containerEl.querySelector<HTMLElement>(`.pdf-ai-card[data-annotation-id="${annotationId}"]`);
     if (aiCardEl) aiCardEl.remove();
 
+    // Also clean up from the undo stack so undo doesn't double-delete
+    captureUndoStack.current = captureUndoStack.current.filter((e) => e.annotationId !== annotationId);
+
     clearCardRenderer(annotationId);
+    return annotationId;
   };
 
   /** Remove multiple captures at once. Used when clearing overlapping highlights. */
