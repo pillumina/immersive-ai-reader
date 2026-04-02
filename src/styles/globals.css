@@ -273,6 +273,38 @@ h1, h2, h3, h4, h5, h6 {
   z-index: 1;
 }
 
+/* Hover delete button on each highlight block. */
+.pdf-highlight-delete-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(28, 25, 23, 0.75);
+  color: #fafaf9;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: auto;
+  z-index: 10;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  padding: 0;
+  line-height: 1;
+}
+
+.pdf-highlight:hover .pdf-highlight-delete-btn {
+  opacity: 1;
+}
+
+.pdf-highlight-delete-btn:hover {
+  background: rgba(220, 38, 38, 0.9);
+  transform: scale(1.15);
+}
+
 /* ─── Canvas Cards: Shared ─────────────────────────────── */
 .pdf-note-card,
 .pdf-ai-card {

@@ -56,8 +56,6 @@ export function useCanvasRendering(
     annotationId: string; pageNumber: number;
     x: number; y: number; width: number; height: number;
   }>>([]);
-  /** Tracks undo stack size for reactive UI (shown only when stack is non-empty). */
-  const [undoHighlightCount, setUndoHighlightCount] = useState(0);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
 
@@ -137,6 +135,17 @@ export function useCanvasRendering(
     highlight.style.height = `${height}px`;
     highlight.style.backgroundColor = color;
     if (annotationId) highlight.dataset.annotationId = annotationId;
+
+    // Delete button: appears on hover, top-right corner of the highlight block.
+    // Single delegated listener on container handles all highlight deletions.
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'pdf-highlight-delete-btn';
+    deleteBtn.setAttribute('aria-label', 'Delete highlight');
+    deleteBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>`;
+    highlight.appendChild(deleteBtn);
+
     pageEl.appendChild(highlight);
   };
 
@@ -1416,7 +1425,6 @@ export function useCanvasRendering(
       renderHighlight(pn, x, y, width, height, color, created[i]?.id);
       if (created[i]?.id) {
         highlightUndoStack.current.push({ annotationId: created[i].id, pageNumber: pn, x, y, width, height });
-        setUndoHighlightCount(highlightUndoStack.current.length);
       }
     }
 
@@ -1428,7 +1436,6 @@ export function useCanvasRendering(
   const undoLastHighlight = async () => {
     const entry = highlightUndoStack.current.pop();
     if (!entry) return;
-    setUndoHighlightCount(highlightUndoStack.current.length);
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!containerEl) return;
     const { annotationId } = entry;
@@ -1781,69 +1788,42 @@ export function useCanvasRendering(
     return () => containerEl.removeEventListener('dblclick', handler);
   }, [containerId, onHighlightDoubleClick]);
 
-  // ── Highlight keyboard + context menu ──────────────────────────────────────────
-
-  /** Show/hide a simple floating delete button for highlights. */
-  const showHighlightDeleteMenu = (hlEl: HTMLElement, _pageNumber: number) => {
-    // Remove any existing menu
-    document.querySelectorAll('.highlight-delete-menu').forEach((m) => m.remove());
-
-    const menu = document.createElement('div');
-    menu.className = 'highlight-delete-menu';
-    menu.style.cssText = [
-      'position:fixed',
-      `left:${hlEl.getBoundingClientRect().left}px`,
-      `top:${hlEl.getBoundingClientRect().bottom + 4}px`,
-      'background:#1c1917',
-      'color:#fafaf9',
-      'border-radius:6px',
-      'padding:6px 12px',
-      'font-size:13px',
-      'cursor:pointer',
-      'z-index:9999',
-      'box-shadow:0 2px 8px rgba(0,0,0,0.25)',
-      'user-select:none',
-    ].join(';');
-    menu.textContent = '✕ 删除高亮';
-    menu.addEventListener('click', async () => {
-      const annotationId = hlEl.dataset.annotationId;
-      if (!annotationId) { menu.remove(); return; }
-      await annotationCommands.delete(annotationId);
-      hlEl.remove();
-      highlightUndoStack.current = highlightUndoStack.current.filter(
-        (e) => e.annotationId !== annotationId
-      );
-      setUndoHighlightCount(highlightUndoStack.current.length);
-      menu.remove();
-    });
-    document.body.appendChild(menu);
-
-    // Close menu on next click outside
-    const closeMenu = (e: MouseEvent) => {
-      if (!menu.contains(e.target as Node)) {
-        menu.remove();
-        document.removeEventListener('click', closeMenu);
-      }
-    };
-    setTimeout(() => document.addEventListener('click', closeMenu, { once: true }), 0);
-  };
+  // ── Highlight hover delete button ─────────────────────────────────────────────
 
   useEffect(() => {
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!containerEl) return;
 
-    // Right-click on highlight → show delete button
-    const contextHandler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const hlEl = target.closest('.pdf-highlight') as HTMLElement | null;
+    // Delegated click: hover × button OR right-click → delete highlight.
+    // Single handler covers both cases.
+    const deleteHandler = async (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest('.pdf-highlight-delete-btn') as HTMLElement | null;
+      const hlEl = btn?.closest('.pdf-highlight') as HTMLElement | null
+        ?? (e.target as HTMLElement).closest('.pdf-highlight') as HTMLElement | null;
+
+      // Only act when clicking the × button directly (hover case) or right-clicking the highlight
+      if (e.type === 'contextmenu' && !hlEl) return;
+      if (e.type === 'click' && !btn) return;
+      if (e.type === 'contextmenu') e.preventDefault();
+
       if (!hlEl) return;
-      e.preventDefault();
-      const pageEl = hlEl.closest('.pdf-page') as HTMLElement | null;
-      const pageNumber = pageEl ? Number(pageEl.dataset.pageNumber || '1') : 1;
-      showHighlightDeleteMenu(hlEl, pageNumber);
+      const annotationId = hlEl.dataset.annotationId;
+      if (!annotationId) { hlEl.remove(); return; }
+      await annotationCommands.delete(annotationId);
+      hlEl.remove();
+      highlightUndoStack.current = highlightUndoStack.current.filter(
+        (entry) => entry.annotationId !== annotationId
+      );
+      // Close any floating delete menu
+      document.querySelectorAll('.highlight-delete-menu').forEach((m) => m.remove());
     };
-    containerEl.addEventListener('contextmenu', contextHandler);
-    return () => containerEl.removeEventListener('contextmenu', contextHandler);
+
+    containerEl.addEventListener('click', deleteHandler);
+    containerEl.addEventListener('contextmenu', deleteHandler);
+    return () => {
+      containerEl.removeEventListener('click', deleteHandler);
+      containerEl.removeEventListener('contextmenu', deleteHandler);
+    };
   }, [containerId]);
 
   // Ctrl+Z → undo last highlight creation
@@ -2073,7 +2053,5 @@ export function useCanvasRendering(
     clearCardRenderer,
     removeCapture,
     setFitToWidthZoom,
-    undoLastHighlight,
-    undoHighlightCount,
   };
 }

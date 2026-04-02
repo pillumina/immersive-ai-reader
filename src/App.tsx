@@ -206,8 +206,6 @@ const AppInner = memo(function AppInner() {
     clearCardRenderer,
     removeCapture,
     setFitToWidthZoom,
-    undoLastHighlight,
-    undoHighlightCount,
   } = useCanvasRendering(
     activeTabId === 'library' ? '' : 'pdf-scroll-container',
     activeTabId === 'library' ? '' : 'pdf-pages-container',
@@ -1413,8 +1411,6 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
             comparePaneCommand={comparePaneCommand}
             onSplitModeChange={setSplitActive}
             pdfFileBlob={currentDocument?.fileBlob ?? null}
-            onUndoHighlight={undoLastHighlight}
-            undoHighlightCount={undoHighlightCount}
           />
 
           {!focusState.isActive && !splitActive && (
