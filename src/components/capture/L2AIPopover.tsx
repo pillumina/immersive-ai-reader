@@ -1,4 +1,4 @@
-import { Brain, Languages, MessageSquare, StickyNote, type LucideIcon } from 'lucide-react';
+import { Brain, Languages, StickyNote, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
@@ -33,8 +33,7 @@ interface L2Option {
 const OPTIONS: L2Option[] = [
   { key: 'explain', label: '让 AI 解释', icon: Brain, shortcut: '1' },
   { key: 'translate', label: '让 AI 翻译', icon: Languages, shortcut: '2' },
-  { key: 'add-to-session', label: '加入 AI 会话', icon: MessageSquare, shortcut: '3' },
-  { key: 'new-note', label: '新建笔记', icon: StickyNote, shortcut: '4' },
+  { key: 'new-note', label: '新建笔记', icon: StickyNote, shortcut: '3' },
 ];
 
 /** Debounce window after popover appears (ms) — prevents accidental double-clicks */
@@ -99,7 +98,7 @@ export const L2AIPopover = memo(function L2AIPopover({
     [debouncing, onAction, onClose, text, page]
   );
 
-  // Keyboard shortcuts (1-4, Escape)
+  // Keyboard shortcuts (1-3, Escape)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Don't intercept when user is typing

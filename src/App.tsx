@@ -113,6 +113,7 @@ const AppInner = memo(function AppInner() {
     dismissResumePrompt,
     dismissSummary80,
     dismissFocusTooltip,
+    currentTip,
   } = useFocusMode();
   /** Captured DOM range rect + page number from text selection before toolbar clears it */
   const noteInputCapturedRangeRef = useRef<{
@@ -1633,26 +1634,28 @@ Use citations [ref:pN] where N is the page number. Focus only on the provided co
         </div>
       )}
 
-      {/* First-use Focus Mode tooltip */}
-      {focusState.focusTooltipVisible && (
+      {/* Progressive Focus Mode tooltip — one tip at a time */}
+      {focusState.focusTooltipVisible && currentTip && (
         <div className="fixed left-4 bottom-4 z-[9999] bg-[var(--color-text)] text-[var(--color-text-inverse)] rounded-2xl shadow-2xl p-4 w-72 animate-in fade-in slide-in-from-bottom-4">
           <div className="flex items-start gap-3">
-            <span className="text-2xl flex-shrink-0 mt-0.5">🎯</span>
+            <span className="text-2xl flex-shrink-0 mt-0.5">{currentTip.icon}</span>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold mb-1.5">Focus Mode 使用提示</p>
-              <ul className="text-[11px] text-[var(--color-text-muted)] leading-relaxed space-y-1">
-                <li>• 选中文本自动高亮（蓝色）</li>
-                <li>• 点击气泡添加笔记或问 AI</li>
-                <li>• <kbd className="bg-white/10 px-1 py-0.5 rounded text-[10px]">Cmd+`</kbd> 打开 Mini AI 窗口</li>
-                <li>• <kbd className="bg-white/10 px-1 py-0.5 rounded text-[10px]">Cmd+Shift+B</kbd> 打开捕获抽屉</li>
-                <li>• <kbd className="bg-white/10 px-1 py-0.5 rounded text-[10px]">Esc</kbd> 退出 Focus Mode</li>
-              </ul>
-              <button
-                className="mt-2.5 text-[11px] text-[var(--color-text-muted)] hover:text-white transition-colors underline underline-offset-2"
-                onClick={() => { dismissFocusTooltip(); }}
-              >
-                知道了
-              </button>
+              <p className="text-[13px] font-semibold mb-1">{currentTip.title}</p>
+              <p className="text-[12px] text-white/70 leading-relaxed">{currentTip.desc}</p>
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  className="text-[11px] text-white/50 hover:text-white transition-colors"
+                  onClick={() => { dismissFocusTooltip(true); }}
+                >
+                  下一个提示 →
+                </button>
+                <button
+                  className="text-[11px] text-white/40 hover:text-white/70 transition-colors"
+                  onClick={() => { dismissFocusTooltip(false); }}
+                >
+                  关闭
+                </button>
+              </div>
             </div>
           </div>
         </div>

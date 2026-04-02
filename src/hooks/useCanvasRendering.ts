@@ -51,11 +51,14 @@ export function useCanvasRendering(
   const initialZoomSetRef = useRef(false);
   /** Stores the fit-to-width zoom value set by App (used to detect auto vs manual zoom). */
   const fitToWidthZoomRef = useRef<number>(1);
-  /** Undo stack for highlight creations. Each entry: {annotationId, pageNumber, x, y, width, height}. */
-  const highlightUndoStack = useRef<Array<{
-    annotationId: string; pageNumber: number;
-    x: number; y: number; width: number; height: number;
-  }>>([]);
+  /** Undo stack for all capture creations (highlights, notes, AI cards).
+   *  Stores either a highlight entry (just needs annotationId to undo)
+   *  or a note/AI card entry (needs full create params to recreate). */
+  const captureUndoStack = useRef<Array<
+    | { type: 'highlight'; annotationId: string; pageNumber: number }
+    | { type: 'note'; annotationId: string; pageNumber: number; createRequest: Parameters<typeof annotationCommands.create>[0] }
+    | { type: 'ai-card'; annotationId: string; pageNumber: number; createRequest: Parameters<typeof annotationCommands.create>[0] }
+  >>([]);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
 
@@ -1433,7 +1436,7 @@ export function useCanvasRendering(
       const { pageNumber: pn, x, y, width, height } = pendingAnnotations[i];
       renderHighlight(pn, x, y, width, height, color, created[i]?.id);
       if (created[i]?.id) {
-        highlightUndoStack.current.push({ annotationId: created[i].id, pageNumber: pn, x, y, width, height });
+        captureUndoStack.current.push({ type: 'highlight', annotationId: created[i].id, pageNumber: pn });
       }
     }
 
@@ -1441,18 +1444,37 @@ export function useCanvasRendering(
     return pendingAnnotations.length;
   };
 
-  /** Undo the last highlight creation. Removes from DB and DOM. */
-  const undoLastHighlight = async () => {
-    const entry = highlightUndoStack.current.pop();
+  /** Undo the last capture creation (highlight, note, or AI card).
+   *  For highlights: deletes from DB + removes DOM.
+   *  For notes/AI cards: deletes from DB + removes DOM. */
+  const undoLastCapture = async () => {
+    const entry = captureUndoStack.current.pop();
     if (!entry) return;
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!containerEl) return;
-    const { annotationId } = entry;
-    await annotationCommands.delete(annotationId);
-    const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${entry.pageNumber}"]`);
-    if (pageEl) {
-      const hl = pageEl.querySelector<HTMLElement>(`.pdf-highlight-wrapper[data-annotation-id="${annotationId}"]`);
-      hl?.remove();
+
+    await annotationCommands.delete(entry.annotationId);
+
+    if (entry.type === 'highlight') {
+      const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${entry.pageNumber}"]`);
+      if (pageEl) {
+        const hl = pageEl.querySelector<HTMLElement>(`.pdf-highlight-wrapper[data-annotation-id="${entry.annotationId}"]`);
+        hl?.remove();
+      }
+    } else {
+      // note or ai-card: remove the card element
+      const pageEl = containerEl.querySelector<HTMLElement>(`.pdf-page[data-page-number="${entry.pageNumber}"]`);
+      if (pageEl) {
+        const card = pageEl.querySelector<HTMLElement>(
+          `.pdf-note-card[data-annotation-id="${entry.annotationId}"],` +
+          `.pdf-ai-card[data-annotation-id="${entry.annotationId}"]`
+        );
+        if (card) {
+          const cleanup = (card as HTMLElement & { _dragCleanup?: () => void })._dragCleanup;
+          if (cleanup) cleanup();
+          card.remove();
+        }
+      }
     }
   };
 
@@ -1559,7 +1581,7 @@ export function useCanvasRendering(
       nx = x; ny = y; nw = width; nh = height;
     }
 
-    const createdNote = await annotationCommands.create({
+    const noteCreateRequest = {
       document_id: pdfDocument.id,
       page_number: pageNumber,
       annotation_type: 'highlight',
@@ -1569,12 +1591,16 @@ export function useCanvasRendering(
       position_width: nw,
       position_height: nh,
       text: selectedText ? `${NOTE_PREFIX}${note}\n\n${selectedText}` : `${NOTE_PREFIX}${note}`,
-    });
+    };
+    const createdNote = await annotationCommands.create(noteCreateRequest);
 
     if (hasSelection) {
       renderHighlight(pageNumber, x, y, width, height, 'rgba(14, 165, 233, 0.25)', createdNote?.id);
     }
     renderNoteCard(pageNumber, x, y, note, { annotationId: createdNote?.id, selectedText });
+    if (createdNote?.id) {
+      captureUndoStack.current.push({ type: 'note', annotationId: createdNote.id, pageNumber, createRequest: noteCreateRequest });
+    }
     selection?.removeAllRanges();
     return createdNote;
   };
@@ -1609,7 +1635,7 @@ export function useCanvasRendering(
     const textPayload = kind === 'ai-card'
       ? `${AI_CARD_PREFIX}${options?.messageId || ''}\n\n${note}`
       : `${NOTE_PREFIX}${note}`;
-    const created = await annotationCommands.create({
+    const noteCreateRequest = {
       document_id: pdfDocument.id,
       page_number: pageNumber,
       annotation_type: 'highlight',
@@ -1619,7 +1645,8 @@ export function useCanvasRendering(
       position_width: width / pw,
       position_height: height / ph,
       text: textPayload,
-    });
+    };
+    const created = await annotationCommands.create(noteCreateRequest);
 
     renderHighlight(
       pageNumber,
@@ -1628,13 +1655,21 @@ export function useCanvasRendering(
       width,
       height,
       kind === 'ai-card' ? 'rgba(168, 85, 247, 0.18)' : 'rgba(14, 165, 233, 0.06)',
-      kind === 'ai-card' ? created?.id : undefined
+      created?.id
     );
     renderNoteCard(pageNumber, x, y, note, {
       messageId: options?.messageId,
       annotationId: created?.id,
       kind,
     });
+    if (created?.id) {
+      captureUndoStack.current.push({
+        type: kind === 'ai-card' ? 'ai-card' : 'note',
+        annotationId: created.id,
+        pageNumber,
+        createRequest: noteCreateRequest,
+      });
+    }
   };
 
   const dropAICardAtPoint = async (
@@ -1673,8 +1708,7 @@ export function useCanvasRendering(
     const pw = pageEl.offsetWidth || 1;
     const ph = pageEl.offsetHeight || 1;
     const textPayload = `${AI_CARD_PREFIX}${messageId}\n\n${note}`;
-
-    const created = await annotationCommands.create({
+    const aiCardCreateRequest = {
       document_id: pdfDocument.id,
       page_number: resolvedPageNumber,
       annotation_type: 'highlight',
@@ -1684,7 +1718,8 @@ export function useCanvasRendering(
       position_width: width / pw,
       position_height: height / ph,
       text: textPayload,
-    });
+    };
+    const created = await annotationCommands.create(aiCardCreateRequest);
 
     renderHighlight(resolvedPageNumber, x, y, width, height, 'rgba(168, 85, 247, 0.18)', created?.id);
     renderNoteCard(resolvedPageNumber, x, y, note, {
@@ -1692,6 +1727,9 @@ export function useCanvasRendering(
       annotationId: created?.id,
       kind: 'ai-card',
     });
+    if (created?.id) {
+      captureUndoStack.current.push({ type: 'ai-card', annotationId: created.id, pageNumber: resolvedPageNumber, createRequest: aiCardCreateRequest });
+    }
     jumpToPage(resolvedPageNumber);
   };
 
@@ -1818,10 +1856,15 @@ export function useCanvasRendering(
 
       if (!hlWrapper) return;
       const annotationId = hlWrapper.dataset.annotationId;
-      if (!annotationId) { hlWrapper.remove(); return; }
+      if (!annotationId) {
+        hlWrapper.classList.add('deleting');
+        setTimeout(() => hlWrapper.remove(), 200);
+        return;
+      }
       await annotationCommands.delete(annotationId);
-      hlWrapper.remove();
-      highlightUndoStack.current = highlightUndoStack.current.filter(
+      hlWrapper.classList.add('deleting');
+      setTimeout(() => hlWrapper.remove(), 200);
+      captureUndoStack.current = captureUndoStack.current.filter(
         (entry) => entry.annotationId !== annotationId
       );
       // Close any floating delete menu
@@ -1836,13 +1879,13 @@ export function useCanvasRendering(
     };
   }, [containerId]);
 
-  // Ctrl+Z → undo last highlight creation
+  // Ctrl+Z → undo last capture (highlight, note, or AI card)
   useEffect(() => {
     if (!pdfDocument) return;
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        void undoLastHighlight();
+        void undoLastCapture();
       }
     };
     globalThis.addEventListener('keydown', handler);
@@ -2072,6 +2115,7 @@ export function useCanvasRendering(
     clearCardRenderer,
     removeCapture,
     removeCaptures,
+    undoLastCapture,
     setFitToWidthZoom,
   };
 }

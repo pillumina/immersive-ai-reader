@@ -1,6 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { focusCommands, FocusSession } from '@/lib/tauri/commands';
 
+// ── Progressive tooltip tips (module-level so it's accessible in the interface) ──
+const FOCUS_MODE_TIPS = [
+  { id: 'highlight', icon: '✏️', title: '高亮文本', desc: '选中文本后点击工具栏高亮按钮即可高亮' },
+  { id: 'bubble', icon: '💬', title: '气泡菜单', desc: '选中文本后点击出现的 "+" 气泡，快速添加笔记或问 AI' },
+  { id: 'mini-ai', icon: '🤖', title: 'Mini AI', desc: '按 Cmd+` 打开 AI 窗口，随时查看和对话' },
+  { id: 'captures', icon: '📚', title: '捕获抽屉', desc: '按 Cmd+Shift+B 查看所有高亮、笔记和 AI 内容' },
+  { id: 'exit', icon: '🚪', title: '退出专注', desc: '按 Esc 或点击底部状态栏退出 Focus Mode' },
+] as const;
+type FocusTipId = typeof FOCUS_MODE_TIPS[number]['id'];
+
 export interface FocusModeState {
   isActive: boolean;
   currentSessionId: string | null;
@@ -25,6 +35,7 @@ export interface FocusModeState {
 
 interface FocusModeContextValue {
   state: FocusModeState;
+  currentTip: typeof FOCUS_MODE_TIPS[number] | null;
   enterFocusMode: (documentId: string, currentPage: number, showResumePrompt?: boolean) => Promise<void>;
   exitFocusMode: (lastPage: number, maxScrollTop: number) => Promise<void>;
   updateProgress: (lastPage: number, maxScrollTop: number, maxPercentage: number) => void;
@@ -36,7 +47,7 @@ interface FocusModeContextValue {
   dismissResumePrompt: () => void;
   dismissSummary80: () => void;
   acknowledgeSummary80: () => void;
-  dismissFocusTooltip: () => void;
+  dismissFocusTooltip: (nextTip?: boolean) => void;
 }
 
 const FocusModeContext = createContext<FocusModeContextValue | null>(null);
@@ -64,19 +75,44 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingProgressRef = useRef<{ lastPage: number; maxScrollTop: number; maxPercentage: number } | null>(null);
 
+  // ── Progressive tooltip helpers ──
+  function getNextTip(): typeof FOCUS_MODE_TIPS[number] | null {
+    try {
+      const stored = localStorage.getItem('focus_mode_tips_shown');
+      const shown: FocusTipId[] = stored ? JSON.parse(stored) : [];
+      const next = FOCUS_MODE_TIPS.find((t) => !shown.includes(t.id));
+      return next ?? null; // all shown → no tooltip this session
+    } catch {
+      return FOCUS_MODE_TIPS[0];
+    }
+  }
+
+  function markTipShown(tipId: FocusTipId) {
+    try {
+      const stored = localStorage.getItem('focus_mode_tips_shown');
+      const shown: FocusTipId[] = stored ? JSON.parse(stored) : [];
+      if (!shown.includes(tipId)) {
+        shown.push(tipId);
+        localStorage.setItem('focus_mode_tips_shown', JSON.stringify(shown));
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Lazy init: reads localStorage once on first mount, then persists via setCurrentTip
+  const [currentTip, setCurrentTip] = useState<typeof FOCUS_MODE_TIPS[number] | null>(() => {
+    try {
+      const stored = localStorage.getItem('focus_mode_tips_shown');
+      const shown: FocusTipId[] = stored ? JSON.parse(stored) : [];
+      return FOCUS_MODE_TIPS.find((t) => !shown.includes(t.id)) ?? null;
+    } catch {
+      return FOCUS_MODE_TIPS[0] ?? null;
+    }
+  });
+
   const enterFocusMode = useCallback(async (documentId: string, currentPage: number, showResumePrompt = true) => {
     const sessionId = crypto.randomUUID();
     const enteredAt = new Date().toISOString();
     enterTimeRef.current = new Date();
-
-    // Check if this is the first time the user sees Focus Mode
-    let tooltipVisible = false;
-    try {
-      const seen = localStorage.getItem('focus_mode_tooltip_seen');
-      tooltipVisible = !seen;
-    } catch {
-      // ignore localStorage errors
-    }
 
     // Check for existing session to show resume prompt
     let existingSession: FocusSession | null = null;
@@ -103,11 +139,10 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
         summaryTriggered: false,
         summary80Shown: false,
         summary80Visible: false,
-        focusTooltipVisible: tooltipVisible,
+        focusTooltipVisible: true,
       });
     } catch (err) {
       console.error('[FocusMode] Failed to create session:', err);
-      // Still enter locally even if DB fails
       setState((prev) => ({
         ...prev,
         isActive: true,
@@ -121,19 +156,21 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
         aiResponsesCount: existingSession?.ai_responses_count ?? 0,
         summary80Shown: false,
         summary80Visible: false,
-        focusTooltipVisible: tooltipVisible,
+        focusTooltipVisible: true,
       }));
     }
   }, []);
 
-  const dismissFocusTooltip = useCallback(() => {
-    try {
-      localStorage.setItem('focus_mode_tooltip_seen', '1');
-    } catch {
-      // ignore localStorage errors
+  const dismissFocusTooltip = useCallback((nextTip = false) => {
+    if (currentTip) markTipShown(currentTip.id);
+    if (nextTip) {
+      const next = getNextTip();
+      setCurrentTip(next);
+    } else {
+      setCurrentTip(null);
     }
     setState((prev) => ({ ...prev, focusTooltipVisible: false }));
-  }, []);
+  }, [currentTip]);
 
   const exitFocusMode = useCallback(
     async (lastPage: number, maxScrollTop: number) => {
@@ -282,6 +319,7 @@ export function FocusModeProvider({ children }: { children: React.ReactNode }) {
     <FocusModeContext.Provider
       value={{
         state,
+        currentTip,
         enterFocusMode,
         exitFocusMode,
         updateProgress,

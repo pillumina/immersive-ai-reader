@@ -76,6 +76,9 @@ export const MainCanvas = memo(function MainCanvas({
   const [splitMode, setSplitMode] = useState(false);
   const [comparePage, setComparePage] = useState(1);
   const [compareFollowCitation, setCompareFollowCitation] = useState(true);
+  /** Controls the secondary actions overflow menu (Note / Ask AI / Copy / Clear) */
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowMenuRef = useRef<HTMLDivElement>(null);
   const [compareZoom, setCompareZoom] = useState(1);
   const [comparePageInput, setComparePageInput] = useState('1');
   const [compareTocOpen, setCompareTocOpen] = useState(false);
@@ -83,6 +86,18 @@ export const MainCanvas = memo(function MainCanvas({
   const [compareHistory, setCompareHistory] = useState<number[]>([]);
   const [compareHistoryIndex, setCompareHistoryIndex] = useState(-1);
   const [splitReason, setSplitReason] = useState<'evidence' | 'reference' | 'compare'>('compare');
+
+  // Close overflow menu when clicking outside
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const handler = (e: globalThis.MouseEvent) => {
+      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target as Node)) {
+        setOverflowOpen(false);
+      }
+    };
+    globalThis.document.addEventListener('mousedown', handler);
+    return () => globalThis.document.removeEventListener('mousedown', handler);
+  }, [overflowOpen]);
 
   // L1 bubble state (Focus Mode auto-highlight + "+" button)
   type L1Bubble = { x: number; y: number; text: string; page?: number };
@@ -1303,10 +1318,11 @@ export const MainCanvas = memo(function MainCanvas({
             }}
             onMouseDown={(e) => e.stopPropagation()}
           >
+            {/* Primary action: Highlight (always visible, prominent) */}
             <button
               type="button"
-              className="text-action-btn"
-              title="Highlight"
+              className="text-action-btn text-action-btn--primary"
+              title="Highlight (H)"
               onClick={() => {
                 onHighlightSelection();
                 globalThis.getSelection?.()?.removeAllRanges();
@@ -1318,100 +1334,125 @@ export const MainCanvas = memo(function MainCanvas({
               <span className="text-action-label">Highlight</span>
             </button>
 
-            {/* Show "Clear highlight" when selected text overlaps an existing highlight */}
-            {textHandleRef.current?.overlappingHlIds && textHandleRef.current.overlappingHlIds.length > 0 && (
-              <>
-                <div className="text-action-divider" />
-                <button
-                  type="button"
-                  className="text-action-btn"
-                  title="Clear overlapping highlight"
-                  onClick={() => {
-                    const ids = textHandleRef.current?.overlappingHlIds ?? [];
-                    onDeleteAnnotations?.(ids);
-                    globalThis.getSelection?.()?.removeAllRanges();
-                    textHandleRef.current = null;
-                    forceTextToolbarUpdate((n) => n + 1);
-                  }}
+            <div className="text-action-divider" />
+
+            {/* Overflow menu for secondary actions */}
+            <div className="relative" ref={overflowMenuRef}>
+              <button
+                type="button"
+                className="text-action-btn"
+                title="更多操作"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOverflowOpen((v) => !v);
+                }}
+              >
+                <span className="text-action-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+                  </svg>
+                </span>
+              </button>
+
+              {/* Overflow dropdown menu */}
+              {overflowOpen && (
+                <div
+                  className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-[var(--color-bg-raised)] border border-[var(--color-border)] rounded-xl shadow-xl py-1 min-w-[140px]"
+                  style={{ backdropFilter: 'blur(12px)' }}
+                  onMouseDown={(e) => e.stopPropagation()}
                 >
-                  <span className="text-action-icon"><Trash2 size={14} /></span>
-                  <span className="text-action-label">Clear</span>
-                </button>
-              </>
-            )}
+                  {/* Clear — only when overlapping an existing highlight */}
+                  {textHandleRef.current?.overlappingHlIds && textHandleRef.current.overlappingHlIds.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        className="text-action-btn text-action-btn--danger w-full justify-start px-3"
+                        title="清除已有高亮"
+                        onClick={() => {
+                          const ids = textHandleRef.current?.overlappingHlIds ?? [];
+                          onDeleteAnnotations?.(ids);
+                          globalThis.getSelection?.()?.removeAllRanges();
+                          textHandleRef.current = null;
+                          setOverflowOpen(false);
+                          forceTextToolbarUpdate((n) => n + 1);
+                        }}
+                      >
+                        <span className="text-action-icon"><Trash2 size={13} /></span>
+                        <span className="text-action-label">清除高亮</span>
+                      </button>
+                      <div className="text-action-divider mx-2 my-1" />
+                    </>
+                  )}
 
-            <div className="text-action-divider" />
+                  <button
+                    type="button"
+                    className="text-action-btn w-full justify-start px-3"
+                    title="添加笔记 (N)"
+                    onClick={() => {
+                      const sel = globalThis.getSelection?.();
+                      const capturedText = (sel && !sel.isCollapsed) ? sel.toString().trim() : undefined;
+                      let capturedRange: { left: number; top: number; width: number; height: number; pageNumber: number } | undefined;
+                      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                        const range = sel.getRangeAt(0);
+                        const rects = Array.from(range.getClientRects()).filter((r) => r.width > 1 && r.height > 1);
+                        if (rects.length > 0) {
+                          const rect = rects[0];
+                          const pageEl = globalThis.document?.elementFromPoint(rect.left + 1, rect.top + 1)
+                            ?.closest('.pdf-page') as HTMLElement | null;
+                          capturedRange = {
+                            left: rect.left, top: rect.top,
+                            width: rect.width, height: rect.height,
+                            pageNumber: pageEl ? Number(pageEl.dataset.pageNumber || '1') : 1,
+                          };
+                        }
+                      }
+                      sel?.removeAllRanges();
+                      textHandleRef.current = null;
+                      setOverflowOpen(false);
+                      forceTextToolbarUpdate((n) => n + 1);
+                      onAddNoteSelection(undefined, undefined, capturedText, capturedRange);
+                    }}
+                  >
+                    <span className="text-action-icon"><StickyNote size={13} /></span>
+                    <span className="text-action-label">添加笔记</span>
+                  </button>
 
-            <button
-              type="button"
-              className="text-action-btn"
-              title="Add Note"
-              onClick={() => {
-                // Capture selection range before clearing it — needed for anchored note connector.
-                const sel = globalThis.getSelection?.();
-                const capturedText = (sel && !sel.isCollapsed) ? sel.toString().trim() : undefined;
-                let capturedRange: { left: number; top: number; width: number; height: number; pageNumber: number } | undefined;
-                if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-                  const range = sel.getRangeAt(0);
-                  const rects = Array.from(range.getClientRects()).filter((r) => r.width > 1 && r.height > 1);
-                  if (rects.length > 0) {
-                    const rect = rects[0];
-                    const pageEl = globalThis.document?.elementFromPoint(rect.left + 1, rect.top + 1)
-                      ?.closest('.pdf-page') as HTMLElement | null;
-                    capturedRange = {
-                      left: rect.left,
-                      top: rect.top,
-                      width: rect.width,
-                      height: rect.height,
-                      pageNumber: pageEl ? Number(pageEl.dataset.pageNumber || '1') : 1,
-                    };
-                  }
-                }
-                sel?.removeAllRanges();
-                textHandleRef.current = null;
-                forceTextToolbarUpdate((n) => n + 1);
-                onAddNoteSelection(undefined, undefined, capturedText, capturedRange);
-              }}
-            >
-              <span className="text-action-icon"><StickyNote size={14} /></span>
-              <span className="text-action-label">Note</span>
-            </button>
+                  <button
+                    type="button"
+                    className="text-action-btn text-action-btn--ai w-full justify-start px-3"
+                    title="让 AI 解释选中文本"
+                    onClick={() => {
+                      onExplainSelection();
+                      globalThis.getSelection?.()?.removeAllRanges();
+                      textHandleRef.current = null;
+                      setOverflowOpen(false);
+                      forceTextToolbarUpdate((n) => n + 1);
+                    }}
+                  >
+                    <span className="text-action-icon"><MessageCircleQuestion size={13} /></span>
+                    <span className="text-action-label">让 AI 解释</span>
+                  </button>
 
-            <div className="text-action-divider" />
-
-            <button
-              type="button"
-              className="text-action-btn text-action-btn--ai"
-              title="Ask AI about selected text"
-              onClick={() => {
-                onExplainSelection();
-                globalThis.getSelection?.()?.removeAllRanges();
-                textHandleRef.current = null;
-                forceTextToolbarUpdate((n) => n + 1);
-              }}
-            >
-              <span className="text-action-icon"><MessageCircleQuestion size={14} /></span>
-              <span className="text-action-label">Ask AI</span>
-            </button>
-
-            <div className="text-action-divider" />
-
-            <button
-              type="button"
-              className="text-action-btn"
-              title="Copy selected text"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(textHandleRef.current?.text || '');
-                } catch { /* ignore */ }
-                globalThis.getSelection?.()?.removeAllRanges();
-                textHandleRef.current = null;
-        forceTextToolbarUpdate((n) => n + 1);
-              }}
-            >
-              <span className="text-action-icon"><Copy size={14} /></span>
-              <span className="text-action-label">Copy</span>
-            </button>
+                  <button
+                    type="button"
+                    className="text-action-btn w-full justify-start px-3"
+                    title="复制选中文本"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(textHandleRef.current?.text || '');
+                      } catch { /* ignore */ }
+                      globalThis.getSelection?.()?.removeAllRanges();
+                      textHandleRef.current = null;
+                      setOverflowOpen(false);
+                      forceTextToolbarUpdate((n) => n + 1);
+                    }}
+                  >
+                    <span className="text-action-icon"><Copy size={13} /></span>
+                    <span className="text-action-label">复制</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}

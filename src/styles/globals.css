@@ -315,6 +315,23 @@ h1, h2, h3, h4, h5, h6 {
   transform: scale(1.15);
 }
 
+/* Delete animation: scale + fade out before DOM removal */
+.pdf-highlight-wrapper.deleting {
+  animation: highlight-fade-out 200ms ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes highlight-fade-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
 /* ─── Canvas Cards: Shared ─────────────────────────────── */
 .pdf-note-card,
 .pdf-ai-card {
@@ -3845,6 +3862,34 @@ h1, h2, h3, h4, h5, h6 {
 .text-action-btn--ai:hover {
   background: var(--color-bg-subtle);
   color: var(--color-ai, #5b21b6);
+}
+
+/* Primary action: Highlight button — warm amber highlight to stand out */
+.text-action-btn--primary {
+  background: rgba(194, 65, 12, 0.10);
+  color: #c2410c;
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.text-action-btn--primary:hover {
+  background: rgba(194, 65, 12, 0.18);
+  color: #9a3412;
+}
+
+.text-action-btn--primary:active {
+  background: rgba(194, 65, 12, 0.22);
+  transform: scale(0.96);
+}
+
+/* Danger action: Clear/delete */
+.text-action-btn--danger {
+  color: var(--color-danger, #dc2626);
+}
+
+.text-action-btn--danger:hover {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--color-danger, #dc2626);
 }
 
 .text-action-icon {
