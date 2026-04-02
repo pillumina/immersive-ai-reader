@@ -935,7 +935,7 @@ export const MainCanvas = memo(function MainCanvas({
                     void goToPrevSearchResult();
                   }
                 }}
-                placeholder="Search…"
+                placeholder="Search (↑↓ 导航)"
                 className="border-none outline-none text-[12px] text-[var(--color-text)] bg-transparent w-24 placeholder:text-[var(--color-text-muted)]"
               />
               {searchLoading ? (
