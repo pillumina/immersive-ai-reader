@@ -190,22 +190,8 @@ const AppInner = memo(function AppInner() {
   // Theme-aware colors for canvas (Fabric.js) — must be declared before useCanvasRendering
   const canvasColors = useCanvasColors();
 
-  /** Handler passed to useCanvasRendering — receives deleted undo entry and shows toast with undo. */
-  const handleDeleteCaptureWithUndo = useCallback(
-    (entry: CaptureUndoEntry) => {
-      setToast({
-        message: '已删除',
-        type: 'success',
-        action: {
-          label: '撤销',
-          onClick: async () => {
-            await restoreCapture(entry);
-          },
-        },
-      });
-    },
-    [restoreCapture]
-  );
+  // Ref that holds the delete-with-undo handler (set after handleDeleteCaptureWithUndo is defined)
+  const deleteCaptureHandlerRef = useRef<(entry: CaptureUndoEntry) => void>();
 
   const {
     isRendering,
@@ -255,8 +241,29 @@ const AppInner = memo(function AppInner() {
       }
     },
     canvasColors,
-    handleDeleteCaptureWithUndo,
+    (entry) => deleteCaptureHandlerRef.current?.(entry),
   );
+
+  /** Handler for useCanvasRendering — shows toast with undo after a capture is deleted.
+   *  Defined after useCanvasRendering so restoreCapture is in scope. */
+  const handleDeleteCaptureWithUndo = useCallback(
+    (entry: CaptureUndoEntry) => {
+      setToast({
+        message: '已删除',
+        type: 'success',
+        action: {
+          label: '撤销',
+          onClick: async () => {
+            await restoreCapture(entry);
+          },
+        },
+      });
+    },
+    [restoreCapture]
+  );
+
+  // Keep the ref in sync so useCanvasRendering's deleteHandler can call it
+  deleteCaptureHandlerRef.current = handleDeleteCaptureWithUndo;
 
   // Stable callbacks passed to AIPanel to prevent unnecessary re-renders
   const handleAIPanelJumpToPage = useCallback((page: number) => {
