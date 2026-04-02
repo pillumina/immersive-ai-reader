@@ -334,16 +334,20 @@ export const CaptureDrawer = memo(function CaptureDrawer({
               <button
                 type="button"
                 disabled={!canSynthesize}
-                className={`w-full rounded-xl text-[12px] font-semibold py-2 px-4 transition-all ${
+                className={`w-full rounded-xl text-[12px] font-semibold py-2 px-4 transition-all flex items-center justify-center gap-1.5 ${
                   canSynthesize
                     ? 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] shadow-sm'
                     : 'bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] cursor-not-allowed'
                 }`}
                 onClick={onSynthesize}
-                title={canSynthesize ? `基于 ${captures.length} 条捕获` : '需要至少 3 条捕获'}
+                title={canSynthesize ? `基于 ${captures.length} 条捕获生成总结` : '至少需要 3 条捕获才能生成总结'}
               >
-                ✨ 一键合成
-                {canSynthesize && <span className="ml-1 opacity-70">（{captures.length} 条）</span>}
+                <span>✨ 一键合成</span>
+                {canSynthesize ? (
+                  <span className="opacity-70">（{captures.length} 条）</span>
+                ) : (
+                  <span className="text-[10px] font-normal opacity-60">还需 {3 - captures.length} 条</span>
+                )}
               </button>
             )}
           </div>
