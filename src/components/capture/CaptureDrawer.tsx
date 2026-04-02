@@ -196,7 +196,7 @@ function SessionCard({
         <button
           type="button"
           onClick={() => onResume(session)}
-          className="w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-medium bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)] transition-colors"
+          className="w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-[11px] font-semibold bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] shadow-sm transition-colors"
         >
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <polygon points="5 3 19 12 5 21 5 3" />
