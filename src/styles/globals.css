@@ -332,6 +332,17 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* Delete animation for CaptureItem cards in the drawer */
+.capture-item--deleting {
+  animation: capture-item-fade-out 200ms ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes capture-item-fade-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.96); }
+}
+
 /* ─── Canvas Cards: Shared ─────────────────────────────── */
 .pdf-note-card,
 .pdf-ai-card {

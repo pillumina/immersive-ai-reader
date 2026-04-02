@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 export type CaptureType = 'note' | 'highlight' | 'ai-response';
 
 interface BaseCaptureItem {
@@ -66,9 +66,19 @@ export const CaptureItemComponent = memo(function CaptureItemComponent({
 }: CaptureItemProps) {
   const config = TYPE_CONFIG[item.type];
   const preview = item.preview || '';
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = () => {
+    if (deleting) return;
+    setDeleting(true);
+    // Wait for fade-out animation before calling onDelete
+    setTimeout(() => { onDelete?.(item.id); }, 200);
+  };
 
   return (
-    <div className="group relative rounded-xl border border-[var(--color-bg-subtle)] bg-[var(--color-bg-raised)] px-3 py-2.5 transition-all duration-100 hover:border-[var(--color-border)] hover:shadow-sm">
+    <div
+      className={`group relative rounded-xl border border-[var(--color-bg-subtle)] bg-[var(--color-bg-raised)] px-3 py-2.5 transition-all duration-100 hover:border-[var(--color-border)] hover:shadow-sm${deleting ? ' capture-item--deleting' : ''}`}
+    >
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -84,7 +94,7 @@ export const CaptureItemComponent = memo(function CaptureItemComponent({
             aria-label={`Jump to page ${item.pageNumber}`}
             className="flex items-center justify-center w-6 h-6 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] transition-colors"
             onClick={() => onJumpTo(item.pageNumber)}
-            title="跳转到"
+            title="跳转到 (点击)"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <polyline points="5 9 2 12 5 15" />
@@ -111,8 +121,9 @@ export const CaptureItemComponent = memo(function CaptureItemComponent({
               type="button"
               aria-label="Delete item"
               className="flex items-center justify-center w-6 h-6 rounded-md text-[var(--color-text-muted)] hover:bg-[var(--color-danger-subtle)] hover:text-[var(--color-danger)] transition-colors"
-              onClick={() => onDelete(item.id)}
+              onClick={handleDelete}
               title="删除"
+              disabled={deleting}
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <polyline points="3 6 5 6 21 6" />

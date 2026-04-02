@@ -43,13 +43,16 @@ export const FocusStatusBar = memo(function FocusStatusBar({
 
       {/* Progress bar */}
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <div className="flex-1 h-1.5 bg-[var(--color-bg-hover)] rounded-full overflow-hidden max-w-32">
+        <div className="flex-1 h-2 bg-[var(--color-bg-hover)] rounded-full overflow-hidden max-w-48">
           <div
             className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-500"
-            style={{ width: `${Math.min(maxProgress, 100)}%` }}
+            style={{
+              width: `${Math.min(maxProgress, 100)}%`,
+              boxShadow: maxProgress > 0 ? '0 0 6px 1px rgba(var(--color-accent-rgb, 194,65,12), 0.4)' : 'none',
+            }}
           />
         </div>
-        <span className="text-[11px] tabular-nums text-[var(--color-text-secondary)] flex-shrink-0">
+        <span className="text-[12px] tabular-nums font-medium text-[var(--color-accent)] flex-shrink-0">
           {Math.round(maxProgress)}%
         </span>
       </div>
@@ -85,9 +88,9 @@ export const FocusStatusBar = memo(function FocusStatusBar({
       <button
         type="button"
         className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text)] transition-colors flex-shrink-0"
-        aria-label="Exit Focus Mode"
+        aria-label="Exit Focus Mode (Esc)"
         onClick={onExitFocusMode}
-        title="退出 Focus Mode"
+        title="退出 Focus Mode (Esc)"
       >
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -95,6 +98,7 @@ export const FocusStatusBar = memo(function FocusStatusBar({
           <line x1="21" y1="12" x2="9" y2="12" />
         </svg>
         退出
+        <kbd className="hidden md:inline text-[9px] font-mono opacity-50 border border-current rounded px-0.5">Esc</kbd>
       </button>
     </div>
   );

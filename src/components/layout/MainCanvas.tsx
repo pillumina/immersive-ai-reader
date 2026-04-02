@@ -943,7 +943,7 @@ export const MainCanvas = memo(function MainCanvas({
               ) : searchError ? (
                 <span className="text-[10px] text-[var(--color-danger)]">error</span>
               ) : searchResultPages.length > 0 ? (
-                <span className="text-[10px] text-[var(--color-success)] font-medium whitespace-nowrap">
+                <span className="text-[12px] tabular-nums font-semibold text-[var(--color-accent)] whitespace-nowrap">
                   {searchCurrentIndex + 1}/{searchResultPages.length}
                 </span>
               ) : searchQuery && !searchLoading ? (
