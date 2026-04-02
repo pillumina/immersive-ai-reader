@@ -865,9 +865,8 @@ const AppInner = memo(function AppInner() {
   // ─── Capture Drawer handlers ─────────────────────────────────────
   const handleDeleteCapture = async (id: string) => {
     try {
-      await annotationCommands.delete(id);
+      await removeCapture(id);
       setCaptures((prev) => prev.filter((c) => c.id !== id));
-      removeCapture(id);
       setToast({ message: '已删除', type: 'success' });
     } catch (error) {
       const message = error instanceof Error ? error.message : '删除失败';

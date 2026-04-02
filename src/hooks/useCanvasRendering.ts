@@ -146,6 +146,11 @@ export function useCanvasRendering(
     deleteBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     </svg>`;
+    // JS hover (not CSS :hover) because wrapper has pointer-events:none.
+    // mouseenter/mouseleave on the wrapper (or its children) fires reliably
+    // regardless of pointer-events on the wrapper itself.
+    wrapper.addEventListener('mouseenter', () => { deleteBtn.style.opacity = '1'; });
+    wrapper.addEventListener('mouseleave', () => { deleteBtn.style.opacity = ''; });
 
     wrapper.appendChild(highlight);
     wrapper.appendChild(deleteBtn);
@@ -901,7 +906,7 @@ export function useCanvasRendering(
               : isNote ? 'rgba(14, 165, 233, 0.25)'
               : 'rgba(255, 235, 59, 0.35)'
           ),
-          (isAiCard || isNote) ? a.id : undefined
+          a.id
         );
         if (isNote && noteContent) {
           const noteSelectedText = noteRaw.split('\n\n').slice(1).join('\n\n');
@@ -2009,11 +2014,15 @@ export function useCanvasRendering(
     tagChipRenderersRef.current.delete(annotationId);
   };
 
-  // Remove a capture (highlight, note card, or AI card) from the DOM by annotationId.
+  // Remove a capture (highlight, note card, or AI card) from DOM by annotationId.
+  // Also deletes from DB so the deletion persists across sessions.
   // Used by the CaptureDrawer to sync deletion with the canvas.
-  const removeCapture = (annotationId: string) => {
+  const removeCapture = async (annotationId: string) => {
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!(containerEl instanceof HTMLElement)) return;
+
+    // Delete from DB first so the deletion persists across app restarts
+    await annotationCommands.delete(annotationId);
 
     // Remove the highlight element if present
     const highlightEl = containerEl.querySelector<HTMLElement>(`.pdf-highlight-wrapper[data-annotation-id="${annotationId}"]`);
@@ -2035,8 +2044,8 @@ export function useCanvasRendering(
   };
 
   /** Remove multiple captures at once. Used when clearing overlapping highlights. */
-  const removeCaptures = (annotationIds: string[]) => {
-    annotationIds.forEach((id) => removeCapture(id));
+  const removeCaptures = async (annotationIds: string[]) => {
+    await Promise.all(annotationIds.map((id) => removeCapture(id)));
   };
 
   /** Update the stored fit-to-width zoom value (called by App when it calculates fit-to-width). */
