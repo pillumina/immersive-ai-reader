@@ -1,4 +1,4 @@
-import { ZoomIn, ZoomOut, X, StickyNote, MessageCircleQuestion, Highlighter, Copy } from 'lucide-react';
+import { ZoomIn, ZoomOut, X, StickyNote, MessageCircleQuestion, Highlighter, Copy, Undo2 } from 'lucide-react';
 import { DragEvent, MouseEvent, WheelEvent, PointerEvent, useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PdfOutlineItem } from '@/lib/pdf/renderer';
@@ -39,6 +39,10 @@ interface MainCanvasProps {
   } | null;
   onSplitModeChange?: (active: boolean) => void;
   pdfFileBlob?: Blob | null;
+  /** Undo the most recently created highlight. */
+  onUndoHighlight: () => void;
+  /** Number of highlights available to undo. Button is shown when > 0. */
+  undoHighlightCount: number;
 }
 
 export const MainCanvas = memo(function MainCanvas({
@@ -65,6 +69,8 @@ export const MainCanvas = memo(function MainCanvas({
   comparePaneCommand,
   onSplitModeChange,
   pdfFileBlob,
+  onUndoHighlight,
+  undoHighlightCount,
 }: MainCanvasProps) {
   const [tocOpen, setTocOpen] = useState(false);
   const [tocQuery, setTocQuery] = useState('');
@@ -858,6 +864,16 @@ export const MainCanvas = memo(function MainCanvas({
           <Button variant="secondary" size="sm" onClick={onHighlightSelection} disabled={!hasDocument} className="!h-7 !px-2.5 !text-[11px]">
             Highlight
           </Button>
+          {undoHighlightCount > 0 && (
+            <button
+              type="button"
+              className="toolbar-icon-btn"
+              onClick={onUndoHighlight}
+              title={`Undo (${undoHighlightCount} available · Ctrl+Z)`}
+            >
+              <Undo2 size={14} />
+            </button>
+          )}
           {hasDocument && totalPages > 0 && (
             <button
               type="button"

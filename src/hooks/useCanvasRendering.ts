@@ -56,6 +56,8 @@ export function useCanvasRendering(
     annotationId: string; pageNumber: number;
     x: number; y: number; width: number; height: number;
   }>>([]);
+  /** Tracks undo stack size for reactive UI (shown only when stack is non-empty). */
+  const [undoHighlightCount, setUndoHighlightCount] = useState(0);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
 
@@ -1414,6 +1416,7 @@ export function useCanvasRendering(
       renderHighlight(pn, x, y, width, height, color, created[i]?.id);
       if (created[i]?.id) {
         highlightUndoStack.current.push({ annotationId: created[i].id, pageNumber: pn, x, y, width, height });
+        setUndoHighlightCount(highlightUndoStack.current.length);
       }
     }
 
@@ -1425,6 +1428,7 @@ export function useCanvasRendering(
   const undoLastHighlight = async () => {
     const entry = highlightUndoStack.current.pop();
     if (!entry) return;
+    setUndoHighlightCount(highlightUndoStack.current.length);
     const containerEl = globalThis.document?.getElementById(containerId);
     if (!containerEl) return;
     const { annotationId } = entry;
@@ -1809,6 +1813,7 @@ export function useCanvasRendering(
       highlightUndoStack.current = highlightUndoStack.current.filter(
         (e) => e.annotationId !== annotationId
       );
+      setUndoHighlightCount(highlightUndoStack.current.length);
       menu.remove();
     });
     document.body.appendChild(menu);
@@ -2068,5 +2073,7 @@ export function useCanvasRendering(
     clearCardRenderer,
     removeCapture,
     setFitToWidthZoom,
+    undoLastHighlight,
+    undoHighlightCount,
   };
 }
